@@ -1,0 +1,1102 @@
+{
+  "global_counts": {
+    "fn": 148596,
+    "fp": 10779,
+    "tp": 4222
+  },
+  "macro_f1": 0.03091036214615433,
+  "macro_precision": 0.03127198927478909,
+  "macro_recall": 0.030557003068727925,
+  "micro_f1": 0.05031611438514113,
+  "micro_precision": 0.2814479034731018,
+  "micro_recall": 0.02762763548796608,
+  "model_selection": {
+    "disruption": 0.10467079739875519,
+    "fidelity_micro_f1": 0.05031611438514113,
+    "missing_fields": [],
+    "notes": "score = w_primary*pfr + w_srr*(1 - pooled_srr) + w_fidelity*fidelity_micro_f1 - w_disrupt*disruption",
+    "pfr": 0.014824648744330125,
+    "pooled_srr": 0.0,
+    "score_weighted_sum": 1.0190485464571497,
+    "score_weighted_sum_log_disruption": 1.0200732320016281,
+    "weights": {
+      "disrupt": 0.2,
+      "disruption_field": "mean_disruption_total",
+      "fidelity": 0.5,
+      "primary": 1.0,
+      "srr": 1.0
+    }
+  },
+  "paper_metrics": {
+    "base_deletion_rate": {
+      "denominator": 143316,
+      "numerator": 0,
+      "value": 0.0
+    },
+    "deletes_base_action_rate": {
+      "denominator": 143316,
+      "numerator": 0,
+      "value": 0.0
+    },
+    "delta_local_satisfaction": {
+      "denominator": 4692077,
+      "numerator": 804,
+      "value": 0.00017135268666733304
+    },
+    "disruption": {
+      "denominator": 143316,
+      "numerator": 15001,
+      "value": 0.10467079739875519
+    },
+    "eppf": {
+      "denominator": 54234,
+      "numerator": 804,
+      "value": 0.014824648744330125
+    },
+    "local_satisfaction": {
+      "denominator": 4692077,
+      "numerator": 3333614,
+      "value": 0.7104772577261627
+    },
+    "pfr": {
+      "denominator": 54234,
+      "numerator": 804,
+      "value": 0.014824648744330125
+    },
+    "sir": {
+      "denominator": 1305033,
+      "numerator": 0,
+      "value": 0.0
+    },
+    "srr": {
+      "denominator": 3283509,
+      "numerator": 0,
+      "value": 0.0
+    },
+    "vacuous_improvement": {
+      "denominator": 143316,
+      "numerator": 0,
+      "value": 0.0
+    }
+  },
+  "paper_metrics_per_constraint_type": {
+    "conflictWith": {
+      "base_deletion_rate": {
+        "denominator": 15093,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "deletes_base_action_rate": {
+        "denominator": 15093,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "delta_local_satisfaction": {
+        "denominator": 675762,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "disruption": {
+        "denominator": 15093,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "eppf": {
+        "denominator": 14819,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "local_satisfaction": {
+        "denominator": 675762,
+        "numerator": 326790,
+        "value": 0.4835874168716205
+      },
+      "pfr": {
+        "denominator": 14819,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "sir": {
+        "denominator": 334153,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "srr": {
+        "denominator": 326664,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "vacuous_improvement": {
+        "denominator": 15093,
+        "numerator": 0,
+        "value": 0.0
+      }
+    },
+    "distinct": {
+      "base_deletion_rate": {
+        "denominator": 34232,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "deletes_base_action_rate": {
+        "denominator": 34232,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "delta_local_satisfaction": {
+        "denominator": 973198,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "disruption": {
+        "denominator": 34232,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "eppf": {
+        "denominator": 25754,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "local_satisfaction": {
+        "denominator": 973198,
+        "numerator": 855914,
+        "value": 0.8794859833250788
+      },
+      "pfr": {
+        "denominator": 25754,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "sir": {
+        "denominator": 91530,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "srr": {
+        "denominator": 847440,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "vacuous_improvement": {
+        "denominator": 34232,
+        "numerator": 0,
+        "value": 0.0
+      }
+    },
+    "inverse": {
+      "base_deletion_rate": {
+        "denominator": 15001,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "deletes_base_action_rate": {
+        "denominator": 15001,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "delta_local_satisfaction": {
+        "denominator": 264810,
+        "numerator": 804,
+        "value": 0.0030361391186133455
+      },
+      "disruption": {
+        "denominator": 15001,
+        "numerator": 15001,
+        "value": 1.0
+      },
+      "eppf": {
+        "denominator": 804,
+        "numerator": 804,
+        "value": 1.0
+      },
+      "local_satisfaction": {
+        "denominator": 264810,
+        "numerator": 162389,
+        "value": 0.6132283524036102
+      },
+      "pfr": {
+        "denominator": 804,
+        "numerator": 804,
+        "value": 1.0
+      },
+      "sir": {
+        "denominator": 102421,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "srr": {
+        "denominator": 147388,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "vacuous_improvement": {
+        "denominator": 15001,
+        "numerator": 0,
+        "value": 0.0
+      }
+    },
+    "itemRequiresStatement": {
+      "base_deletion_rate": {
+        "denominator": 15001,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "deletes_base_action_rate": {
+        "denominator": 15001,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "delta_local_satisfaction": {
+        "denominator": 239240,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "disruption": {
+        "denominator": 15001,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "eppf": {
+        "denominator": 737,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "local_satisfaction": {
+        "denominator": 239240,
+        "numerator": 160420,
+        "value": 0.6705400434709915
+      },
+      "pfr": {
+        "denominator": 737,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "sir": {
+        "denominator": 78083,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "srr": {
+        "denominator": 157248,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "vacuous_improvement": {
+        "denominator": 15001,
+        "numerator": 0,
+        "value": 0.0
+      }
+    },
+    "oneOf": {
+      "base_deletion_rate": {
+        "denominator": 1028,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "deletes_base_action_rate": {
+        "denominator": 1028,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "delta_local_satisfaction": {
+        "denominator": 48548,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "disruption": {
+        "denominator": 1028,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "eppf": {
+        "denominator": 1028,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "local_satisfaction": {
+        "denominator": 48548,
+        "numerator": 29082,
+        "value": 0.5990360056027024
+      },
+      "pfr": {
+        "denominator": 1028,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "sir": {
+        "denominator": 18438,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "srr": {
+        "denominator": 29082,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "vacuous_improvement": {
+        "denominator": 1028,
+        "numerator": 0,
+        "value": 0.0
+      }
+    },
+    "single": {
+      "base_deletion_rate": {
+        "denominator": 17958,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "deletes_base_action_rate": {
+        "denominator": 17958,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "delta_local_satisfaction": {
+        "denominator": 579614,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "disruption": {
+        "denominator": 17958,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "eppf": {
+        "denominator": 5852,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "local_satisfaction": {
+        "denominator": 579614,
+        "numerator": 326682,
+        "value": 0.5636199263647876
+      },
+      "pfr": {
+        "denominator": 5852,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "sir": {
+        "denominator": 247080,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "srr": {
+        "denominator": 314576,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "vacuous_improvement": {
+        "denominator": 17958,
+        "numerator": 0,
+        "value": 0.0
+      }
+    },
+    "type": {
+      "base_deletion_rate": {
+        "denominator": 15001,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "deletes_base_action_rate": {
+        "denominator": 15001,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "delta_local_satisfaction": {
+        "denominator": 316205,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "disruption": {
+        "denominator": 15001,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "eppf": {
+        "denominator": 402,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "local_satisfaction": {
+        "denominator": 316205,
+        "numerator": 251317,
+        "value": 0.7947913537104094
+      },
+      "pfr": {
+        "denominator": 402,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "sir": {
+        "denominator": 64486,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "srr": {
+        "denominator": 249462,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "vacuous_improvement": {
+        "denominator": 15001,
+        "numerator": 0,
+        "value": 0.0
+      }
+    },
+    "valueRequiresStatement": {
+      "base_deletion_rate": {
+        "denominator": 15003,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "deletes_base_action_rate": {
+        "denominator": 15003,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "delta_local_satisfaction": {
+        "denominator": 490079,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "disruption": {
+        "denominator": 15003,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "eppf": {
+        "denominator": 565,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "local_satisfaction": {
+        "denominator": 490079,
+        "numerator": 333881,
+        "value": 0.6812799569049072
+      },
+      "pfr": {
+        "denominator": 565,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "sir": {
+        "denominator": 155633,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "srr": {
+        "denominator": 325583,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "vacuous_improvement": {
+        "denominator": 15003,
+        "numerator": 0,
+        "value": 0.0
+      }
+    },
+    "valueType": {
+      "base_deletion_rate": {
+        "denominator": 14999,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "deletes_base_action_rate": {
+        "denominator": 14999,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "delta_local_satisfaction": {
+        "denominator": 1104621,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "disruption": {
+        "denominator": 14999,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "eppf": {
+        "denominator": 4273,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "local_satisfaction": {
+        "denominator": 1104621,
+        "numerator": 887139,
+        "value": 0.8031161819302729
+      },
+      "pfr": {
+        "denominator": 4273,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "sir": {
+        "denominator": 213209,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "srr": {
+        "denominator": 886066,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "vacuous_improvement": {
+        "denominator": 14999,
+        "numerator": 0,
+        "value": 0.0
+      }
+    }
+  },
+  "per_constraint_type": {
+    "conflictWith": {
+      "macro": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      },
+      "micro": {
+        "f1": 0.0,
+        "fn": 17817,
+        "fp": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "tp": 0
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.0,
+          "fn": 2724,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        },
+        "del": {
+          "f1": 0.0,
+          "fn": 15093,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        }
+      }
+    },
+    "distinct": {
+      "macro": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      },
+      "micro": {
+        "f1": 0.0,
+        "fn": 36248,
+        "fp": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "tp": 0
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.0,
+          "fn": 2016,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        },
+        "del": {
+          "f1": 0.0,
+          "fn": 34232,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        }
+      }
+    },
+    "inverse": {
+      "macro": {
+        "f1": 0.1455962480171046,
+        "precision": 0.1407239517365509,
+        "recall": 0.1508180324355219
+      },
+      "micro": {
+        "f1": 0.27819325931538896,
+        "fn": 11130,
+        "fp": 10779,
+        "precision": 0.2814479034731018,
+        "recall": 0.27501302761855134,
+        "tp": 4222
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.2911924960342092,
+          "fn": 9775,
+          "fp": 10779,
+          "precision": 0.2814479034731018,
+          "recall": 0.3016360648710438,
+          "tp": 4222
+        },
+        "del": {
+          "f1": 0.0,
+          "fn": 1355,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        }
+      }
+    },
+    "itemRequiresStatement": {
+      "macro": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      },
+      "micro": {
+        "f1": 0.0,
+        "fn": 15069,
+        "fp": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "tp": 0
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.0,
+          "fn": 14743,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        },
+        "del": {
+          "f1": 0.0,
+          "fn": 326,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        }
+      }
+    },
+    "oneOf": {
+      "macro": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      },
+      "micro": {
+        "f1": 0.0,
+        "fn": 1807,
+        "fp": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "tp": 0
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.0,
+          "fn": 779,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        },
+        "del": {
+          "f1": 0.0,
+          "fn": 1028,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        }
+      }
+    },
+    "single": {
+      "macro": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      },
+      "micro": {
+        "f1": 0.0,
+        "fn": 20624,
+        "fp": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "tp": 0
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.0,
+          "fn": 2666,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        },
+        "del": {
+          "f1": 0.0,
+          "fn": 17958,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        }
+      }
+    },
+    "type": {
+      "macro": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      },
+      "micro": {
+        "f1": 0.0,
+        "fn": 15336,
+        "fp": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "tp": 0
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.0,
+          "fn": 14500,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        },
+        "del": {
+          "f1": 0.0,
+          "fn": 836,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        }
+      }
+    },
+    "valueRequiresStatement": {
+      "macro": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      },
+      "micro": {
+        "f1": 0.0,
+        "fn": 15326,
+        "fp": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "tp": 0
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.0,
+          "fn": 14689,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        },
+        "del": {
+          "f1": 0.0,
+          "fn": 637,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        }
+      }
+    },
+    "valueType": {
+      "macro": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      },
+      "micro": {
+        "f1": 0.0,
+        "fn": 15239,
+        "fp": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "tp": 0
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.0,
+          "fn": 14874,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        },
+        "del": {
+          "f1": 0.0,
+          "fn": 365,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tp": 0
+        }
+      }
+    }
+  },
+  "prediction_artifacts": {
+    "manifest": "baseline-AddMirrorBaseline/predictions.manifest.json",
+    "predictions": "baseline-AddMirrorBaseline/predictions.parquet",
+    "predictions_sha256": "e58065cdc85cc7887829d8145ff15301b1e93fa39026b968df01c84314c251d1"
+  },
+  "repair_metrics": {
+    "by_action": {
+      "add": {
+        "alternative": 10779,
+        "alternative_rate": 0.07521142091601775,
+        "exact": 65546,
+        "exact_rate": 0.4573529822211058,
+        "failed": 0,
+        "fix_rate": 0.5325644031371236,
+        "missing": 66991,
+        "total": 143316
+      },
+      "del": {
+        "alternative": 0,
+        "alternative_rate": 0.0,
+        "exact": 71486,
+        "exact_rate": 0.49879985486616985,
+        "failed": 0,
+        "fix_rate": 0.49879985486616985,
+        "missing": 71830,
+        "total": 143316
+      }
+    },
+    "overall": {
+      "alternative": 10779,
+      "alternative_rate": 0.037605710458008874,
+      "exact": 137032,
+      "exact_rate": 0.47807641854363786,
+      "failed": 0,
+      "fix_rate": 0.5156821290016467,
+      "missing": 138821,
+      "total": 286632
+    },
+    "per_constraint_type": {
+      "conflictWith": {
+        "add": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 12369,
+          "exact_rate": 0.81951898230968,
+          "failed": 0,
+          "fix_rate": 0.81951898230968,
+          "missing": 2724,
+          "total": 15093
+        },
+        "del": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 0,
+          "exact_rate": 0.0,
+          "failed": 0,
+          "fix_rate": 0.0,
+          "missing": 15093,
+          "total": 15093
+        }
+      },
+      "distinct": {
+        "add": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 32216,
+          "exact_rate": 0.9411077354522085,
+          "failed": 0,
+          "fix_rate": 0.9411077354522085,
+          "missing": 2016,
+          "total": 34232
+        },
+        "del": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 0,
+          "exact_rate": 0.0,
+          "failed": 0,
+          "fix_rate": 0.0,
+          "missing": 34232,
+          "total": 34232
+        }
+      },
+      "inverse": {
+        "add": {
+          "alternative": 10779,
+          "alternative_rate": 0.7185520965268982,
+          "exact": 4222,
+          "exact_rate": 0.2814479034731018,
+          "failed": 0,
+          "fix_rate": 1.0,
+          "missing": 0,
+          "total": 15001
+        },
+        "del": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 13646,
+          "exact_rate": 0.9096726884874342,
+          "failed": 0,
+          "fix_rate": 0.9096726884874342,
+          "missing": 1355,
+          "total": 15001
+        }
+      },
+      "itemRequiresStatement": {
+        "add": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 258,
+          "exact_rate": 0.01719885340977268,
+          "failed": 0,
+          "fix_rate": 0.01719885340977268,
+          "missing": 14743,
+          "total": 15001
+        },
+        "del": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 14675,
+          "exact_rate": 0.9782681154589694,
+          "failed": 0,
+          "fix_rate": 0.9782681154589694,
+          "missing": 326,
+          "total": 15001
+        }
+      },
+      "oneOf": {
+        "add": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 249,
+          "exact_rate": 0.24221789883268482,
+          "failed": 0,
+          "fix_rate": 0.24221789883268482,
+          "missing": 779,
+          "total": 1028
+        },
+        "del": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 0,
+          "exact_rate": 0.0,
+          "failed": 0,
+          "fix_rate": 0.0,
+          "missing": 1028,
+          "total": 1028
+        }
+      },
+      "single": {
+        "add": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 15292,
+          "exact_rate": 0.85154248802762,
+          "failed": 0,
+          "fix_rate": 0.85154248802762,
+          "missing": 2666,
+          "total": 17958
+        },
+        "del": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 0,
+          "exact_rate": 0.0,
+          "failed": 0,
+          "fix_rate": 0.0,
+          "missing": 17958,
+          "total": 17958
+        }
+      },
+      "type": {
+        "add": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 501,
+          "exact_rate": 0.03339777348176788,
+          "failed": 0,
+          "fix_rate": 0.03339777348176788,
+          "missing": 14500,
+          "total": 15001
+        },
+        "del": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 14165,
+          "exact_rate": 0.9442703819745351,
+          "failed": 0,
+          "fix_rate": 0.9442703819745351,
+          "missing": 836,
+          "total": 15001
+        }
+      },
+      "valueRequiresStatement": {
+        "add": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 314,
+          "exact_rate": 0.020929147503832568,
+          "failed": 0,
+          "fix_rate": 0.020929147503832568,
+          "missing": 14689,
+          "total": 15003
+        },
+        "del": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 14366,
+          "exact_rate": 0.9575418249683396,
+          "failed": 0,
+          "fix_rate": 0.9575418249683396,
+          "missing": 637,
+          "total": 15003
+        }
+      },
+      "valueType": {
+        "add": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 125,
+          "exact_rate": 0.008333888925928396,
+          "failed": 0,
+          "fix_rate": 0.008333888925928396,
+          "missing": 14874,
+          "total": 14999
+        },
+        "del": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 14634,
+          "exact_rate": 0.9756650443362891,
+          "failed": 0,
+          "fix_rate": 0.9756650443362891,
+          "missing": 365,
+          "total": 14999
+        }
+      }
+    }
+  },
+  "schema_version": 2,
+  "support_per_constraint_type": {
+    "conflictWith": 15093,
+    "distinct": 34232,
+    "inverse": 15001,
+    "itemRequiresStatement": 15001,
+    "oneOf": 1028,
+    "single": 17958,
+    "type": 15001,
+    "valueRequiresStatement": 15003,
+    "valueType": 14999
+  }
+}

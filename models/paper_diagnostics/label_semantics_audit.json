@@ -1,0 +1,292 @@
+{
+  "labeled_directory": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100_labeled",
+  "mode": "read_only",
+  "schema_version": 1,
+  "splits": {
+    "test": {
+      "by_constraint_family": {
+        "conflictWith": {
+          "factor_checkable_post_gold_drift": 236172,
+          "factor_checkable_pre_drift": 319049,
+          "factor_positions": 1222040,
+          "factor_satisfied_post_gold_drift": 515878,
+          "factor_satisfied_pre_drift": 631155,
+          "length_mismatches": 0,
+          "rows": 15093
+        },
+        "distinct": {
+          "factor_checkable_post_gold_drift": 6144,
+          "factor_checkable_pre_drift": 8162,
+          "factor_positions": 1702574,
+          "factor_satisfied_post_gold_drift": 13532,
+          "factor_satisfied_pre_drift": 15900,
+          "length_mismatches": 0,
+          "rows": 34232
+        },
+        "inverse": {
+          "factor_checkable_post_gold_drift": 63637,
+          "factor_checkable_pre_drift": 78668,
+          "factor_positions": 566919,
+          "factor_satisfied_post_gold_drift": 89947,
+          "factor_satisfied_pre_drift": 107026,
+          "length_mismatches": 0,
+          "rows": 15001
+        },
+        "itemRequiresStatement": {
+          "factor_checkable_post_gold_drift": 76820,
+          "factor_checkable_pre_drift": 79535,
+          "factor_positions": 496615,
+          "factor_satisfied_post_gold_drift": 118713,
+          "factor_satisfied_pre_drift": 120835,
+          "length_mismatches": 0,
+          "rows": 15001
+        },
+        "oneOf": {
+          "factor_checkable_post_gold_drift": 2224,
+          "factor_checkable_pre_drift": 4352,
+          "factor_positions": 84201,
+          "factor_satisfied_post_gold_drift": 5825,
+          "factor_satisfied_pre_drift": 8589,
+          "length_mismatches": 0,
+          "rows": 1028
+        },
+        "single": {
+          "factor_checkable_post_gold_drift": 218113,
+          "factor_checkable_pre_drift": 332412,
+          "factor_positions": 1222239,
+          "factor_satisfied_post_gold_drift": 428706,
+          "factor_satisfied_pre_drift": 546475,
+          "length_mismatches": 0,
+          "rows": 17958
+        },
+        "type": {
+          "factor_checkable_post_gold_drift": 71659,
+          "factor_checkable_pre_drift": 73634,
+          "factor_positions": 657712,
+          "factor_satisfied_post_gold_drift": 97480,
+          "factor_satisfied_pre_drift": 99890,
+          "length_mismatches": 0,
+          "rows": 15001
+        },
+        "valueRequiresStatement": {
+          "factor_checkable_post_gold_drift": 18605,
+          "factor_checkable_pre_drift": 22334,
+          "factor_positions": 951850,
+          "factor_satisfied_post_gold_drift": 37396,
+          "factor_satisfied_pre_drift": 42148,
+          "length_mismatches": 0,
+          "rows": 15003
+        },
+        "valueType": {
+          "factor_checkable_post_gold_drift": 27629,
+          "factor_checkable_pre_drift": 28611,
+          "factor_positions": 1781170,
+          "factor_satisfied_post_gold_drift": 45483,
+          "factor_satisfied_pre_drift": 51764,
+          "length_mismatches": 0,
+          "rows": 14999
+        }
+      },
+      "overall": {
+        "factor_checkable_post_gold_drift": 721003,
+        "factor_checkable_pre_drift": 946757,
+        "factor_positions": 8685320,
+        "factor_satisfied_post_gold_drift": 1352960,
+        "factor_satisfied_pre_drift": 1623782,
+        "length_mismatches": 0,
+        "rows": 143316
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100_labeled/df_test.parquet"
+    },
+    "train": {
+      "by_constraint_family": {
+        "conflictWith": {
+          "factor_checkable_post_gold_drift": 1097109,
+          "factor_checkable_pre_drift": 1487521,
+          "factor_positions": 5702195,
+          "factor_satisfied_post_gold_drift": 2397454,
+          "factor_satisfied_pre_drift": 2940261,
+          "length_mismatches": 0,
+          "rows": 70427
+        },
+        "distinct": {
+          "factor_checkable_post_gold_drift": 29759,
+          "factor_checkable_pre_drift": 39128,
+          "factor_positions": 7942931,
+          "factor_satisfied_post_gold_drift": 63804,
+          "factor_satisfied_pre_drift": 74679,
+          "length_mismatches": 0,
+          "rows": 159743
+        },
+        "inverse": {
+          "factor_checkable_post_gold_drift": 294963,
+          "factor_checkable_pre_drift": 365195,
+          "factor_positions": 2650215,
+          "factor_satisfied_post_gold_drift": 419443,
+          "factor_satisfied_pre_drift": 499293,
+          "length_mismatches": 0,
+          "rows": 70002
+        },
+        "itemRequiresStatement": {
+          "factor_checkable_post_gold_drift": 359383,
+          "factor_checkable_pre_drift": 372421,
+          "factor_positions": 2323948,
+          "factor_satisfied_post_gold_drift": 551753,
+          "factor_satisfied_pre_drift": 562339,
+          "length_mismatches": 0,
+          "rows": 70001
+        },
+        "oneOf": {
+          "factor_checkable_post_gold_drift": 10644,
+          "factor_checkable_pre_drift": 22270,
+          "factor_positions": 406299,
+          "factor_satisfied_post_gold_drift": 29469,
+          "factor_satisfied_pre_drift": 44314,
+          "length_mismatches": 0,
+          "rows": 4798
+        },
+        "single": {
+          "factor_checkable_post_gold_drift": 1017474,
+          "factor_checkable_pre_drift": 1552074,
+          "factor_positions": 5719739,
+          "factor_satisfied_post_gold_drift": 1998777,
+          "factor_satisfied_pre_drift": 2551053,
+          "length_mismatches": 0,
+          "rows": 83807
+        },
+        "type": {
+          "factor_checkable_post_gold_drift": 336059,
+          "factor_checkable_pre_drift": 345281,
+          "factor_positions": 3074887,
+          "factor_satisfied_post_gold_drift": 455439,
+          "factor_satisfied_pre_drift": 467181,
+          "length_mismatches": 0,
+          "rows": 70000
+        },
+        "valueRequiresStatement": {
+          "factor_checkable_post_gold_drift": 88161,
+          "factor_checkable_pre_drift": 105194,
+          "factor_positions": 4425653,
+          "factor_satisfied_post_gold_drift": 177707,
+          "factor_satisfied_pre_drift": 199326,
+          "length_mismatches": 0,
+          "rows": 70000
+        },
+        "valueType": {
+          "factor_checkable_post_gold_drift": 131672,
+          "factor_checkable_pre_drift": 137239,
+          "factor_positions": 8403560,
+          "factor_satisfied_post_gold_drift": 215824,
+          "factor_satisfied_pre_drift": 247319,
+          "length_mismatches": 0,
+          "rows": 70001
+        }
+      },
+      "overall": {
+        "factor_checkable_post_gold_drift": 3365224,
+        "factor_checkable_pre_drift": 4426323,
+        "factor_positions": 40649427,
+        "factor_satisfied_post_gold_drift": 6309670,
+        "factor_satisfied_pre_drift": 7585765,
+        "length_mismatches": 0,
+        "rows": 668779
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100_labeled/df_train.parquet"
+    },
+    "val": {
+      "by_constraint_family": {
+        "conflictWith": {
+          "factor_checkable_post_gold_drift": 234157,
+          "factor_checkable_pre_drift": 318924,
+          "factor_positions": 1218244,
+          "factor_satisfied_post_gold_drift": 512758,
+          "factor_satisfied_pre_drift": 630018,
+          "length_mismatches": 0,
+          "rows": 15092
+        },
+        "distinct": {
+          "factor_checkable_post_gold_drift": 6688,
+          "factor_checkable_pre_drift": 8929,
+          "factor_positions": 1702916,
+          "factor_satisfied_post_gold_drift": 14400,
+          "factor_satisfied_pre_drift": 17075,
+          "length_mismatches": 0,
+          "rows": 34233
+        },
+        "inverse": {
+          "factor_checkable_post_gold_drift": 63440,
+          "factor_checkable_pre_drift": 78408,
+          "factor_positions": 571270,
+          "factor_satisfied_post_gold_drift": 91009,
+          "factor_satisfied_pre_drift": 108096,
+          "length_mismatches": 0,
+          "rows": 15000
+        },
+        "itemRequiresStatement": {
+          "factor_checkable_post_gold_drift": 77011,
+          "factor_checkable_pre_drift": 79948,
+          "factor_positions": 492445,
+          "factor_satisfied_post_gold_drift": 117825,
+          "factor_satisfied_pre_drift": 120291,
+          "length_mismatches": 0,
+          "rows": 14998
+        },
+        "oneOf": {
+          "factor_checkable_post_gold_drift": 2989,
+          "factor_checkable_pre_drift": 5897,
+          "factor_positions": 85269,
+          "factor_satisfied_post_gold_drift": 7417,
+          "factor_satisfied_pre_drift": 11020,
+          "length_mismatches": 0,
+          "rows": 1029
+        },
+        "single": {
+          "factor_checkable_post_gold_drift": 219521,
+          "factor_checkable_pre_drift": 333140,
+          "factor_positions": 1231340,
+          "factor_satisfied_post_gold_drift": 430853,
+          "factor_satisfied_pre_drift": 548371,
+          "length_mismatches": 0,
+          "rows": 17958
+        },
+        "type": {
+          "factor_checkable_post_gold_drift": 71762,
+          "factor_checkable_pre_drift": 73781,
+          "factor_positions": 670235,
+          "factor_satisfied_post_gold_drift": 96909,
+          "factor_satisfied_pre_drift": 99415,
+          "length_mismatches": 0,
+          "rows": 15001
+        },
+        "valueRequiresStatement": {
+          "factor_checkable_post_gold_drift": 18884,
+          "factor_checkable_pre_drift": 22484,
+          "factor_positions": 945272,
+          "factor_satisfied_post_gold_drift": 37956,
+          "factor_satisfied_pre_drift": 42421,
+          "length_mismatches": 0,
+          "rows": 14999
+        },
+        "valueType": {
+          "factor_checkable_post_gold_drift": 28730,
+          "factor_checkable_pre_drift": 30012,
+          "factor_positions": 1798190,
+          "factor_satisfied_post_gold_drift": 46937,
+          "factor_satisfied_pre_drift": 53736,
+          "length_mismatches": 0,
+          "rows": 15000
+        }
+      },
+      "overall": {
+        "factor_checkable_post_gold_drift": 723182,
+        "factor_checkable_pre_drift": 951523,
+        "factor_positions": 8715181,
+        "factor_satisfied_post_gold_drift": 1356064,
+        "factor_satisfied_pre_drift": 1630443,
+        "length_mismatches": 0,
+        "rows": 143310
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100_labeled/df_val.parquet"
+    }
+  }
+}

@@ -1,5 +1,6 @@
 {
   "model_config": {
+    "active_factor_type_ids": null,
     "constraint_representation": "eswc_passive",
     "dataset_variant": "full_strat1m_minocc100",
     "dropout": 0.5,
@@ -4264,6 +4265,7 @@
     ],
     "factor_executor_impl": "per_type_v1",
     "factor_type_embedding_dim": 8,
+    "gold_edit_embedding_mode": "full",
     "head_hidden": 128,
     "hidden_channels": 128,
     "min_occurrence": 100,
@@ -4841,6 +4843,7 @@
     "policy_filter_strict": true,
     "scheduler_factor": 0.5,
     "scheduler_patience": 0,
+    "seed": 42,
     "validate_factor_labels": false,
     "validation_subset_size": 25000,
     "weight_decay": 0.00011

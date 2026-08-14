@@ -1,0 +1,343 @@
+{
+  "excluded_runs": {
+    "G0": {
+      "membership_rate": 0.9936573725194675,
+      "predictions_sha256": "34ddc9ff52415b8347d9220e6425bc73d9d50114b5c5b29a04d9814137b26931",
+      "reason": "missing reranker checkpoint and incomplete gold-excluded candidate membership",
+      "row_count": 143316,
+      "status": "excluded"
+    }
+  },
+  "ready": true,
+  "schema_version": 2,
+  "sidecars": {
+    "A1": {
+      "h2_status": "partial",
+      "h2_unsupported": {
+        "post_gold_factor_semantics": "evaluation-safe compact forward omits post-gold logits because test gold edits may be absent from the train/validation compact target vocabulary"
+      },
+      "oracle_support": 143316
+    },
+    "M1C": {
+      "h2_status": "partial",
+      "h2_unsupported": {
+        "post_gold_factor_semantics": "evaluation-safe compact forward omits post-gold logits because test gold edits may be absent from the train/validation compact target vocabulary"
+      },
+      "oracle_support": 143316
+    },
+    "M1D": {
+      "h2_status": "partial",
+      "h2_unsupported": {
+        "post_gold_factor_semantics": "evaluation-safe compact forward omits post-gold logits because test gold edits may be absent from the train/validation compact target vocabulary"
+      },
+      "oracle_support": 143316
+    }
+  },
+  "systems": {
+    "A1": {
+      "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
+      "dataset_variant": "full_strat1m_minocc100",
+      "model_path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/evaluations/model.json",
+      "paper_metrics": {
+        "base_deletion_rate": {
+          "denominator": 143316,
+          "numerator": 50409,
+          "value": 0.35173323285606634
+        },
+        "deletes_base_action_rate": {
+          "denominator": 143316,
+          "numerator": 51904,
+          "value": 0.3621647268972062
+        },
+        "delta_local_satisfaction": {
+          "denominator": 4691910,
+          "numerator": 72262,
+          "value": 0.015401403692739204
+        },
+        "disruption": {
+          "denominator": 143316,
+          "numerator": 148357,
+          "value": 1.0351740210444054
+        },
+        "eppf": {
+          "denominator": 54234,
+          "numerator": 5713,
+          "value": 0.10533982372681344
+        },
+        "local_satisfaction": {
+          "denominator": 5189194,
+          "numerator": 3901059,
+          "value": 0.751765881175381
+        },
+        "pfr": {
+          "denominator": 54234,
+          "numerator": 34050,
+          "value": 0.6278349374930855
+        },
+        "sir": {
+          "denominator": 1305024,
+          "numerator": 53873,
+          "value": 0.041281233142072486
+        },
+        "srr": {
+          "denominator": 3283351,
+          "numerator": 15643,
+          "value": 0.004764339846699302
+        },
+        "vacuous_improvement": {
+          "denominator": 143316,
+          "numerator": 38719,
+          "value": 0.27016522928354125
+        }
+      },
+      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+      "predictions_sha256": "b9c0588e6e06b2f34774f45ba06a5455c98491fe74c2fecc2cba200d5a246750",
+      "row_count": 143316,
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2"
+    },
+    "B0": {
+      "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
+      "dataset_variant": "full_strat1m_minocc100",
+      "model_path": "/home/mvazquez/fidelity-safety-gap/models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/evaluations/model.json",
+      "paper_metrics": {
+        "base_deletion_rate": {
+          "denominator": 143316,
+          "numerator": 62228,
+          "value": 0.434201345278964
+        },
+        "deletes_base_action_rate": {
+          "denominator": 143316,
+          "numerator": 62277,
+          "value": 0.4345432470903458
+        },
+        "delta_local_satisfaction": {
+          "denominator": 4691844,
+          "numerator": 94417,
+          "value": 0.020123644349641635
+        },
+        "disruption": {
+          "denominator": 143316,
+          "numerator": 143017,
+          "value": 0.997913701191772
+        },
+        "eppf": {
+          "denominator": 54234,
+          "numerator": 6511,
+          "value": 0.12005384076409632
+        },
+        "local_satisfaction": {
+          "denominator": 5322054,
+          "numerator": 4056318,
+          "value": 0.7621715224986443
+        },
+        "pfr": {
+          "denominator": 54234,
+          "numerator": 43977,
+          "value": 0.8108750968027436
+        },
+        "sir": {
+          "denominator": 1305030,
+          "numerator": 67932,
+          "value": 0.05205397577067194
+        },
+        "srr": {
+          "denominator": 3283279,
+          "numerator": 17489,
+          "value": 0.0053266871319799505
+        },
+        "vacuous_improvement": {
+          "denominator": 143316,
+          "numerator": 48997,
+          "value": 0.34188087861787936
+        }
+      },
+      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+      "predictions_sha256": "98861939b42496a0f9d0bbb7e6a0157c7a5ae039e13b2e1f8adc0a7e8e8ecbdc",
+      "row_count": 143316,
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2"
+    },
+    "DFB": {
+      "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
+      "dataset_variant": "full_strat1m_minocc100",
+      "model_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-DeleteFocusBaseline.json",
+      "paper_metrics": {
+        "base_deletion_rate": {
+          "denominator": 143316,
+          "numerator": 143316,
+          "value": 1.0
+        },
+        "deletes_base_action_rate": {
+          "denominator": 143316,
+          "numerator": 143316,
+          "value": 1.0
+        },
+        "delta_local_satisfaction": {
+          "denominator": 4690179,
+          "numerator": 163909,
+          "value": 0.03494728026371701
+        },
+        "disruption": {
+          "denominator": 143316,
+          "numerator": 143316,
+          "value": 1.0
+        },
+        "eppf": {
+          "denominator": 54234,
+          "numerator": 0,
+          "value": 0.0
+        },
+        "local_satisfaction": {
+          "denominator": 5962474,
+          "numerator": 4767220,
+          "value": 0.7995372390722375
+        },
+        "pfr": {
+          "denominator": 54234,
+          "numerator": 49992,
+          "value": 0.9217833831176016
+        },
+        "sir": {
+          "denominator": 1304929,
+          "numerator": 145181,
+          "value": 0.11125586143000883
+        },
+        "srr": {
+          "denominator": 3281715,
+          "numerator": 31264,
+          "value": 0.009526726117289283
+        },
+        "vacuous_improvement": {
+          "denominator": 143316,
+          "numerator": 82864,
+          "value": 0.5781908509866309
+        }
+      },
+      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-DeleteFocusBaseline/predictions.parquet",
+      "predictions_sha256": "dbd1a79ce6b3d936c081f6da3a745428c4b1d30a50a4ecc4c4d6178187fab9dc",
+      "row_count": 143316,
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2"
+    },
+    "M1C": {
+      "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
+      "dataset_variant": "full_strat1m_minocc100",
+      "model_path": "/home/mvazquez/fidelity-safety-gap/models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/evaluations/model.json",
+      "paper_metrics": {
+        "base_deletion_rate": {
+          "denominator": 143316,
+          "numerator": 44727,
+          "value": 0.3120865779117475
+        },
+        "deletes_base_action_rate": {
+          "denominator": 143316,
+          "numerator": 44727,
+          "value": 0.3120865779117475
+        },
+        "delta_local_satisfaction": {
+          "denominator": 4691615,
+          "numerator": 73074,
+          "value": 0.015575446834405636
+        },
+        "disruption": {
+          "denominator": 143316,
+          "numerator": 143316,
+          "value": 1.0
+        },
+        "eppf": {
+          "denominator": 54234,
+          "numerator": 5567,
+          "value": 0.10264778552199727
+        },
+        "local_satisfaction": {
+          "denominator": 5127377,
+          "numerator": 3840417,
+          "value": 0.7490022676311884
+        },
+        "pfr": {
+          "denominator": 54234,
+          "numerator": 32271,
+          "value": 0.595032636353579
+        },
+        "sir": {
+          "denominator": 1304991,
+          "numerator": 54428,
+          "value": 0.04170756733188198
+        },
+        "srr": {
+          "denominator": 3283089,
+          "numerator": 13615,
+          "value": 0.004147009112454764
+        },
+        "vacuous_improvement": {
+          "denominator": 143316,
+          "numerator": 33880,
+          "value": 0.23640068101258757
+        }
+      },
+      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+      "predictions_sha256": "ab0665f53fd43a67535b99a4494047f727d12d3ce87427169b16e0656570d3e0",
+      "row_count": 143316,
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2"
+    },
+    "M1D": {
+      "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
+      "dataset_variant": "full_strat1m_minocc100",
+      "model_path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/evaluations/model.json",
+      "paper_metrics": {
+        "base_deletion_rate": {
+          "denominator": 143316,
+          "numerator": 63661,
+          "value": 0.44420022886488597
+        },
+        "deletes_base_action_rate": {
+          "denominator": 143316,
+          "numerator": 63661,
+          "value": 0.44420022886488597
+        },
+        "delta_local_satisfaction": {
+          "denominator": 4692049,
+          "numerator": 94916,
+          "value": 0.02022911525433771
+        },
+        "disruption": {
+          "denominator": 143316,
+          "numerator": 142501,
+          "value": 0.9943132657902816
+        },
+        "eppf": {
+          "denominator": 54234,
+          "numerator": 1896,
+          "value": 0.034959619426927754
+        },
+        "local_satisfaction": {
+          "denominator": 5331576,
+          "numerator": 4066710,
+          "value": 0.7627594542401721
+        },
+        "pfr": {
+          "denominator": 54234,
+          "numerator": 41796,
+          "value": 0.7706604712910721
+        },
+        "sir": {
+          "denominator": 1305021,
+          "numerator": 66091,
+          "value": 0.05064362948948714
+        },
+        "srr": {
+          "denominator": 3283493,
+          "numerator": 12917,
+          "value": 0.003933920370775878
+        },
+        "vacuous_improvement": {
+          "denominator": 143316,
+          "numerator": 51250,
+          "value": 0.3576013843534567
+        }
+      },
+      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+      "predictions_sha256": "b0c7eb39ab7866ff536d07c48c4b8fa1ceae1148d9730aee8f364db929096094",
+      "row_count": 143316,
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2"
+    }
+  }
+}

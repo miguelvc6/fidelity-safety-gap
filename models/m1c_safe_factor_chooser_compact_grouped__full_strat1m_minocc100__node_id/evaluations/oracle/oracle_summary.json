@@ -1,0 +1,159 @@
+{
+  "candidate_config": {
+    "heuristic_max_candidates": 30,
+    "heuristic_max_values": 3,
+    "include_gold": false,
+    "max_candidates_total": 80,
+    "topk_candidates": 20,
+    "topk_per_slot": 5
+  },
+  "checkpoint": {
+    "path": "/home/mvazquez/fidelity-safety-gap/models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/checkpoint.pth",
+    "sha256": "9057a2c7af95cfe4260f76b69f8d2c3f389c1f4d60b10cbef02e8827ffdf1cfb"
+  },
+  "config": {
+    "path": "/home/mvazquez/fidelity-safety-gap/models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/config.json",
+    "sha256": "0b71335b5099505b19227841e40b41bac64819035e7cebf009516930a1b2511e"
+  },
+  "constraint_representation": "factorized",
+  "constraint_type_support": {
+    "conflictWith": 15093,
+    "distinct": 34232,
+    "inverse": 15001,
+    "itemRequiresStatement": 15001,
+    "oneOf": 1028,
+    "single": 17958,
+    "type": 15001,
+    "valueRequiresStatement": 15003,
+    "valueType": 14999
+  },
+  "dataset": {
+    "path": "data/interim/full_strat1m_minocc100/df_test.parquet",
+    "sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
+    "variant": "full_strat1m_minocc100"
+  },
+  "encoding": "node_id",
+  "max_safe_disruption": 2,
+  "min_occurrence": 100,
+  "overall": {
+    "candidate_count_mean": 42.42178123866142,
+    "candidate_set_nonempty_rate": 1.0,
+    "oracle_non_vacuous_safe_available_rate": 0.09634653492980547,
+    "oracle_paper_metrics": {
+      "base_deletion_rate": {
+        "denominator": 143316,
+        "numerator": 105025,
+        "value": 0.7328211783750593
+      },
+      "deletes_base_action_rate": {
+        "denominator": 143316,
+        "numerator": 105025,
+        "value": 0.7328211783750593
+      },
+      "delta_local_satisfaction": {
+        "denominator": 4690578,
+        "numerator": 171883,
+        "value": 0.036644311212818546
+      },
+      "disruption": {
+        "denominator": 143316,
+        "numerator": 110585,
+        "value": 0.7716165675849173
+      },
+      "eppf": {
+        "denominator": 54234,
+        "numerator": 4635,
+        "value": 0.0854629936939927
+      },
+      "local_satisfaction": {
+        "denominator": 5762338,
+        "numerator": 4575206,
+        "value": 0.7939843167825282
+      },
+      "pfr": {
+        "denominator": 54234,
+        "numerator": 50604,
+        "value": 0.93306781723642
+      },
+      "sir": {
+        "denominator": 1304760,
+        "numerator": 123242,
+        "value": 0.09445568533676692
+      },
+      "srr": {
+        "denominator": 3282283,
+        "numerator": 1963,
+        "value": 0.0005980593385762288
+      },
+      "vacuous_improvement": {
+        "denominator": 143316,
+        "numerator": 77226,
+        "value": 0.538851209913757
+      }
+    },
+    "oracle_safe_available_rate": 0.3442393033576153,
+    "selected_non_vacuous_safe_rate": 0.034022719026486924,
+    "selected_paper_metrics": {
+      "base_deletion_rate": {
+        "denominator": 143316,
+        "numerator": 44727,
+        "value": 0.3120865779117475
+      },
+      "deletes_base_action_rate": {
+        "denominator": 143316,
+        "numerator": 44727,
+        "value": 0.3120865779117475
+      },
+      "delta_local_satisfaction": {
+        "denominator": 4691615,
+        "numerator": 73074,
+        "value": 0.015575446834405636
+      },
+      "disruption": {
+        "denominator": 143316,
+        "numerator": 143316,
+        "value": 1.0
+      },
+      "eppf": {
+        "denominator": 54234,
+        "numerator": 5567,
+        "value": 0.10264778552199727
+      },
+      "local_satisfaction": {
+        "denominator": 5127377,
+        "numerator": 3840417,
+        "value": 0.7490022676311884
+      },
+      "pfr": {
+        "denominator": 54234,
+        "numerator": 32271,
+        "value": 0.595032636353579
+      },
+      "sir": {
+        "denominator": 1304991,
+        "numerator": 54428,
+        "value": 0.04170756733188198
+      },
+      "srr": {
+        "denominator": 3283089,
+        "numerator": 13615,
+        "value": 0.004147009112454764
+      },
+      "vacuous_improvement": {
+        "denominator": 143316,
+        "numerator": 33880,
+        "value": 0.23640068101258757
+      }
+    },
+    "selected_safe_rate": 0.21820313154148874,
+    "support": 143316
+  },
+  "run_directory": "/home/mvazquez/fidelity-safety-gap/models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id",
+  "schema_version": 2,
+  "selected_prediction_source": {
+    "mode": "validated_schema_v2_replay",
+    "path": "/home/mvazquez/fidelity-safety-gap/models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+    "sha256": "ab0665f53fd43a67535b99a4494047f727d12d3ce87427169b16e0656570d3e0"
+  },
+  "selection_mode": "chooser"
+}

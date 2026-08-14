@@ -1,0 +1,109 @@
+{
+  "checkpoint": {
+    "path": "/home/mvazquez/fidelity-safety-gap/models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/checkpoint.pth",
+    "sha256": "7a105577d715979bd4ba56832b0c9c63d64f59fb0302c83a271bdf9eb6e19d18",
+    "size_bytes": 111757941
+  },
+  "config": {
+    "path": "/home/mvazquez/fidelity-safety-gap/models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/config.json",
+    "sha256": "6bbc3e64b27fa3126f6215726ece984cd68e21f054c5dfa4cf1815167c325a68",
+    "size_bytes": 64292
+  },
+  "dataset": {
+    "artifact": {
+      "path": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100/df_test.parquet",
+      "sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
+      "size_bytes": 28038233
+    },
+    "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
+    "split": "test",
+    "variant": "full_strat1m_minocc100"
+  },
+  "graph": {
+    "artifacts": [
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard000.pt",
+        "sha256": "a27548353bd076c437fe1ac823002bdd5986a142ac6f0ab02871956aed1d727d",
+        "size_bytes": 108917821
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard001.pt",
+        "sha256": "05b5681a42ac830c03bdd9314adcb79d0ebc0855296133fb4d4a895654120f80",
+        "size_bytes": 107550333
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard002.pt",
+        "sha256": "e7029d0961214916b5daca7071335995c66403fa906eaf517c93932c1870a1f2",
+        "size_bytes": 109941053
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard003.pt",
+        "sha256": "52cc7345f2673b8f58fd4badbd5922ae6d3ef2268a2175cb16c3ba710d8090b9",
+        "size_bytes": 109676413
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard004.pt",
+        "sha256": "5ba120152a0913575db034af8d0cce04848518b570612ff57af3a00cc1c19d8c",
+        "size_bytes": 108007101
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard005.pt",
+        "sha256": "3596390c20d36caadc09e102322933910e84e808a9de153e4102296e7d5b2e89",
+        "size_bytes": 109317629
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard006.pt",
+        "sha256": "e8e328f85cdcfd96f71fdcfe9a1411d635febba70a0ad5476c1478a15c1c98df",
+        "size_bytes": 107491261
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard007.pt",
+        "sha256": "c92c32a6eb9cc3bebe25aa86c53f81a0a99df4917bb5a4824d5735f34531e9cb",
+        "size_bytes": 109588285
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard008.pt",
+        "sha256": "be555fc5322aa95bf41da1d45bdb4e3380d81a4de16b7a0e5c4c671b946ef523",
+        "size_bytes": 107986813
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard009.pt",
+        "sha256": "d45e976b7277266e02d1466078da24a6b79eabfe5144e96a5f9c860efe30aa60",
+        "size_bytes": 108551869
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard010.pt",
+        "sha256": "5153ef50455150584e86cc3328ac178688d615e83efe578b51b7a36a51238d9b",
+        "size_bytes": 108465469
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard011.pt",
+        "sha256": "13a5f82cc2835d2ad5de85936def381de5ee293c839ad0a8c65f7bf17fa9eb02",
+        "size_bytes": 110424317
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard012.pt",
+        "sha256": "2de546725c163648837a73dd517d42cb633e1f84f3a164a1df828425bf9c9e9d",
+        "size_bytes": 110901053
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard013.pt",
+        "sha256": "6888b00164dcf1e9eaf918aca076d4d8ee90165f9f24fa75f3cafcc4c4be27a9",
+        "size_bytes": 111129469
+      },
+      {
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph_repr-eswc_passive-node_id-shard014.pt",
+        "sha256": "94d46bcf73a5d857ef477b88d218bbd88c8ef1775178d4eccbf18c3bdb866445",
+        "size_bytes": 35755417
+      }
+    ]
+  },
+  "predictions": {
+    "path": "/home/mvazquez/fidelity-safety-gap/models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+    "sha256": "98861939b42496a0f9d0bbb7e6a0157c7a5ae039e13b2e1f8adc0a7e8e8ecbdc",
+    "size_bytes": 3854517
+  },
+  "row_count": 143316,
+  "schema_version": 2,
+  "split": "test"
+}

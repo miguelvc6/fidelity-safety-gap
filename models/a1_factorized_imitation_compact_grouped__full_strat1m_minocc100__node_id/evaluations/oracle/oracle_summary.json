@@ -1,0 +1,159 @@
+{
+  "candidate_config": {
+    "heuristic_max_candidates": 30,
+    "heuristic_max_values": 3,
+    "include_gold": false,
+    "max_candidates_total": 80,
+    "topk_candidates": 20,
+    "topk_per_slot": 5
+  },
+  "checkpoint": {
+    "path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/checkpoint.pth",
+    "sha256": "099a5cb14bf2a33157ac8b4d3bbc6cd1f6a891dda85e28c3a94fe5fb4d3a67d8"
+  },
+  "config": {
+    "path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/config.json",
+    "sha256": "4bbd90e7812c8ca72389a23aa8e1c3eb55abf9b91c652eea8eda6a56ae4855ef"
+  },
+  "constraint_representation": "factorized",
+  "constraint_type_support": {
+    "conflictWith": 15093,
+    "distinct": 34232,
+    "inverse": 15001,
+    "itemRequiresStatement": 15001,
+    "oneOf": 1028,
+    "single": 17958,
+    "type": 15001,
+    "valueRequiresStatement": 15003,
+    "valueType": 14999
+  },
+  "dataset": {
+    "path": "data/interim/full_strat1m_minocc100/df_test.parquet",
+    "sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
+    "variant": "full_strat1m_minocc100"
+  },
+  "encoding": "node_id",
+  "max_safe_disruption": 2,
+  "min_occurrence": 100,
+  "overall": {
+    "candidate_count_mean": 42.42229758017248,
+    "candidate_set_nonempty_rate": 1.0,
+    "oracle_non_vacuous_safe_available_rate": 0.09780485081916883,
+    "oracle_paper_metrics": {
+      "base_deletion_rate": {
+        "denominator": 143316,
+        "numerator": 104798,
+        "value": 0.7312372659019231
+      },
+      "deletes_base_action_rate": {
+        "denominator": 143316,
+        "numerator": 104798,
+        "value": 0.7312372659019231
+      },
+      "delta_local_satisfaction": {
+        "denominator": 4690661,
+        "numerator": 171818,
+        "value": 0.03662980547944096
+      },
+      "disruption": {
+        "denominator": 143316,
+        "numerator": 110455,
+        "value": 0.7707094811465572
+      },
+      "eppf": {
+        "denominator": 54234,
+        "numerator": 4849,
+        "value": 0.08940885791201092
+      },
+      "local_satisfaction": {
+        "denominator": 5759705,
+        "numerator": 4572509,
+        "value": 0.7938790267904345
+      },
+      "pfr": {
+        "denominator": 54234,
+        "numerator": 50707,
+        "value": 0.9349669948740642
+      },
+      "sir": {
+        "denominator": 1304759,
+        "numerator": 123035,
+        "value": 0.09429710774173622
+      },
+      "srr": {
+        "denominator": 3282367,
+        "numerator": 1924,
+        "value": 0.0005861623639282262
+      },
+      "vacuous_improvement": {
+        "denominator": 143316,
+        "numerator": 77106,
+        "value": 0.5380138993552709
+      }
+    },
+    "oracle_safe_available_rate": 0.34508359150408885,
+    "selected_non_vacuous_safe_rate": 0.03622065924251305,
+    "selected_paper_metrics": {
+      "base_deletion_rate": {
+        "denominator": 143316,
+        "numerator": 50409,
+        "value": 0.35173323285606634
+      },
+      "deletes_base_action_rate": {
+        "denominator": 143316,
+        "numerator": 51904,
+        "value": 0.3621647268972062
+      },
+      "delta_local_satisfaction": {
+        "denominator": 4691910,
+        "numerator": 72262,
+        "value": 0.015401403692739204
+      },
+      "disruption": {
+        "denominator": 143316,
+        "numerator": 148357,
+        "value": 1.0351740210444054
+      },
+      "eppf": {
+        "denominator": 54234,
+        "numerator": 5713,
+        "value": 0.10533982372681344
+      },
+      "local_satisfaction": {
+        "denominator": 5189194,
+        "numerator": 3901059,
+        "value": 0.751765881175381
+      },
+      "pfr": {
+        "denominator": 54234,
+        "numerator": 34050,
+        "value": 0.6278349374930855
+      },
+      "sir": {
+        "denominator": 1305024,
+        "numerator": 53873,
+        "value": 0.041281233142072486
+      },
+      "srr": {
+        "denominator": 3283351,
+        "numerator": 15643,
+        "value": 0.004764339846699302
+      },
+      "vacuous_improvement": {
+        "denominator": 143316,
+        "numerator": 38719,
+        "value": 0.27016522928354125
+      }
+    },
+    "selected_safe_rate": 0.23191409193669932,
+    "support": 143316
+  },
+  "run_directory": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id",
+  "schema_version": 2,
+  "selected_prediction_source": {
+    "mode": "validated_schema_v2_replay",
+    "path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+    "sha256": "b9c0588e6e06b2f34774f45ba06a5455c98491fe74c2fecc2cba200d5a246750"
+  },
+  "selection_mode": "slot_argmax"
+}

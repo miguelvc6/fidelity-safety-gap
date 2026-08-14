@@ -1,0 +1,25 @@
+{
+  "checkpoint": null,
+  "config": null,
+  "dataset": {
+    "artifact": {
+      "path": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100/df_test.parquet",
+      "sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
+      "size_bytes": 28038233
+    },
+    "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
+    "split": "test",
+    "variant": "full_strat1m_minocc100"
+  },
+  "graph": {
+    "artifacts": []
+  },
+  "predictions": {
+    "path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-ConstraintDefinitionMajorityBaseline/predictions.parquet",
+    "sha256": "8ab1e13efcd4f157721b271cfc3678b5263f853a543855e2767a25defe414134",
+    "size_bytes": 3980009
+  },
+  "row_count": 143316,
+  "schema_version": 2,
+  "split": "test"
+}

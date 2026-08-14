@@ -1,5 +1,6 @@
 {
   "model_config": {
+    "active_factor_type_ids": null,
     "constraint_representation": "factorized",
     "dataset_variant": "full_strat1m_minocc100",
     "dropout": 0.5,
@@ -8,6 +9,7 @@
     "entity_class_ids": null,
     "factor_executor_impl": "per_type_v1",
     "factor_type_embedding_dim": 8,
+    "gold_edit_embedding_mode": "full",
     "head_hidden": 128,
     "hidden_channels": 128,
     "min_occurrence": 100,
@@ -29,7 +31,7 @@
     "use_role_embeddings": false
   },
   "proposal_config": {
-    "config_tag": "a1_factorized_imitation__full_strat1m_minocc100__node_id",
+    "config_tag": "a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id",
     "model": "GIN_PRESSURE"
   },
   "reranker_config": {
@@ -52,6 +54,7 @@
     "num_workers": 0,
     "objective": "global_fix",
     "pin_memory": false,
+    "prediction_include_gold": false,
     "regression_weight": 0.5,
     "scheduler_factor": 0.5,
     "scheduler_patience": 0,
