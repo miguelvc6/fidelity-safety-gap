@@ -1,4 +1,21 @@
 {
+  "canonical_scope": {
+    "deterministic_baselines": [
+      "DFB",
+      "AMB",
+      "CFM",
+      "CDM"
+    ],
+    "excluded_systems": [
+      "G0"
+    ],
+    "learned_systems": [
+      "B0",
+      "A1",
+      "M1C",
+      "M1D"
+    ]
+  },
   "excluded_runs": {
     "G0": {
       "membership_rate": 0.9936573725194675,
@@ -7,6 +24,16 @@
       "row_count": 143316,
       "status": "excluded"
     }
+  },
+  "paper": {
+    "path": "/home/mvazquez/fidelity-safety-gap/latex_paper/main_compact.tex",
+    "sha256": "a4137c897d9f964c89f32da3981a56c3e37057a770378b72cc568807447780d9",
+    "validated_tables": [
+      "tab:main-results",
+      "tab:symbolic-results",
+      "tab:transition-results",
+      "tab:pressure-masking"
+    ]
   },
   "ready": true,
   "schema_version": 2,
@@ -37,6 +64,14 @@
     "A1": {
       "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
       "dataset_variant": "full_strat1m_minocc100",
+      "fidelity": {
+        "f1": 0.6787681580476468,
+        "precision": 0.6889732200031007,
+        "recall": 0.6688609980499679
+      },
+      "graph_checksums_verified": true,
+      "mean_additions": 0.5747299673448882,
+      "mean_deletions": 0.46044405369951713,
       "model_path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/evaluations/model.json",
       "paper_metrics": {
         "base_deletion_rate": {
@@ -93,11 +128,96 @@
       "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
       "predictions_sha256": "b9c0588e6e06b2f34774f45ba06a5455c98491fe74c2fecc2cba200d5a246750",
       "row_count": 143316,
-      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2"
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
+      "training": {
+        "best_epoch": 10,
+        "best_validation_loss": 0.28684,
+        "epochs_run": 10,
+        "history_path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/training_history.json",
+        "history_sha256": "6c5c9a65437a87a255111f9346b8d17f7d1d878d6e1ec2eaa5f1a11d4fbff057"
+      }
+    },
+    "AMB": {
+      "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
+      "dataset_variant": "full_strat1m_minocc100",
+      "fidelity": {
+        "f1": 0.05031611438514113,
+        "precision": 0.2814479034731018,
+        "recall": 0.02762763548796608
+      },
+      "graph_checksums_verified": false,
+      "mean_additions": 0.10467079739875519,
+      "mean_deletions": 0.0,
+      "model_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-AddMirrorBaseline.json",
+      "paper_metrics": {
+        "base_deletion_rate": {
+          "denominator": 143316,
+          "numerator": 0,
+          "value": 0.0
+        },
+        "deletes_base_action_rate": {
+          "denominator": 143316,
+          "numerator": 0,
+          "value": 0.0
+        },
+        "delta_local_satisfaction": {
+          "denominator": 4692077,
+          "numerator": 804,
+          "value": 0.00017135268666733304
+        },
+        "disruption": {
+          "denominator": 143316,
+          "numerator": 15001,
+          "value": 0.10467079739875519
+        },
+        "eppf": {
+          "denominator": 54234,
+          "numerator": 804,
+          "value": 0.014824648744330125
+        },
+        "local_satisfaction": {
+          "denominator": 4692077,
+          "numerator": 3333614,
+          "value": 0.7104772577261627
+        },
+        "pfr": {
+          "denominator": 54234,
+          "numerator": 804,
+          "value": 0.014824648744330125
+        },
+        "sir": {
+          "denominator": 1305033,
+          "numerator": 0,
+          "value": 0.0
+        },
+        "srr": {
+          "denominator": 3283509,
+          "numerator": 0,
+          "value": 0.0
+        },
+        "vacuous_improvement": {
+          "denominator": 143316,
+          "numerator": 0,
+          "value": 0.0
+        }
+      },
+      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-AddMirrorBaseline/predictions.parquet",
+      "predictions_sha256": "e58065cdc85cc7887829d8145ff15301b1e93fa39026b968df01c84314c251d1",
+      "row_count": 143316,
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
+      "training": null
     },
     "B0": {
       "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
       "dataset_variant": "full_strat1m_minocc100",
+      "fidelity": {
+        "f1": 0.5471428329981239,
+        "precision": 0.5658907682303502,
+        "recall": 0.5295972987475297
+      },
+      "graph_checksums_verified": true,
+      "mean_additions": 0.515860057495325,
+      "mean_deletions": 0.482053643696447,
       "model_path": "/home/mvazquez/fidelity-safety-gap/models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/evaluations/model.json",
       "paper_metrics": {
         "base_deletion_rate": {
@@ -154,11 +274,166 @@
       "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
       "predictions_sha256": "98861939b42496a0f9d0bbb7e6a0157c7a5ae039e13b2e1f8adc0a7e8e8ecbdc",
       "row_count": 143316,
-      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2"
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
+      "training": {
+        "best_epoch": 10,
+        "best_validation_loss": 0.43182,
+        "epochs_run": 10,
+        "history_path": "/home/mvazquez/fidelity-safety-gap/models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/training_history.json",
+        "history_sha256": "4b7055eab56221afa4718c769558fe0b9c0f20c9d8cdca785558a56c2739b6fd"
+      }
+    },
+    "CDM": {
+      "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
+      "dataset_variant": "full_strat1m_minocc100",
+      "fidelity": {
+        "f1": 0.6482406401526192,
+        "precision": 0.6563007175910401,
+        "recall": 0.6403761337015274
+      },
+      "graph_checksums_verified": false,
+      "mean_additions": 0.5602863602110023,
+      "mean_deletions": 0.48014178458790363,
+      "model_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-ConstraintDefinitionMajorityBaseline.json",
+      "paper_metrics": {
+        "base_deletion_rate": {
+          "denominator": 143316,
+          "numerator": 58438,
+          "value": 0.4077562868067766
+        },
+        "deletes_base_action_rate": {
+          "denominator": 143316,
+          "numerator": 59700,
+          "value": 0.4165620028468559
+        },
+        "delta_local_satisfaction": {
+          "denominator": 4691750,
+          "numerator": 86958,
+          "value": 0.018534235626365428
+        },
+        "disruption": {
+          "denominator": 143316,
+          "numerator": 149110,
+          "value": 1.0404281447989059
+        },
+        "eppf": {
+          "denominator": 54234,
+          "numerator": 7928,
+          "value": 0.1461813622450861
+        },
+        "local_satisfaction": {
+          "denominator": 5280993,
+          "numerator": 4007750,
+          "value": 0.7589008355057467
+        },
+        "pfr": {
+          "denominator": 54234,
+          "numerator": 43590,
+          "value": 0.8037393516981967
+        },
+        "sir": {
+          "denominator": 1304998,
+          "numerator": 62972,
+          "value": 0.04825448008349438
+        },
+        "srr": {
+          "denominator": 3283217,
+          "numerator": 19600,
+          "value": 0.005969754664403845
+        },
+        "vacuous_improvement": {
+          "denominator": 143316,
+          "numerator": 46273,
+          "value": 0.3228739289402439
+        }
+      },
+      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-ConstraintDefinitionMajorityBaseline/predictions.parquet",
+      "predictions_sha256": "8ab1e13efcd4f157721b271cfc3678b5263f853a543855e2767a25defe414134",
+      "row_count": 143316,
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
+      "training": null
+    },
+    "CFM": {
+      "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
+      "dataset_variant": "full_strat1m_minocc100",
+      "fidelity": {
+        "f1": 0.2653771343576904,
+        "precision": 0.2731668791220972,
+        "recall": 0.2580193432710806
+      },
+      "graph_checksums_verified": false,
+      "mean_additions": 0.5305269474448073,
+      "mean_deletions": 0.476646013006224,
+      "model_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-ConstraintFamilyMajorityBaseline.json",
+      "paper_metrics": {
+        "base_deletion_rate": {
+          "denominator": 143316,
+          "numerator": 53219,
+          "value": 0.3713402551006168
+        },
+        "deletes_base_action_rate": {
+          "denominator": 143316,
+          "numerator": 53222,
+          "value": 0.37136118786457895
+        },
+        "delta_local_satisfaction": {
+          "denominator": 4691561,
+          "numerator": 71506,
+          "value": 0.015241408989460012
+        },
+        "disruption": {
+          "denominator": 143316,
+          "numerator": 144344,
+          "value": 1.0071729604510313
+        },
+        "eppf": {
+          "denominator": 54234,
+          "numerator": 6466,
+          "value": 0.11922410296124203
+        },
+        "local_satisfaction": {
+          "denominator": 5217600,
+          "numerator": 3928864,
+          "value": 0.7530021465808034
+        },
+        "pfr": {
+          "denominator": 54234,
+          "numerator": 36440,
+          "value": 0.6719032341335693
+        },
+        "sir": {
+          "denominator": 1305031,
+          "numerator": 51158,
+          "value": 0.039200601365025046
+        },
+        "srr": {
+          "denominator": 3282995,
+          "numerator": 16092,
+          "value": 0.004901621842250749
+        },
+        "vacuous_improvement": {
+          "denominator": 143316,
+          "numerator": 41426,
+          "value": 0.28905355996539117
+        }
+      },
+      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-ConstraintFamilyMajorityBaseline/predictions.parquet",
+      "predictions_sha256": "6ed893cc25df4099aa63e022049c974dcae0c94852e11ba873fe391525f90ef3",
+      "row_count": 143316,
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
+      "training": null
     },
     "DFB": {
       "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
       "dataset_variant": "full_strat1m_minocc100",
+      "fidelity": {
+        "f1": 0.28044061134486414,
+        "precision": 0.28973736358815483,
+        "recall": 0.27172191757515474
+      },
+      "graph_checksums_verified": false,
+      "mean_additions": 0.0,
+      "mean_deletions": 1.0,
       "model_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-DeleteFocusBaseline.json",
       "paper_metrics": {
         "base_deletion_rate": {
@@ -215,11 +490,20 @@
       "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-DeleteFocusBaseline/predictions.parquet",
       "predictions_sha256": "dbd1a79ce6b3d936c081f6da3a745428c4b1d30a50a4ecc4c4d6178187fab9dc",
       "row_count": 143316,
-      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2"
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
+      "training": null
     },
     "M1C": {
       "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
       "dataset_variant": "full_strat1m_minocc100",
+      "fidelity": {
+        "f1": 0.514780471002992,
+        "precision": 0.531845711574423,
+        "recall": 0.498776322161002
+      },
+      "graph_checksums_verified": true,
+      "mean_additions": 0.5675779396578191,
+      "mean_deletions": 0.4324220603421809,
       "model_path": "/home/mvazquez/fidelity-safety-gap/models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/evaluations/model.json",
       "paper_metrics": {
         "base_deletion_rate": {
@@ -276,11 +560,26 @@
       "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
       "predictions_sha256": "ab0665f53fd43a67535b99a4494047f727d12d3ce87427169b16e0656570d3e0",
       "row_count": 143316,
-      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2"
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
+      "training": {
+        "best_epoch": 9,
+        "best_validation_loss": 0.49348,
+        "epochs_run": 10,
+        "history_path": "/home/mvazquez/fidelity-safety-gap/models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/training_history.json",
+        "history_sha256": "3df989bf1375d159a66e6ac727c23b87edcc4817e5a852578896cbb074ff86cf"
+      }
     },
     "M1D": {
       "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
       "dataset_variant": "full_strat1m_minocc100",
+      "fidelity": {
+        "f1": 0.43698509069853286,
+        "precision": 0.45280383997305285,
+        "recall": 0.4222342917719117
+      },
+      "graph_checksums_verified": true,
+      "mean_additions": 0.5325853359010857,
+      "mean_deletions": 0.4617279298891959,
       "model_path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/evaluations/model.json",
       "paper_metrics": {
         "base_deletion_rate": {
@@ -337,7 +636,14 @@
       "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
       "predictions_sha256": "b0c7eb39ab7866ff536d07c48c4b8fa1ceae1148d9730aee8f364db929096094",
       "row_count": 143316,
-      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2"
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
+      "training": {
+        "best_epoch": 1,
+        "best_validation_loss": 1.48208,
+        "epochs_run": 3,
+        "history_path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/training_history.json",
+        "history_sha256": "a48858abce8202690c93042d0b0066dcdbed4fd9f4a8ac38ecbe9b4af440090c"
+      }
     }
   }
 }

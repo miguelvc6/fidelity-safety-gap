@@ -230,13 +230,25 @@ After the compact H2/oracle sidecars and the retained-G0 exclusion audit
 complete, enforce the paper gate with:
 
 ```bash
-uv run python scripts/check_corrected_paper_readiness.py
+uv run python scripts/check_corrected_paper_readiness.py \
+  --paper latex_paper/main_compact.tex \
+  --verify-graph-checksums
 ```
 
-The gate verifies schema versions, complete numerator/denominator metrics,
-prediction and dataset checksums, common row identity, absence of legacy metric
-fields, DFB's expected deletion-degeneracy rates, complete canonical sidecars,
-and the evidence supporting G0's exclusion. It writes
+The gate covers the four learned paper systems and all four deterministic
+baselines. It verifies the exact canonical run paths and architecture/training
+settings, schema versions, complete numerator/denominator metrics, prediction,
+dataset, configuration, and checkpoint checksums, common row identity, and
+absence of legacy metric fields. It independently reaggregates every symbolic
+metric event and strict operation-level fidelity count from
+`predictions.parquet`, checks every `per_constraint.csv`, validates the H2 and
+candidate-oracle selection modes, enforces DFB's expected deletion-degeneracy
+rates, and checks the evidence supporting G0's exclusion. With `--paper`, it
+also requires every row in the aggregate, symbolic, transition, and pressure
+masking tables to equal the canonical artifacts at the displayed precision and
+records the TeX checksum. `--verify-graph-checksums` hashes each unique graph
+artifact once, including the shared factorized graph, rather than validating
+only its recorded path and size. It writes
 `models/paper_diagnostics/corrected_paper_readiness.json` only when every check
 passes. A newly trained G0 checkpoint intentionally invalidates that exclusion
 gate until the run is added back to the paper-ready system set.
