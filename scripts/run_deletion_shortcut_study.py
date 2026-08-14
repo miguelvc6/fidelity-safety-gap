@@ -56,6 +56,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Run one registered experiment instead of the complete sequential suite.",
     )
+    parser.add_argument(
+        "--detach",
+        action="store_true",
+        help="Launch the selected suite in a persistent background process and return its PID.",
+    )
     return parser.parse_args()
 
 
@@ -111,6 +116,36 @@ def _run_step(run: StudyRun, step: str, command: Sequence[str]) -> None:
 
 def _python(*arguments: str) -> list[str]:
     return [sys.executable, *arguments]
+
+
+def _detach(args: argparse.Namespace) -> None:
+    LOG_ROOT.mkdir(parents=True, exist_ok=True)
+    command = [sys.executable, str(Path(__file__).resolve())]
+    if args.force_train:
+        command.append("--force-train")
+    if args.only is not None:
+        command.extend(("--only", args.only))
+    launcher_log_path = LOG_ROOT / "launcher.log"
+    launcher_log = launcher_log_path.open("a", encoding="utf-8")
+    process = subprocess.Popen(
+        command,
+        cwd=ROOT,
+        stdout=launcher_log,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    )
+    launcher_log.close()
+    _write_status(
+        {
+            "status": "scheduled",
+            "pid": process.pid,
+            "command": command,
+            "started_at": datetime.now(UTC).isoformat(),
+            "log": str(launcher_log_path),
+        }
+    )
+    print(f"[ok] deletion-shortcut study scheduled as PID {process.pid}")
 
 
 def _evaluate(run: StudyRun, run_directory: Path) -> None:
@@ -212,6 +247,9 @@ def _evaluate(run: StudyRun, run_directory: Path) -> None:
 
 def main() -> None:
     args = parse_args()
+    if args.detach:
+        _detach(args)
+        return
     selected = [run for run in RUNS if args.only is None or run.name == args.only]
     for run in selected:
         run_directory = ROOT / "models" / run.directory

@@ -30,7 +30,7 @@ For unattended execution, the resumable sequential scheduler runs the same four 
 uv run python scripts/run_deletion_shortcut_study.py
 ```
 
-It never discovers or runs other model directories. It skips training only when the corresponding versioned best checkpoint already exists, writes one log per step under `logs/deletion_shortcut_v2/`, and atomically updates `status.json`. `--only M1D`, `--only M1D-BP`, `--only G0`, and `--only G0-BP` select one experiment; `--force-train` is required to overwrite a versioned checkpoint.
+Add `--detach` for a persistent background process. It never discovers or runs other model directories. It skips training only when the corresponding versioned best checkpoint already exists, writes one log per step under `logs/deletion_shortcut_v2/`, and atomically updates `status.json`. `--only M1D`, `--only M1D-BP`, `--only G0`, and `--only G0-BP` select one experiment; `--force-train` is required to overwrite a versioned checkpoint.
 
 The gate rejects non-finite histories, total loss at or above 100, valid M1D logit magnitude at or above 10,000, incomplete schema-v2 metrics, legacy metric fields, checksum or row-count failures, replay disagreement, or incorrect A1 provenance. It promotes a base-preserving variant as mitigation only when both deletion rates fall and EPPF rises relative to its matched control.
 
