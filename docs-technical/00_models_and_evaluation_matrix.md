@@ -1,6 +1,6 @@
 # Paper-Facing Models and Evaluation Matrix
 
-Date: 2026-03-11
+Date: 2026-08-06
 
 This document defines the canonical paper-facing suite implemented in the repository. The default experiment surface should describe only these models.
 
@@ -8,23 +8,28 @@ This document defines the canonical paper-facing suite implemented in the reposi
 
 | ID | Name | Representation | Training path | Objective | Inference role |
 | --- | --- | --- | --- | --- | --- |
-| `B0` | `B0 ESWC-Reproduction` | `eswc_passive` | `src/07_train.py` | `L_edit` | slot argmax |
-| `A1` | `A1 Factorized Imitation` | `factorized` | `src/07_train.py` | `L_edit` | slot argmax |
+| `B0-R` | `Original B0 ESWC-Reproduction` | `eswc_passive` | `src/07_train.py` | `L_edit` | slot argmax |
+| `B0-M` | `Parameter-matched B0` | `eswc_passive` | `src/07_train.py` | `L_edit` | slot argmax |
+| `A1` | `Compact A1 Factorized Imitation` | `factorized` | existing checkpoint | `L_edit` | slot argmax |
 | `M1C` | `M1C Safe Factor Chooser` | `factorized` | `src/07_train.py` | `L_edit + L_chooser` | chooser over symbolic candidates |
 | `M1D` | `M1D Safe Factor Direct` | `factorized` | `src/07_train.py` | `L_edit + alpha L_primary + beta L_secondary` | candidate argmax from proposal logits |
 | `G0` | `G0 GlobalFix Reference` | `factorized` proposal + reranker | `src/08_train_reranker.py` | `L_global` | reranker over symbolic candidates |
 
 ## Definitions
 
-### B0 ESWC-Reproduction
+### Original and parameter-matched B0
 - Uses `constraint_representation="eswc_passive"`.
 - Disables local executable factor expansion, local factor-scope wiring, typed pressure, chooser loss, and direct safety loss.
-- Exists to reproduce the prior-paper regime as a baseline, not as a factor-model ablation.
+- Original B0 is the 128×2 replication baseline. Parameter-matched B0 is the
+  304×4 capacity control and differs from Compact A1 by at most 0.1% trainable
+  parameters. Both consume the same passive graph suite.
 
 ### A1 Factorized Imitation
 - Uses `constraint_representation="factorized"`.
 - Keeps the factorized graph, per-type factor executors, and per-role pressure, but trains only with edit imitation plus auxiliary factor supervision.
 - Answers whether factorized local constraint context helps before any safety-aware decision objective.
+- The compact/grouped 400×4 checkpoint is canonical. Original A1 is prior
+  compression-equivalence evidence only and is not retrained.
 
 ### M1C Safe Factor Chooser
 - Builds on `A1`.
@@ -54,6 +59,10 @@ The default paper-facing generator should enforce these settings for `A1`, `M1C`
 - dynamic per-type reweighting: fixed by the locked winning `M1C` configuration
 - fix-probability loss: disabled
 - factor-loss-only training: disabled
+- factor executor: `per_type_grouped_v2`
+- gold edit embedding: `compact`
+- pressure modules: `per_type`
+- active factor IDs: train/validation union, with test-only IDs rejected
 
 `B0` is the exception: it keeps the passive representation and disables typed pressure.
 
@@ -62,9 +71,10 @@ The default paper-facing generator should enforce these settings for `A1`, `M1C`
 The default config generator should emit only:
 
 - `b0_eswc_reproduction`
-- `a1_factorized_imitation`
-- `m1c_safe_factor_chooser`
-- `m1d_safe_factor_direct`
+- `b0_parameter_matched`
+- `a1_factorized_imitation_compact_grouped`
+- `m1c_safe_factor_chooser_compact_grouped`
+- `m1d_safe_factor_direct_compact_grouped`
 - `g0_globalfix_reference`
 
 Appendix or exploratory variants such as policy-choice, factor-loss-only, untyped-pressure, and non-paper rerankers should be gated behind `--include-experimental` or a more specific appendix flag.
@@ -88,11 +98,16 @@ Appendix or exploratory variants such as policy-choice, factor-loss-only, untype
 
 ### Required metrics
 - historical fidelity: precision / recall / micro-F1
-- primary fix rate
-- global fix rate (`GFR`)
-- secondary regression rate (`SRR`)
-- secondary improvement rate (`SIR`)
-- disruption / edit-minimality metrics
+- PFR
+- pooled Local Satisfaction and common-support ΔLocalSat
+- pooled secondary regression and improvement rates (`SRR`, `SIR`)
+- disruption
+- Base-deletion Rate and Deletes-base-action Rate
+- EPPF and Vacuous Improvement
+
+Each paper metric contains `value`, `numerator`, and `denominator`. Stored graph
+pre-label tensors are never paper-metric truth; pre/post states are recomputed
+from interim rows.
 
 ### Evaluation rule
 - `M1C`, `M1D`, and `G0` must share the same candidate-level symbolic evaluator contract so reported safety metrics are definitionally aligned.

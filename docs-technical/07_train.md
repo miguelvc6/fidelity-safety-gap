@@ -13,8 +13,8 @@
 2. **Run directory setup** – `ensure_run_dir()` creates or reuses a deterministic slugged folder based on dataset variant, encoding, model name, and config tag, while `config_copy_path()` determines where the config snapshot will live beside the checkpoint.
 3. **Data loading** – `dataset_variant_name()` selects the processed root (`data/processed/<variant>/`), `load_graph_dataset()` discovers either monolithic files or shard collections (`*-shardNNN.{pkl,pt}`), returning an in-memory list or a lazy `GraphStreamDataset`/sharded stream as appropriate. `infer_node_feature_spec()` inspects samples to decide whether node features are embeddings or categorical IDs (including optional role flags).
 4. **Target vocabularies** – The model predicts six categorical slots. `load_precomputed_target_vocabs()` reuses cached entity/predicate class IDs when available, otherwise `derive_target_class_ids()` scans the loaded graphs. These IDs are passed into the model so entity and predicate heads can be expanded/masked into a shared `num_target_ids` space.
-5. **Factor type setup** – For `constraint_representation="factorized"`, if `model_config.num_factor_types > 0`, training uses that value directly unless the constraint registry reports a larger compact `constraint_type_index` range, in which case the registry value wins and the resolved config is updated. If the config leaves the field at `0`, the trainer prefers the constraint registry count and only falls back to a dataset scan when no registry-derived count is available. For `constraint_representation="eswc_passive"`, the trainer clears `num_factor_types` in the resolved config because passive graphs may include passive constraint nodes but do not execute per-type factor heads.
-6. **Encoder + model build** – The frozen `GlobalIntEncoder` from `data/interim/<variant>/globalintencoder.txt` defines `num_graph_nodes`. `build_model()` instantiates the chosen architecture (e.g., message-passing network with dual branches). For `GIN_PRESSURE`, `model_config.pressure_module_sharing` controls whether factor-to-local pressure modules are per factor type (`per_type`, default) or shared across types (`shared`). Device selection is automatic (CUDA if available) with memory logging hooks for debugging.
+5. **Factor type setup** – For `constraint_representation="factorized"`, if `model_config.num_factor_types > 0`, training uses that stable-id address-space bound directly unless the constraint registry reports a larger `constraint_type_index` range, in which case the registry value wins and the resolved config is updated. If the config leaves the field at `0`, the trainer prefers the constraint registry count and only falls back to a dataset scan when no registry-derived count is available. Compact execution separately uses `active_factor_type_ids` to decide which stable ids receive parameters. For `constraint_representation="eswc_passive"`, the trainer clears `num_factor_types` in the resolved config because passive graphs may include passive constraint nodes but do not execute per-type factor heads.
+6. **Encoder + model build** – The frozen `GlobalIntEncoder` from `data/interim/<variant>/globalintencoder.txt` defines `num_graph_nodes`. `build_model()` instantiates the chosen architecture (e.g., message-passing network with dual branches). For `GIN_PRESSURE`, `model_config.pressure_module_sharing` controls whether factor-to-local pressure modules are per factor type (`per_type`, default) or shared across types (`shared`). `factor_executor_impl="per_type_grouped_v2"` keeps independent executor, post-edit, and pressure parameters per active type while storing them in packed banks. CPU uses a segmented linear fallback; compatible CUDA/BF16 execution uses grouped matrix multiplication. Device selection is automatic (CUDA if available) with memory logging hooks for debugging.
 7. **Training loop (`train()`):**
    - Wrap datasets in split-specific `DataLoader`s, shuffling the in-memory train split while leaving streaming datasets ordered. For streamed datasets the trainer disables `pin_memory`, reduces `prefetch_factor` to `1`, and keeps `persistent_workers=False` so train/validation worker pools do not overlap and exhaust shared memory at epoch boundaries.
    - Forward pass returns logits of shape `(batch, 6, num_target_ids)` where entity/predicate slots are masked to the per-split vocabularies. Each slot is compared against the gold IDs via `CrossEntropyLoss(reduction="none")`, producing a `(batch, 6)` loss matrix.
@@ -44,6 +44,43 @@
 - Chooser training supports streamed datasets via per-graph `context_index` assignment; contexts/parquet sidecars must align with graph ordering/counts.
 - CUDA batch prefetch (`TRAIN_CUDA_PREFETCH`) is available and enabled by default; on some hardware/data combinations it may not improve throughput, so treat it as a tunable runtime flag.
 - H2 ablation configs are appendix runs. Train them only into their generated `h2_a1_*` run directories; they should not replace the current canonical or hyperparameter-search checkpoints.
+- Compact execution validates every graph's stable factor ids against `active_factor_type_ids` and fails rather than silently routing an unknown type. Regenerate the compact config after regenerating labeled splits.
+
+## Compact/grouped A1 experiment
+
+After the `full_strat1m_minocc100` labeled parquet and graph artifacts exist, create the opt-in config:
+
+```bash
+uv run python scripts/make_compact_a1_config.py
+```
+
+The script reads the existing canonical A1 config, preserves its training block and all unrelated model fields, and writes:
+
+```text
+models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/config.json
+```
+
+It derives active factor types from `df_train.parquet` and `df_val.parquet`, checks that `df_test.parquet` introduces none, and refuses to overwrite an existing config. It changes only:
+
+- `factor_executor_impl` to `per_type_grouped_v2`;
+- `active_factor_type_ids` to the discovered stable-id vocabulary;
+- `gold_edit_embedding_mode` to `compact`; and
+- `pressure_module_sharing` explicitly to `per_type`.
+
+Train and evaluate through the existing entry points:
+
+```bash
+uv run python src/07_train.py \
+  --experiment-config models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/config.json
+
+uv run python src/09_eval.py \
+  --run-directory models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id \
+  --batch-size 256
+```
+
+Standard evaluation uses the inference forward path, which omits the training-only post-gold factor branch. This allows test-only target IDs to be counted normally without attempting to look them up in the compact train/validation gold-edit table. `--batch-size` controls standard evaluation throughput; lower it if GPU memory is insufficient.
+
+Do not reuse a config generated from different labeled splits: the compact mapping is persisted in the checkpoint and is part of the architecture. Existing `per_type_v1` configs and checkpoints remain on the legacy dense path.
 
 ## Profiling & Throughput Controls
 
@@ -65,7 +102,7 @@ This makes bottlenecks explicit (for example, chooser-heavy runs where `chooser`
 - GPU monitoring hooks (`log_cuda_memory`) fire at strategic checkpoints (epoch boundaries, first batch) to simplify diagnosing OOMs or fragmentation.
 - Model checkpoints store both the state dict and the resolved configuration, allowing `09_eval.py` to rebuild the architecture without guessing hyperparameters.
 - If `training_config.validate_factor_labels` is enabled, training asserts that factor label tensors exist and align with `factor_constraint_ids` (useful for upcoming factor supervision).
-- Models receive `model_config.constraint_representation` at construction time. Passive models skip factor-head and pressure execution even if the passive graph contains constraint/factor nodes; factorized models remain strict and require dense `factor_types` whenever per-type factor execution is reached.
+- Models receive `model_config.constraint_representation` at construction time. Passive models skip factor-head and pressure execution even if the passive graph contains constraint/factor nodes; factorized models require stable `factor_types` whenever per-type factor execution is reached. The legacy path expects the dense registry address space; the grouped path maps the configured active stable ids to compact parameter-bank indices.
 
 ## Dynamic Weighting per constraint type
 

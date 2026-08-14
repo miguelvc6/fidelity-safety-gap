@@ -205,7 +205,8 @@ Paper readiness check:
 - coverage reports exist:
   - `coverage_local.csv`
   - `coverage_local.md`
-- baseline evaluation now emits global metrics when labeled parquet is available
+- baseline evaluation emits the corrected schema-v2 paper metrics with explicit
+  numerator and denominator support
 
 ### Step 1. Generate canonical configs
 
@@ -270,7 +271,9 @@ If `AMB` is not used in the final main table, keep it as appendix support.
 Code note:
 
 - `src/09_eval.py --run-baselines` now prefers `data/interim/<variant>_labeled/` when it exists and falls back to `data/interim/<variant>/` otherwise.
-- This is the paper-safe path for getting heuristic `GFR`, `SRR`, `SIR`, and disruption metrics from the labeled parquet files.
+- This is the paper-safe path for recomputing PFR, pooled Local Satisfaction,
+  ΔLocalSat, pooled SIR/SRR, disruption, and evidence-preservation metrics from
+  the interim rows. Stored factor tensors are not evaluation truth.
 
 ### Step 3. Run a brief `M1C` hyperparameter search
 
@@ -325,15 +328,15 @@ Choose the winner using the evaluation JSONs from the search runs.
 
 Primary selection criteria:
 
-1. primary-fix behavior
-2. lower `SRR`
-3. higher `GFR`
-4. fidelity as a tie-breaker
-5. lower disruption as final tie-breaker
+1. higher corrected `PFR`
+2. lower pooled `SRR`
+3. higher historical fidelity
+4. lower disruption
 
 Practical rule:
 
-- use the `model_selection` block in each run's `evaluations/model.json` as a quick ranking aid
+- use the documented weighted score in the `model_selection` block of each
+  run's `evaluations/model.json` as a ranking aid
 - do not accept a config that improves fidelity by noticeably worsening `SRR`
 
 Search outputs to inspect:
@@ -483,7 +486,8 @@ uv run src/09_eval.py \
   --h2-eval
 ```
 
-For chooser checkpoints, pass the chooser flag only to load the optional head if the checkpoint expects it:
+For chooser checkpoints, pass the chooser flag so every H2 variant uses the
+same candidate construction and chooser scoring as the main evaluation:
 
 ```bash
 uv run src/09_eval.py \
@@ -505,7 +509,11 @@ Outputs are written under:
 - `models/<run_dir>/evaluations/h2/counterfactual_overall_deltas.csv`
 - `models/<run_dir>/evaluations/h2/graph_density.csv`
 
-The command does not write `models/<run_dir>/evaluations/model.json` and does not mutate train/test graph artifacts. It requires factorized processed graphs with factor-label fields and reuses the existing processed train split only to count train exposure buckets.
+The command does not write `models/<run_dir>/evaluations/model.json` and does not mutate train/test graph artifacts. It requires factorized processed graphs with factor-label fields and reuses the labeled train Parquet only to count train exposure buckets. H2 records `selection_mode` in its report: raw A1-style proposals use `slot_argmax`, M1C uses `chooser`, and direct-safety M1D uses `direct_safety`. A normal row backed by validated schema-v2 replay must exactly match the corrected main evaluation. Independently recomputed selector outputs may differ on tied CUDA scores; the readiness gate permits at most `0.001` drift in metric values and normalized event counts, which rejects selector bypass while tolerating tie-breaking noise.
+When the run already has validated schema-v2 predictions, H2 replays them for
+the normal prediction row while still forwarding the checkpoint to collect
+factor semantics. Counterfactual pressure variants always recompute predictions
+through the configured selector.
 
 ### Reranker model
 
@@ -636,6 +644,8 @@ The H2 outputs are written under each run's `evaluations/h2/` directory. These a
 ## 9. Candidate-oracle analysis
 
 Candidate-oracle analysis is the next non-training diagnostic after the H2 ablations. It answers whether the candidate set already contains safe repairs that the model fails to select, or whether the candidate generator rarely proposes safe repairs in the first place.
+It uses the evaluation-safe model forward, so compact checkpoints do not try to
+embed test-only gold edit IDs when producing proposal logits.
 
 This should be implemented as a read-only analysis script that reuses the existing candidate and symbolic-evaluation code paths:
 
@@ -648,23 +658,25 @@ Recommended script interface:
 The repository provides this diagnostic as `scripts/analyze_candidate_oracle.py`.
 
 ```bash
-uv run scripts/analyze_candidate_oracle.py \
-  --run-directory models/m1c_safe_factor_chooser__full_strat1m_minocc100__node_id_gamma_0_2 \
-  --strict-global-metrics \
-  --output-dir models/m1c_safe_factor_chooser__full_strat1m_minocc100__node_id_gamma_0_2/evaluations/oracle
+uv run python scripts/analyze_candidate_oracle.py \
+  --run-directory models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id \
+  --strict-global-metrics --batch-size 256
 ```
 
-Run the same analysis for `A1`, final `M1C`, and `M1D`. Use `m1c_safe_factor_chooser__full_strat1m_minocc100__node_id_gamma_0_2` as the final non-zero-primary `M1C` oracle row; keep the earlier `gamma_0` run only as an optional diagnostic comparison.
+Run the same analysis for the canonical compact `A1`, `M1C`, and `M1D`
+checkpoints. Historical non-compact and hyperparameter-search oracle outputs are
+not inputs to the corrected main table.
 
 For each test instance, the script should:
 
 1. Build the candidate set using the run's configured candidate policy.
 2. Evaluate every candidate against the local symbolic constraint state.
 3. Mark whether at least one candidate:
-   - fixes the primary constraint;
-   - introduces no secondary regression;
-   - preserves or improves local `GFR`;
-   - stays within the accepted disruption budget.
+   - has a corrected PFR event;
+   - introduces no common-support secondary regression;
+   - has non-negative common-support Local Satisfaction change;
+   - stays within the accepted disruption budget; and
+   - for the evidence-preserving variant, retains the base statement.
 4. Compare the oracle candidate against the model-selected candidate and, where relevant, the `G0` reranker-selected candidate.
 
 Required outputs:

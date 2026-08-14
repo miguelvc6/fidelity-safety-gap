@@ -1,6 +1,6 @@
 # Model Config Reference
 
-Date: 2026-03-11
+Date: 2026-08-03
 
 This document lists the paper-relevant config fields accepted by `src/07_train.py` and `src/08_train_reranker.py`.
 
@@ -31,7 +31,10 @@ Core fields:
 - `entity_class_ids`
 - `predicate_class_ids`
 - `num_factor_types`
+- `active_factor_type_ids`
 - `factor_type_embedding_dim`
+- `factor_executor_impl`
+- `gold_edit_embedding_mode`
 - `pressure_enabled`
 - `pressure_type_conditioning`
 - `pressure_module_sharing`
@@ -52,10 +55,27 @@ Paper-facing additions:
   - `per_type` preserves the current typed-pressure behavior
   - `shared` keeps factor pressure enabled but shares the role pressure modules across factor types; use this for the H2 untyped-pressure ablation only
 
+- `factor_executor_impl`
+  - allowed values: `per_type_v1`, `per_type_grouped_v2`, `legacy_shared`
+  - default: `per_type_v1`, retaining the original module layout and checkpoint keys
+  - `per_type_grouped_v2` packs the same independent per-type MLP weights into tensor banks and groups rows by compact type index; it requires `active_factor_type_ids`
+  - `legacy_shared` is retained for the H2 shared-executor ablation and is not part of the compact A1 change
+
+- `active_factor_type_ids`
+  - sorted, unique stable factor-type ids that are reachable in the selected dataset
+  - `num_factor_types` remains the upper bound of the stable registry address space; it is not replaced by the active count
+  - the compact A1 generator derives this list from train and validation only, then verifies that test has no unseen types
+
+- `gold_edit_embedding_mode`
+  - allowed values: `full`, `compact`
+  - default: `full`, retaining the original target-id-sized factor gold-edit table
+  - `compact` stores rows only for the union of reachable entity/predicate target ids (plus id `0`) and uses a stable-to-compact lookup
+
 ## `training_config` for proposal runs
 
 Core optimization fields:
 
+- `seed` (canonical corrected-suite value: `42`)
 - `batch_size`
 - `num_epochs`
 - `early_stopping_rounds`
@@ -156,5 +176,8 @@ Paper use:
 - Config loading is strict: unknown keys raise an error.
 - `pressure_type_conditioning` must be one of `none`, `concat`, `gate`.
 - `pressure_module_sharing` must be one of `per_type`, `shared`.
+- `factor_executor_impl` must be one of `per_type_v1`, `per_type_grouped_v2`, `legacy_shared`.
+- `per_type_grouped_v2` requires a non-empty, sorted `active_factor_type_ids` list whose ids fit inside `num_factor_types`.
+- `gold_edit_embedding_mode` must be one of `full`, `compact`.
 - `constraint_representation` must be one of `factorized`, `eswc_passive`.
 - `chooser` and `direct_safety` should not both be enabled in the same proposal config.
