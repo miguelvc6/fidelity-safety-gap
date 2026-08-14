@@ -20,6 +20,17 @@ def _load_checker():
     return module
 
 
+def _load_runner():
+    path = ROOT / "scripts" / "run_deletion_shortcut_study.py"
+    spec = importlib.util.spec_from_file_location("run_deletion_shortcut_study", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _system(base: float, action: float, eppf: float) -> dict:
     return {
         "evaluation": {
@@ -60,3 +71,12 @@ def test_metric_gate_rejects_legacy_and_inconsistent_fields() -> None:
     payload["paper_metrics"]["pfr"]["value"] = 0.6
     with pytest.raises(ValueError, match="inconsistent pfr"):
         checker._assert_metric_schema("toy", payload)
+
+
+def test_study_runner_has_an_exact_isolated_order() -> None:
+    runner = _load_runner()
+    assert [run.name for run in runner.RUNS] == ["M1D", "M1D-BP", "G0", "G0-BP"]
+    assert len({run.directory for run in runner.RUNS}) == 4
+    assert all(directory.endswith("_v2__full_strat1m_minocc100__node_id") for directory in (
+        run.directory for run in runner.RUNS
+    ))
