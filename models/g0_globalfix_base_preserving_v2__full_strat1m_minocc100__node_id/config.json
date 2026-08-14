@@ -1,0 +1,40 @@
+{
+  "model_config": {
+    "constraint_representation": "factorized",
+    "dataset_variant": "full_strat1m_minocc100",
+    "encoding": "node_id",
+    "min_occurrence": 100,
+    "model": "RERANKER",
+    "num_factor_types": 29
+  },
+  "proposal_config": {
+    "config_tag": "a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id",
+    "model": "GIN_PRESSURE"
+  },
+  "reranker_config": {},
+  "training_config": {
+    "assume_complete_entity_facts": true,
+    "batch_size": 64,
+    "constraint_scope": "local",
+    "early_stopping_rounds": 2,
+    "focus_deletion_weight": 1.0,
+    "grad_clip": 0.5,
+    "heuristic_max_candidates": 30,
+    "heuristic_max_values": 3,
+    "include_gold": true,
+    "learning_rate": 0.0001,
+    "max_candidates_total": 80,
+    "num_epochs": 10,
+    "objective": "global_fix",
+    "prediction_include_gold": false,
+    "regression_weight": 0.5,
+    "save_last_checkpoint": true,
+    "scheduler_factor": 0.5,
+    "scheduler_patience": 0,
+    "seed": 42,
+    "topk_candidates": 20,
+    "topk_per_slot": 5,
+    "validation_subset_size": 25000,
+    "weight_decay": 0.0001
+  }
+}

@@ -74,6 +74,9 @@ def test_paper_surface_configs_accept_new_fields() -> None:
                 "enabled": True,
                 "alpha_primary": 2.0,
                 "beta_secondary": 0.25,
+                "loss_weight": 0.2,
+                "score_temperature": 6.0,
+                "focus_deletion_weight": 1.0,
                 "topk_candidates": 10,
                 "max_candidates_total": 40,
             }
@@ -84,6 +87,9 @@ def test_paper_surface_configs_accept_new_fields() -> None:
     assert training_cfg.direct_safety.enabled is True
     assert training_cfg.direct_safety.alpha_primary == 2.0
     assert training_cfg.direct_safety.beta_secondary == 0.25
+    assert training_cfg.direct_safety.loss_weight == 0.2
+    assert training_cfg.direct_safety.score_temperature == 6.0
+    assert training_cfg.direct_safety.focus_deletion_weight == 1.0
 
 
 def test_symmetric_constraint_type_is_supported() -> None:

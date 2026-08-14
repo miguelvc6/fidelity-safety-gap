@@ -28,10 +28,13 @@ from modules.data_encoders import (
     infer_node_feature_spec,
 )
 from modules.model_store import (
+    atomic_torch_save,
     ensure_run_dir_for_config,
     get_checkpoint_path,
+    get_last_checkpoint_path,
     history_path,
 )
+from modules.evaluation_artifacts import atomic_write_json, sha256_file
 from modules.models import BaseGraphModel, build_model
 from modules.repair_eval import ConstraintRepairHeuristics, ViolationContext, load_violation_contexts
 from modules.reranker_eval import CandidateConstraintEvaluator
@@ -62,6 +65,24 @@ ENTITY_SLOT_INDICES: tuple[int, ...] = (0, 2, 3, 5)
 PREDICATE_SLOT_INDICES: tuple[int, ...] = (1, 4)
 
 
+_INITIALIZATION_MODEL_KEYS = (
+    "dataset_variant",
+    "encoding",
+    "model",
+    "constraint_representation",
+    "num_layers",
+    "hidden_channels",
+    "head_hidden",
+    "num_factor_types",
+    "factor_executor_impl",
+    "gold_edit_embedding_mode",
+    "pressure_module_sharing",
+    "active_factor_type_ids",
+    "entity_class_ids",
+    "predicate_class_ids",
+)
+
+
 class ValidationSubsetStream(IterableDataset):
     """Yield the first ``limit`` graphs from a streamed validation dataset."""
 
@@ -85,6 +106,73 @@ def _max_abs_value(tensor: torch.Tensor | None) -> float:
     if tensor is None or tensor.numel() == 0:
         return 0.0
     return float(torch.nan_to_num(tensor.detach(), nan=0.0, posinf=float("inf"), neginf=float("-inf")).abs().max().item())
+
+
+def _file_identity(path: Path) -> dict[str, object]:
+    resolved = path.resolve()
+    return {
+        "path": str(resolved),
+        "size_bytes": resolved.stat().st_size,
+        "sha256": sha256_file(resolved),
+    }
+
+
+def _strict_initialize_model(
+    model: BaseGraphModel,
+    *,
+    model_cfg: ModelConfig,
+    config_path: Path,
+    checkpoint_reference: str,
+) -> dict[str, object]:
+    checkpoint_path = Path(checkpoint_reference)
+    if not checkpoint_path.is_absolute():
+        checkpoint_path = config_path.parent / checkpoint_path
+    checkpoint_path = checkpoint_path.resolve()
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(f"Initialization checkpoint not found at {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    checkpoint_cfg = checkpoint.get("model_cfg")
+    if not isinstance(checkpoint_cfg, dict):
+        raise ValueError("Initialization checkpoint is missing model_cfg provenance")
+    effective_cfg = model_cfg.to_dict()
+    mismatches = {
+        key: (checkpoint_cfg.get(key), effective_cfg.get(key))
+        for key in _INITIALIZATION_MODEL_KEYS
+        if checkpoint_cfg.get(key) != effective_cfg.get(key)
+    }
+    if mismatches:
+        raise ValueError(f"Initialization checkpoint model configuration mismatch: {mismatches}")
+    state = checkpoint.get("model_state")
+    if not isinstance(state, dict):
+        raise ValueError("Initialization checkpoint is missing model_state")
+    model.load_state_dict(state, strict=True)
+    identity = _file_identity(checkpoint_path)
+    identity["model_name"] = checkpoint.get("model_name")
+    logger.info("Strictly initialized model from %s", checkpoint_path)
+    return identity
+
+
+def _max_abs_valid_edit_logits(
+    tensor: torch.Tensor,
+    *,
+    entity_allowed_mask: torch.Tensor | None,
+    predicate_allowed_mask: torch.Tensor | None,
+) -> float:
+    """Return a stability diagnostic that excludes the model's masked ``-1e9`` logits."""
+
+    values: list[torch.Tensor] = []
+    for slot_idx in range(tensor.size(1)):
+        allowed = predicate_allowed_mask if slot_idx in PREDICATE_SLOT_INDICES else entity_allowed_mask
+        slot_values = tensor[:, slot_idx, :]
+        if allowed is not None:
+            slot_values = slot_values[:, allowed]
+        values.append(slot_values.reshape(-1))
+    packed = torch.cat(values) if values else tensor.new_empty(0)
+    if packed.numel() == 0:
+        return 0.0
+    if not torch.isfinite(packed).all():
+        raise FloatingPointError("Non-finite valid edit logits encountered")
+    return float(packed.detach().abs().max().item())
 
 
 def _scalar_float(value: float | torch.Tensor) -> float:
@@ -669,6 +757,12 @@ def train(
 
     direct_safety_cfg = train_cfg.direct_safety
     direct_safety_enabled = bool(direct_safety_cfg.enabled)
+    direct_safety_extended = direct_safety_enabled and (
+        direct_safety_cfg.loss_weight != 1.0
+        or direct_safety_cfg.score_temperature != 1.0
+        or direct_safety_cfg.focus_deletion_weight != 0.0
+        or train_cfg.max_valid_edit_logit_abs is not None
+    )
     direct_safety_heuristics = None
     direct_safety_train_rows = None
     direct_safety_val_rows = None
@@ -1020,6 +1114,7 @@ def train(
         )
 
     best_val_loss = float("inf")
+    best_epoch = -1
     epochs_without_improvement = 0
     best_model_state = None
 
@@ -1043,6 +1138,9 @@ def train(
         "train_chooser_score_abs_max": [],
         "val_chooser_score_abs_max": [],
     }
+    if train_cfg.max_valid_edit_logit_abs is not None:
+        history["train_valid_edit_logit_abs_max"] = []
+        history["val_valid_edit_logit_abs_max"] = []
 
     chooser_loss_mode = chooser_cfg.loss_mode
     chooser_loss_weight = max(float(getattr(chooser_cfg, "loss_weight", 0.5)), 0.0)
@@ -1115,6 +1213,8 @@ def train(
         train_chooser_count = 0
         train_direct_safety_loss_sum = 0.0
         train_direct_safety_count = 0
+        train_direct_focus_deleted_sum = 0.0
+        train_direct_deletes_focus_action_sum = 0.0
         train_policy_loss_sum = 0.0
         train_policy_count = 0
         train_policy_correct = 0
@@ -1122,6 +1222,7 @@ def train(
         train_grad_norm_count = 0
         train_grad_norm_max = 0.0
         train_edit_logit_abs_max = 0.0
+        train_valid_edit_logit_abs_max = 0.0
         train_factor_logit_abs_max = 0.0
         train_chooser_score_abs_max = 0.0
 
@@ -1174,6 +1275,20 @@ def train(
                 f"Expected out (batch_size,{NUM_SLOTS},{model.num_target_ids}), got {tuple(out.shape)}"
             )
             train_edit_logit_abs_max = max(train_edit_logit_abs_max, _max_abs_value(out))
+            if train_cfg.max_valid_edit_logit_abs is not None:
+                valid_logit_abs_max = _max_abs_valid_edit_logits(
+                    out,
+                    entity_allowed_mask=entity_allowed_mask,
+                    predicate_allowed_mask=predicate_allowed_mask,
+                )
+                train_valid_edit_logit_abs_max = max(
+                    train_valid_edit_logit_abs_max, valid_logit_abs_max
+                )
+                if valid_logit_abs_max > train_cfg.max_valid_edit_logit_abs:
+                    raise FloatingPointError(
+                        "Valid edit logit magnitude exceeded configured stability threshold: "
+                        f"{valid_logit_abs_max:.6g} > {train_cfg.max_valid_edit_logit_abs:.6g}"
+                    )
 
             out_flat = out.reshape(-1, out.size(-1))
             targets_flat = targets.reshape(-1)
@@ -1655,6 +1770,8 @@ def train(
                     )
                     candidate_tensor = torch.tensor(candidates, dtype=torch.long, device=graph_loss.device)
                     scores = score_candidates_from_logits(out[idx], candidate_tensor)
+                    if direct_safety_extended:
+                        scores = scores / float(direct_safety_cfg.score_temperature)
                     log_probs = F.log_softmax(scores, dim=0)
                     probs = log_probs.exp()
                     metrics_summary = direct_safety_evaluator.evaluate_candidate_metrics(
@@ -1678,7 +1795,33 @@ def train(
                         direct_safety_cfg.alpha_primary * primary_penalty
                         + direct_safety_cfg.beta_secondary * secondary_penalty
                     )
-                graph_loss = graph_loss + direct_safety_losses
+                    if direct_safety_extended:
+                        focus_deleted_tensor = torch.tensor(
+                            [float(m.focus_deleted) for m in metrics_summary],
+                            dtype=graph_loss.dtype,
+                            device=graph_loss.device,
+                        )
+                        deletes_focus_action_tensor = torch.tensor(
+                            [float(m.candidate_deletes_focus) for m in metrics_summary],
+                            dtype=graph_loss.dtype,
+                            device=graph_loss.device,
+                        )
+                        focus_deletion_penalty = torch.sum(probs * focus_deleted_tensor)
+                        direct_safety_losses[idx] += (
+                            direct_safety_cfg.focus_deletion_weight * focus_deletion_penalty
+                        )
+                        train_direct_focus_deleted_sum += float(
+                            focus_deletion_penalty.detach().item()
+                        )
+                        train_direct_deletes_focus_action_sum += float(
+                            torch.sum(probs * deletes_focus_action_tensor).detach().item()
+                        )
+                if direct_safety_extended:
+                    graph_loss = graph_loss + (
+                        direct_safety_cfg.loss_weight * direct_safety_losses
+                    )
+                else:
+                    graph_loss = graph_loss + direct_safety_losses
                 train_direct_safety_loss_sum += float(direct_safety_losses.sum().item())
                 train_direct_safety_count += direct_safety_losses.numel()
 
@@ -1883,6 +2026,12 @@ def train(
         train_factor_acc = 100 * train_factor_correct / max(train_factor_count, 1)
         train_chooser_loss = train_chooser_loss_sum / max(train_chooser_count, 1)
         train_direct_safety_loss = train_direct_safety_loss_sum / max(train_direct_safety_count, 1)
+        train_direct_focus_deleted = train_direct_focus_deleted_sum / max(
+            train_direct_safety_count, 1
+        )
+        train_direct_deletes_focus_action = train_direct_deletes_focus_action_sum / max(
+            train_direct_safety_count, 1
+        )
         train_policy_loss = train_policy_loss_sum / max(train_policy_count, 1)
         train_policy_acc = 100 * train_policy_correct / max(train_policy_count, 1)
         train_grad_norm_mean = train_grad_norm_sum / max(train_grad_norm_count, 1)
@@ -1934,10 +2083,13 @@ def train(
         val_chooser_count = 0
         val_direct_safety_loss_sum = 0.0
         val_direct_safety_count = 0
+        val_direct_focus_deleted_sum = 0.0
+        val_direct_deletes_focus_action_sum = 0.0
         val_policy_loss_sum = 0.0
         val_policy_count = 0
         val_policy_correct = 0
         val_edit_logit_abs_max = 0.0
+        val_valid_edit_logit_abs_max = 0.0
         val_factor_logit_abs_max = 0.0
         val_chooser_score_abs_max = 0.0
         val_epoch_start = time.perf_counter()
@@ -1976,6 +2128,20 @@ def train(
                     f"Expected out (B,{NUM_SLOTS},{model.num_target_ids}), got {tuple(out.shape)}"
                 )
                 val_edit_logit_abs_max = max(val_edit_logit_abs_max, _max_abs_value(out))
+                if train_cfg.max_valid_edit_logit_abs is not None:
+                    valid_logit_abs_max = _max_abs_valid_edit_logits(
+                        out,
+                        entity_allowed_mask=entity_allowed_mask,
+                        predicate_allowed_mask=predicate_allowed_mask,
+                    )
+                    val_valid_edit_logit_abs_max = max(
+                        val_valid_edit_logit_abs_max, valid_logit_abs_max
+                    )
+                    if valid_logit_abs_max > train_cfg.max_valid_edit_logit_abs:
+                        raise FloatingPointError(
+                            "Validation valid edit logit magnitude exceeded configured stability threshold: "
+                            f"{valid_logit_abs_max:.6g} > {train_cfg.max_valid_edit_logit_abs:.6g}"
+                        )
 
                 out_flat = out.reshape(-1, out.size(-1))
                 targets_flat = targets.reshape(-1)
@@ -2454,6 +2620,8 @@ def train(
                         )
                         candidate_tensor = torch.tensor(candidates, dtype=torch.long, device=graph_loss.device)
                         scores = score_candidates_from_logits(out[idx], candidate_tensor)
+                        if direct_safety_extended:
+                            scores = scores / float(direct_safety_cfg.score_temperature)
                         log_probs = F.log_softmax(scores, dim=0)
                         probs = log_probs.exp()
                         metrics_summary = direct_safety_evaluator.evaluate_candidate_metrics(
@@ -2477,7 +2645,31 @@ def train(
                             direct_safety_cfg.alpha_primary * primary_penalty
                             + direct_safety_cfg.beta_secondary * secondary_penalty
                         )
-                    graph_loss = graph_loss + direct_safety_losses
+                        if direct_safety_extended:
+                            focus_deleted_tensor = torch.tensor(
+                                [float(m.focus_deleted) for m in metrics_summary],
+                                dtype=graph_loss.dtype,
+                                device=graph_loss.device,
+                            )
+                            deletes_focus_action_tensor = torch.tensor(
+                                [float(m.candidate_deletes_focus) for m in metrics_summary],
+                                dtype=graph_loss.dtype,
+                                device=graph_loss.device,
+                            )
+                            focus_deletion_penalty = torch.sum(probs * focus_deleted_tensor)
+                            direct_safety_losses[idx] += (
+                                direct_safety_cfg.focus_deletion_weight * focus_deletion_penalty
+                            )
+                            val_direct_focus_deleted_sum += float(focus_deletion_penalty.item())
+                            val_direct_deletes_focus_action_sum += float(
+                                torch.sum(probs * deletes_focus_action_tensor).item()
+                            )
+                    if direct_safety_extended:
+                        graph_loss = graph_loss + (
+                            direct_safety_cfg.loss_weight * direct_safety_losses
+                        )
+                    else:
+                        graph_loss = graph_loss + direct_safety_losses
                     val_direct_safety_loss_sum += float(direct_safety_losses.sum().item())
                     val_direct_safety_count += direct_safety_losses.numel()
 
@@ -2642,6 +2834,12 @@ def train(
         val_factor_acc = 100 * val_factor_correct / max(val_factor_count, 1)
         val_chooser_loss = val_chooser_loss_sum / max(val_chooser_count, 1)
         val_direct_safety_loss = val_direct_safety_loss_sum / max(val_direct_safety_count, 1)
+        val_direct_focus_deleted = val_direct_focus_deleted_sum / max(
+            val_direct_safety_count, 1
+        )
+        val_direct_deletes_focus_action = val_direct_deletes_focus_action_sum / max(
+            val_direct_safety_count, 1
+        )
         val_policy_loss = val_policy_loss_sum / max(val_policy_count, 1)
         val_policy_acc = 100 * val_policy_correct / max(val_policy_count, 1)
         if timing_enabled and val_timing_epoch_count > 0:
@@ -2690,6 +2888,9 @@ def train(
         history["train_param_abs_max"].append(train_param_abs_max)
         history["train_edit_logit_abs_max"].append(train_edit_logit_abs_max)
         history["val_edit_logit_abs_max"].append(val_edit_logit_abs_max)
+        if train_cfg.max_valid_edit_logit_abs is not None:
+            history["train_valid_edit_logit_abs_max"].append(train_valid_edit_logit_abs_max)
+            history["val_valid_edit_logit_abs_max"].append(val_valid_edit_logit_abs_max)
         history["train_factor_logit_abs_max"].append(train_factor_logit_abs_max)
         history["val_factor_logit_abs_max"].append(val_factor_logit_abs_max)
         history["train_chooser_score_abs_max"].append(train_chooser_score_abs_max)
@@ -2698,6 +2899,15 @@ def train(
         history.setdefault("val_chooser_loss", []).append(val_chooser_loss)
         history.setdefault("train_direct_safety_loss", []).append(train_direct_safety_loss)
         history.setdefault("val_direct_safety_loss", []).append(val_direct_safety_loss)
+        if direct_safety_extended:
+            history.setdefault("train_direct_focus_deleted", []).append(train_direct_focus_deleted)
+            history.setdefault("val_direct_focus_deleted", []).append(val_direct_focus_deleted)
+            history.setdefault("train_direct_deletes_focus_action", []).append(
+                train_direct_deletes_focus_action
+            )
+            history.setdefault("val_direct_deletes_focus_action", []).append(
+                val_direct_deletes_focus_action
+            )
         history.setdefault("train_policy_loss", []).append(train_policy_loss)
         history.setdefault("val_policy_loss", []).append(val_policy_loss)
         history.setdefault("train_policy_acc", []).append(train_policy_acc)
@@ -2758,6 +2968,7 @@ def train(
         # Early stopping
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
+            best_epoch = epoch
             best_model_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
             epochs_without_improvement = 0
         else:
@@ -2826,6 +3037,12 @@ def train(
         if device.type == "cuda":
             log_cuda_memory(f"Epoch {epoch + 1} post-epoch", device)
 
+    last_model_state = None
+    if train_cfg.save_last_checkpoint:
+        last_model_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+        history["best_epoch"] = best_epoch + 1
+        history["completed_epochs"] = len(history["train_loss"])
+
     # Load best model
     if best_model_state is not None:
         model.load_state_dict(best_model_state)
@@ -2836,6 +3053,8 @@ def train(
         log_cuda_memory("Training complete", device)
         torch.cuda.empty_cache()
 
+    if train_cfg.save_last_checkpoint:
+        return model, history, last_model_state
     return model, history
 
 
@@ -3287,6 +3506,14 @@ def main():
         num_input_graph_nodes,
         model_cfg,
     )
+    initialization_identity: dict[str, object] | None = None
+    if training_cfg.initialization_checkpoint is not None:
+        initialization_identity = _strict_initialize_model(
+            model,
+            model_cfg=model_cfg,
+            config_path=config_path,
+            checkpoint_reference=training_cfg.initialization_checkpoint,
+        )
     model.to(device)
     if chooser_cfg.enabled:
         model.enable_chooser()
@@ -3316,7 +3543,7 @@ def main():
         log_cuda_memory("Model moved to device", device, level=logging.DEBUG)
 
     # Train model
-    model, history = train(
+    training_result = train(
         model,
         train_data,
         val_data,
@@ -3330,28 +3557,57 @@ def main():
         estimated_train_batches=estimated_train_batches,
         estimated_val_batches=estimated_val_batches,
     )
+    last_model_state = None
+    if training_cfg.save_last_checkpoint:
+        model, history, last_model_state = training_result
+    else:
+        model, history = training_result
 
     if device.type == "cuda":
         log_cuda_memory("Post-training state", device)
 
+    config_identity = _file_identity(config_path)
+    training_provenance = {
+        "schema_version": 2,
+        "seed": training_cfg.seed,
+        "config": config_identity,
+        "initialization_checkpoint": initialization_identity,
+        "train_graph": str(train_data_path.resolve()),
+        "validation_graph": str(val_data_path.resolve()),
+    }
+    history["training_provenance"] = training_provenance
+
     model_path = get_checkpoint_path(run_directory)
-    # Save model state and minimal config
-    torch.save(
-        {
-            "model_state": model.state_dict(),
-            "num_graph_nodes": num_input_graph_nodes,
-            "model_name": model_cfg.model,
-            "model_cfg": model_cfg.to_dict(),
-            "training_cfg": training_cfg.to_dict(),
-        },
-        model_path,
-    )
+    checkpoint_payload = {
+        "model_state": model.state_dict(),
+        "num_graph_nodes": num_input_graph_nodes,
+        "model_name": model_cfg.model,
+        "model_cfg": model_cfg.to_dict(),
+        "training_cfg": training_cfg.to_dict(),
+        "best_epoch": history.get("best_epoch"),
+        "checkpoint_role": "best",
+        "training_provenance": training_provenance,
+    }
+    if training_cfg.save_last_checkpoint:
+        atomic_torch_save(checkpoint_payload, model_path)
+        if last_model_state is None:
+            raise RuntimeError("Final-epoch checkpoint state was not returned by training")
+        last_payload = dict(checkpoint_payload)
+        last_payload["model_state"] = last_model_state
+        last_payload["checkpoint_role"] = "last"
+        atomic_torch_save(last_payload, get_last_checkpoint_path(run_directory))
+    else:
+        # Preserve the historical write path for all existing experiments.
+        torch.save(checkpoint_payload, model_path)
     logger.info("Saved model checkpoint to %s", model_path)
 
     # Save training history
     history_file = history_path(run_directory)
-    with history_file.open("w", encoding="utf-8") as f:
-        json.dump(history, f)
+    if training_cfg.save_last_checkpoint:
+        atomic_write_json(history_file, history)
+    else:
+        with history_file.open("w", encoding="utf-8") as f:
+            json.dump(history, f)
     logger.info("Persisted training history to %s", history_file)
     plot_training_history(history, history_file)
 

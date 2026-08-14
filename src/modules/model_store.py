@@ -1,15 +1,20 @@
 """Utilities for organizing model artifacts under the unified ``models/`` directory."""
 
 import json
+import os
 import re
+import tempfile
 from pathlib import Path
 from typing import Iterable
+
+import torch
 
 MODELS_ROOT = Path("models")
 TEMPLATES_DIR = MODELS_ROOT / "templates"
 DEFAULT_CONFIG_TAG = "default"
 DEFAULT_CHECKPOINT_NAME = "checkpoint.pth"
 TRAINING_HISTORY_NAME = "training_history.json"
+LAST_CHECKPOINT_NAME = "checkpoint.last.pth"
 CONFIG_FILE_NAME = "config.json"
 EVAL_DIR_NAME = "evaluations"
 
@@ -81,6 +86,31 @@ def ensure_run_dir_for_config(config_path: Path) -> Path:
 def get_checkpoint_path(run_directory: Path) -> Path:
     """Return the checkpoint file location within ``run_directory``."""
     return run_directory / DEFAULT_CHECKPOINT_NAME
+
+
+def get_last_checkpoint_path(run_directory: Path) -> Path:
+    """Return the optional final-epoch checkpoint location within ``run_directory``."""
+
+    return run_directory / LAST_CHECKPOINT_NAME
+
+
+def atomic_torch_save(payload: object, destination: Path) -> None:
+    """Write a torch artifact atomically without exposing a partial checkpoint."""
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(
+        dir=destination.parent,
+        prefix=f".{destination.name}.",
+        suffix=".tmp",
+    )
+    os.close(fd)
+    temporary_path = Path(temporary_name)
+    try:
+        torch.save(payload, temporary_path)
+        os.replace(temporary_path, destination)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
 
 
 def history_path(run_directory: Path) -> Path:

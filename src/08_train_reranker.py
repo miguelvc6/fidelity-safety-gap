@@ -26,12 +26,15 @@ from modules.data_encoders import (
     infer_node_feature_spec,
 )
 from modules.model_store import (
+    atomic_torch_save,
     available_config_tags,
     ensure_run_dir_for_config,
     get_checkpoint_path,
+    get_last_checkpoint_path,
     history_path,
     resolve_run_dir,
 )
+from modules.evaluation_artifacts import atomic_write_json, sha256_file
 from modules.models import build_model
 from modules.repair_eval import ConstraintRepairHeuristics, ViolationContext, load_violation_contexts
 from modules.candidates import CandidateConfig, batch_topk_candidate_triples, build_candidates
@@ -76,6 +79,38 @@ NONE_CLASS_INDEX = 0
 logger = logging.getLogger(__name__)
 
 
+def _file_identity(path: Path) -> dict[str, object]:
+    resolved = path.resolve()
+    return {
+        "path": str(resolved),
+        "size_bytes": resolved.stat().st_size,
+        "sha256": sha256_file(resolved),
+    }
+
+
+def _global_fix_loss(
+    probs: torch.Tensor,
+    metrics_summary: Sequence[Any],
+    *,
+    focus_deletion_weight: float,
+    device: torch.device,
+) -> torch.Tensor:
+    satisfaction = torch.tensor(
+        [m.global_satisfied_fraction for m in metrics_summary],
+        dtype=torch.float32,
+        device=device,
+    )
+    expected_satisfaction = torch.sum(probs * satisfaction)
+    if focus_deletion_weight == 0.0:
+        return -expected_satisfaction
+    focus_deleted = torch.tensor(
+        [m.focus_deleted for m in metrics_summary],
+        dtype=torch.float32,
+        device=device,
+    )
+    return -expected_satisfaction + focus_deletion_weight * torch.sum(probs * focus_deleted)
+
+
 class ValidationSubsetStream(IterableDataset):
     """Yield the first ``limit`` graphs from a streamed validation dataset."""
 
@@ -97,6 +132,7 @@ class ValidationSubsetStream(IterableDataset):
 
 @dataclass
 class RerankerTrainingConfig:
+    seed: int = 42
     batch_size: int = 32
     num_epochs: int = 5
     early_stopping_rounds: int = 3
@@ -119,6 +155,8 @@ class RerankerTrainingConfig:
     max_candidates_total: int = 80
     assume_complete_entity_facts: bool = True
     constraint_scope: str = "local"  # local | focus
+    focus_deletion_weight: float = 0.0
+    save_last_checkpoint: bool = False
 
     @classmethod
     def from_mapping(cls, data: dict | None) -> "RerankerTrainingConfig":
@@ -136,7 +174,13 @@ class RerankerTrainingConfig:
             validation_subset_size = int(validation_subset_size)
             if validation_subset_size <= 0:
                 raise ValueError("training_config.validation_subset_size must be positive when set")
+        focus_deletion_weight = float(
+            payload.get("focus_deletion_weight", cls.focus_deletion_weight)
+        )
+        if focus_deletion_weight < 0.0:
+            raise ValueError("training_config.focus_deletion_weight must be non-negative")
         return cls(
+            seed=int(payload.get("seed", cls.seed)),
             batch_size=int(payload.get("batch_size", cls.batch_size)),
             num_epochs=int(payload.get("num_epochs", cls.num_epochs)),
             early_stopping_rounds=int(payload.get("early_stopping_rounds", cls.early_stopping_rounds)),
@@ -163,10 +207,15 @@ class RerankerTrainingConfig:
                 payload.get("assume_complete_entity_facts", cls.assume_complete_entity_facts)
             ),
             constraint_scope=constraint_scope,
+            focus_deletion_weight=focus_deletion_weight,
+            save_last_checkpoint=bool(
+                payload.get("save_last_checkpoint", cls.save_last_checkpoint)
+            ),
         )
 
     def to_dict(self) -> dict[str, object]:
         return {
+            "seed": self.seed,
             "batch_size": self.batch_size,
             "num_epochs": self.num_epochs,
             "early_stopping_rounds": self.early_stopping_rounds,
@@ -189,6 +238,8 @@ class RerankerTrainingConfig:
             "max_candidates_total": self.max_candidates_total,
             "assume_complete_entity_facts": self.assume_complete_entity_facts,
             "constraint_scope": self.constraint_scope,
+            "focus_deletion_weight": self.focus_deletion_weight,
+            "save_last_checkpoint": self.save_last_checkpoint,
         }
 
 
@@ -688,6 +739,8 @@ def _run_epoch(
             primary_best = metrics_summary[best_idx].primary_satisfied
             global_best = metrics_summary[best_idx].global_satisfied_fraction
             regress_best = metrics_summary[best_idx].secondary_regressions
+            focus_deleted_best = metrics_summary[best_idx].focus_deleted
+            deletes_focus_action_best = metrics_summary[best_idx].candidate_deletes_focus
 
             record = {
                 "primary_oracle": primary_oracle,
@@ -695,18 +748,19 @@ def _run_epoch(
                 "global_oracle": global_oracle,
                 "global_chosen": global_best,
                 "regressions_chosen": regress_best,
+                "focus_deleted_chosen": focus_deleted_best,
+                "deletes_focus_action_chosen": deletes_focus_action_best,
                 "candidate_count": float(len(candidates)),
             }
             epoch_records.append(record)
 
             if cfg.objective == "global_fix":
-                satisfaction = torch.tensor(
-                    [m.global_satisfied_fraction for m in metrics_summary],
-                    dtype=torch.float32,
+                loss = _global_fix_loss(
+                    probs,
+                    metrics_summary,
+                    focus_deletion_weight=cfg.focus_deletion_weight,
                     device=device,
                 )
-                expected_satisfaction = torch.sum(probs * satisfaction)
-                loss = -expected_satisfaction
             else:
                 ce_loss = -log_probs[gold_index]
                 regression_tensor = torch.tensor(
@@ -725,11 +779,15 @@ def _run_epoch(
             continue
 
         batch_loss = total_loss / batch_count
+        if not torch.isfinite(batch_loss):
+            raise FloatingPointError("Non-finite reranker batch loss encountered")
         if is_train:
             optimizer.zero_grad()
             batch_loss.backward()
             if cfg.grad_clip:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), float(cfg.grad_clip))
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), float(cfg.grad_clip))
+                if not torch.isfinite(torch.as_tensor(grad_norm)):
+                    raise FloatingPointError("Non-finite reranker gradient norm encountered")
             optimizer.step()
 
         epoch_loss += float(batch_loss.item())
@@ -751,8 +809,8 @@ def main() -> None:
     parser.add_argument(
         "--seed",
         type=int,
-        default=42,
-        help="Random seed.",
+        default=None,
+        help="Optional random-seed override; must match training_config.seed when supplied.",
     )
     parser.add_argument(
         "--predict-only",
@@ -768,11 +826,18 @@ def main() -> None:
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
-    set_seed(args.seed)
 
     with args.experiment_config.open("r", encoding="utf-8") as fh:
         experiment_payload = json.load(fh)
     model_cfg, reranker_cfg, training_cfg, proposal_cfg = _load_experiment_config(args.experiment_config)
+    seed_is_explicit = "seed" in experiment_payload.get("training_config", {})
+    if seed_is_explicit and args.seed is not None and int(args.seed) != training_cfg.seed:
+        raise ValueError(
+            f"--seed={args.seed} differs from training_config.seed={training_cfg.seed}"
+        )
+    if not seed_is_explicit and args.seed is not None:
+        training_cfg.seed = int(args.seed)
+    set_seed(training_cfg.seed)
 
     dataset_variant = dataset_variant_name(model_cfg.dataset_variant, model_cfg.min_occurrence)
     processed_root = Path("data") / "processed" / dataset_variant
@@ -854,6 +919,10 @@ def main() -> None:
         num_input_graph_nodes = len(encoder._encoding) + 1
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    proposal_checkpoint_path = _resolve_proposal_checkpoint(
+        proposal_cfg,
+        model_cfg=model_cfg,
+    )
     proposal_model = _load_proposal_model(
         proposal_cfg,
         num_input_graph_nodes=num_input_graph_nodes,
@@ -944,6 +1013,14 @@ def main() -> None:
         proposal_cfg=proposal_cfg,
     )
     logger.info("Updated resolved experiment config at %s", args.experiment_config)
+    training_provenance = {
+        "schema_version": 2,
+        "seed": training_cfg.seed,
+        "config": _file_identity(args.experiment_config),
+        "proposal_checkpoint": _file_identity(proposal_checkpoint_path),
+        "train_graph": str(train_path.resolve()),
+        "validation_graph": str(val_path.resolve()),
+    }
     if args.predict_only:
         checkpoint_path = get_checkpoint_path(run_dir)
         if not checkpoint_path.exists():
@@ -951,7 +1028,7 @@ def main() -> None:
 
     best_val = float("inf")
     best_epoch = -1
-    history: dict[str, list] = {
+    history: dict[str, Any] = {
         "train_loss": [],
         "val_loss": [],
         "train_metrics": [],
@@ -1006,26 +1083,51 @@ def main() -> None:
                 best_val = val_loss
                 best_epoch = epoch
                 model_path = get_checkpoint_path(run_dir)
-                torch.save(
-                    {
-                        "model_state": model.state_dict(),
-                        "num_graph_nodes": num_input_graph_nodes,
-                        "model_name": "RERANKER",
-                        "model_cfg": model_cfg.to_dict(),
-                        "training_cfg": training_cfg.to_dict(),
-                        "reranker_cfg": reranker_cfg.to_dict(),
-                    },
-                    model_path,
-                )
+                checkpoint_payload = {
+                    "model_state": model.state_dict(),
+                    "num_graph_nodes": num_input_graph_nodes,
+                    "model_name": "RERANKER",
+                    "model_cfg": model_cfg.to_dict(),
+                    "training_cfg": training_cfg.to_dict(),
+                    "reranker_cfg": reranker_cfg.to_dict(),
+                    "best_epoch": epoch + 1,
+                    "checkpoint_role": "best",
+                    "training_provenance": training_provenance,
+                }
+                if training_cfg.save_last_checkpoint:
+                    atomic_torch_save(checkpoint_payload, model_path)
+                else:
+                    torch.save(checkpoint_payload, model_path)
+
+            if training_cfg.save_last_checkpoint:
+                last_payload = {
+                    "model_state": model.state_dict(),
+                    "num_graph_nodes": num_input_graph_nodes,
+                    "model_name": "RERANKER",
+                    "model_cfg": model_cfg.to_dict(),
+                    "training_cfg": training_cfg.to_dict(),
+                    "reranker_cfg": reranker_cfg.to_dict(),
+                    "best_epoch": best_epoch + 1,
+                    "completed_epoch": epoch + 1,
+                    "checkpoint_role": "last",
+                    "training_provenance": training_provenance,
+                }
+                atomic_torch_save(last_payload, get_last_checkpoint_path(run_dir))
 
             if epoch - best_epoch >= training_cfg.early_stopping_rounds:
                 logger.info("Early stopping at epoch %s", epoch + 1)
                 break
 
     if not args.predict_only:
+        history["best_epoch"] = best_epoch + 1
+        history["completed_epochs"] = len(history["train_loss"])
+        history["training_provenance"] = training_provenance
         history_file = history_path(run_dir)
-        with history_file.open("w", encoding="utf-8") as fh:
-            json.dump(history, fh, indent=2)
+        if training_cfg.save_last_checkpoint:
+            atomic_write_json(history_file, history)
+        else:
+            with history_file.open("w", encoding="utf-8") as fh:
+                json.dump(history, fh, indent=2)
 
     # Generate reranker predictions for evaluation.
     test_path = processed_root / graph_dataset_filename(
@@ -1077,8 +1179,11 @@ def main() -> None:
                     batch_size=args.prediction_batch_size,
                 )
                 pred_path = run_dir / "reranker_predictions.json"
-                with pred_path.open("w", encoding="utf-8") as fh:
-                    json.dump(predictions, fh, indent=2)
+                if training_cfg.save_last_checkpoint:
+                    atomic_write_json(pred_path, predictions)
+                else:
+                    with pred_path.open("w", encoding="utf-8") as fh:
+                        json.dump(predictions, fh, indent=2)
                 logger.info("Saved reranker predictions to %s", pred_path)
             else:
                 logger.warning("Skipping reranker predictions: test rows mismatch.")

@@ -11,7 +11,7 @@ if str(SRC) not in sys.path:
 
 from modules.constraint_checkers import EvidenceState
 from modules.repair_eval import RepairSample, evaluate_global_repair_samples
-from modules.reranker_eval import _evidence_preservation_details
+from modules.reranker_eval import _evidence_preservation_details, _metrics_from_details
 
 
 def _load_script(name: str):
@@ -83,6 +83,30 @@ def test_evidence_details_detect_focus_deletion_and_vacuous_improvement() -> Non
     assert details["candidate_deletes_focus"] == 1
     assert details["non_vacuous_primary_fix"] == 0
     assert details["vacuous_satisfaction_improvement"] == 1
+
+
+def test_delete_then_reinsert_records_action_without_base_deletion() -> None:
+    pre = _state({1: {10: {2}}})
+    post = _state({1: {10: {2}}})
+
+    details = _evidence_preservation_details(
+        pre_state=pre,
+        post_state=post,
+        candidate_slots=[1, 10, 2, 1, 10, 2],
+        placeholder_map={},
+        primary_satisfied=1,
+        pre_global_satisfied_fraction=0.5,
+        post_global_satisfied_fraction=0.5,
+    )
+
+    assert details["focus_deleted"] == 0
+    assert details["focus_preserved"] == 1
+    assert details["candidate_deletes_focus"] == 1
+
+    metrics = _metrics_from_details(details)
+    assert metrics.focus_deleted == 0
+    assert metrics.focus_preserved == 1
+    assert metrics.candidate_deletes_focus == 1
 
 
 class _FakeEvaluator:

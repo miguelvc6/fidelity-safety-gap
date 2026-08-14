@@ -56,6 +56,35 @@ def _run_generator(tmp_path: Path, *, test_types=(0, 2)) -> Path:
     return models
 
 
+def _run_deletion_study_generator(tmp_path: Path) -> Path:
+    models = _run_generator(tmp_path)
+    canonical_path = models / "a1_factorized_imitation_compact_grouped__toy_minocc100__node_id" / "config.json"
+    canonical_before = canonical_path.read_bytes()
+    generator = _load_generator()
+    old_argv = sys.argv
+    sys.argv = [
+        "make_experiment_configs.py",
+        "--processed-root",
+        str(tmp_path / "processed"),
+        "--interim-root",
+        str(tmp_path / "interim"),
+        "--models-root",
+        str(models),
+        "--study",
+        "deletion-shortcut-v2",
+        "--variant",
+        "toy_minocc100",
+        "--encoding",
+        "node_id",
+    ]
+    try:
+        generator.main()
+    finally:
+        sys.argv = old_argv
+    assert canonical_path.read_bytes() == canonical_before
+    return models
+
+
 def _config(models: Path, name: str) -> dict:
     return json.loads((models / f"{name}__toy_minocc100__node_id" / "config.json").read_text())
 
@@ -94,3 +123,38 @@ def test_corrected_bundle_defines_both_b0s_and_compact_factor_runs(tmp_path) -> 
 def test_bundle_rejects_factor_type_seen_only_in_test(tmp_path) -> None:
     with pytest.raises(ValueError, match="absent from train/validation"):
         _run_generator(tmp_path, test_types=(0, 3))
+
+
+def test_deletion_study_is_additive_and_defines_calibrated_matched_pairs(tmp_path) -> None:
+    models = _run_deletion_study_generator(tmp_path)
+    m1d = _config(models, "m1d_safe_factor_direct_v2")
+    m1d_bp = _config(models, "m1d_safe_factor_direct_base_preserving_v2")
+    g0 = _config(models, "g0_globalfix_reference_v2")
+    g0_bp = _config(models, "g0_globalfix_base_preserving_v2")
+
+    for payload in (m1d, m1d_bp):
+        assert payload["model_config"]["factor_executor_impl"] == "per_type_grouped_v2"
+        assert payload["model_config"]["gold_edit_embedding_mode"] == "compact"
+        assert payload["training_config"]["seed"] == 42
+        assert payload["training_config"]["learning_rate"] == 1e-5
+        assert payload["training_config"]["initialization_checkpoint"].endswith(
+            "a1_factorized_imitation_compact_grouped__toy_minocc100__node_id/checkpoint.pth"
+        )
+        direct = payload["training_config"]["direct_safety"]
+        assert direct["loss_weight"] == 0.25
+        assert direct["score_temperature"] == 6.0
+        assert payload["training_config"]["save_last_checkpoint"] is True
+        assert payload["training_config"]["max_valid_edit_logit_abs"] == 10_000.0
+    assert "focus_deletion_weight" not in m1d["training_config"]["direct_safety"]
+    assert m1d_bp["training_config"]["direct_safety"]["focus_deletion_weight"] == 1.0
+
+    for payload in (g0, g0_bp):
+        assert payload["training_config"]["objective"] == "global_fix"
+        assert payload["training_config"]["seed"] == 42
+        assert payload["training_config"]["prediction_include_gold"] is False
+        assert payload["training_config"]["save_last_checkpoint"] is True
+        assert payload["proposal_config"]["config_tag"].startswith(
+            "a1_factorized_imitation_compact_grouped__"
+        )
+    assert "focus_deletion_weight" not in g0["training_config"]
+    assert g0_bp["training_config"]["focus_deletion_weight"] == 1.0

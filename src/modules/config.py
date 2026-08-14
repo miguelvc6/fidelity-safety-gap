@@ -281,6 +281,9 @@ class DirectSafetyConfig:
     enabled: bool = False
     alpha_primary: float = 1.0
     beta_secondary: float = 0.5
+    loss_weight: float = 1.0
+    score_temperature: float = 1.0
+    focus_deletion_weight: float = 0.0
     topk_candidates: int = 20
     max_candidates_total: int = 80
 
@@ -296,7 +299,13 @@ class DirectSafetyConfig:
 
         if "enabled" in filtered and filtered["enabled"] is not None:
             filtered["enabled"] = bool(filtered["enabled"])
-        for key in ("alpha_primary", "beta_secondary"):
+        for key in (
+            "alpha_primary",
+            "beta_secondary",
+            "loss_weight",
+            "score_temperature",
+            "focus_deletion_weight",
+        ):
             if key in filtered and filtered[key] is not None:
                 filtered[key] = float(filtered[key])
         for key in ("topk_candidates", "max_candidates_total"):
@@ -305,6 +314,12 @@ class DirectSafetyConfig:
 
         current = {f.name: getattr(self, f.name) for f in fields(type(self))}
         current.update(filtered)
+        if float(current["loss_weight"]) < 0.0:
+            raise ValueError("DirectSafetyConfig.loss_weight must be non-negative")
+        if float(current["score_temperature"]) <= 0.0:
+            raise ValueError("DirectSafetyConfig.score_temperature must be positive")
+        if float(current["focus_deletion_weight"]) < 0.0:
+            raise ValueError("DirectSafetyConfig.focus_deletion_weight must be non-negative")
         return type(self)(**current)
 
     def to_dict(self) -> dict[str, Any]:
@@ -312,6 +327,9 @@ class DirectSafetyConfig:
             "enabled": self.enabled,
             "alpha_primary": self.alpha_primary,
             "beta_secondary": self.beta_secondary,
+            "loss_weight": self.loss_weight,
+            "score_temperature": self.score_temperature,
+            "focus_deletion_weight": self.focus_deletion_weight,
             "topk_candidates": self.topk_candidates,
             "max_candidates_total": self.max_candidates_total,
         }
@@ -502,6 +520,9 @@ class TrainingConfig:
     pin_memory: bool | None = None  # Override DataLoader pin_memory behaviour (None keeps the default).
     validate_factor_labels: bool = False  # Enable strict factor label assertions per batch.
     validation_subset_size: int | None = None  # Optional cap on validation graphs per epoch.
+    initialization_checkpoint: str | None = None  # Optional strict model-only warm start.
+    save_last_checkpoint: bool = False  # Preserve the final epoch separately from the best model.
+    max_valid_edit_logit_abs: float | None = None  # Optional fail-fast stability threshold.
     constraint_loss: ConstraintLossConfig = field(default_factory=ConstraintLossConfig)
     fix_probability_loss: FixProbabilityLossConfig = field(default_factory=FixProbabilityLossConfig)
     factor_loss: FactorLossConfig = field(default_factory=FactorLossConfig)
@@ -541,6 +562,15 @@ class TrainingConfig:
             filtered["validation_subset_size"] = subset_size
         if "seed" in filtered and filtered["seed"] is not None:
             filtered["seed"] = int(filtered["seed"])
+        if "initialization_checkpoint" in filtered and filtered["initialization_checkpoint"] is not None:
+            filtered["initialization_checkpoint"] = str(filtered["initialization_checkpoint"])
+        if "save_last_checkpoint" in filtered and filtered["save_last_checkpoint"] is not None:
+            filtered["save_last_checkpoint"] = bool(filtered["save_last_checkpoint"])
+        if "max_valid_edit_logit_abs" in filtered and filtered["max_valid_edit_logit_abs"] is not None:
+            threshold = float(filtered["max_valid_edit_logit_abs"])
+            if threshold <= 0.0:
+                raise ValueError("TrainingConfig.max_valid_edit_logit_abs must be positive when set")
+            filtered["max_valid_edit_logit_abs"] = threshold
 
         if dynamic_fallback is not None:
             if constraint_update is None:

@@ -187,6 +187,13 @@ class ProposalExperiment:
     direct_safety_enabled: bool = False
     direct_safety_alpha_primary: float = 1.0
     direct_safety_beta_secondary: float = 0.5
+    direct_safety_loss_weight: float = 1.0
+    direct_safety_score_temperature: float = 1.0
+    direct_safety_focus_deletion_weight: float = 0.0
+    initialization_proposal_name: str | None = None
+    learning_rate: float | None = None
+    save_last_checkpoint: bool = False
+    max_valid_edit_logit_abs: float | None = None
     validate_factor_labels: bool = False
     include_gold_candidates: bool = True
     enable_policy_choice: bool = False
@@ -209,6 +216,9 @@ class RerankerExperiment:
     objective: str
     proposal_name: str
     constraint_scope: str = "local"
+    focus_deletion_weight: float = 0.0
+    save_last_checkpoint: bool = False
+    seed: int | None = None
 
 
 def _proposal_config_payload(
@@ -272,7 +282,9 @@ def _proposal_config_payload(
             "batch_size": 256,
             "num_epochs": CHEAPER_NUM_EPOCHS,
             "early_stopping_rounds": CHEAPER_EARLY_STOPPING_ROUNDS,
-            "learning_rate": CHEAPER_LEARNING_RATE,
+            "learning_rate": (
+                exp.learning_rate if exp.learning_rate is not None else CHEAPER_LEARNING_RATE
+            ),
             "weight_decay": LOCKED_WEIGHT_DECAY,
             "grad_clip": CHEAPER_GRAD_CLIP,
             "scheduler_factor": CHEAPER_SCHEDULER_FACTOR,
@@ -318,6 +330,25 @@ def _proposal_config_payload(
             "seed": 42,
         },
     }
+    if exp.direct_safety_loss_weight != 1.0:
+        payload["training_config"]["direct_safety"]["loss_weight"] = exp.direct_safety_loss_weight
+    if exp.direct_safety_score_temperature != 1.0:
+        payload["training_config"]["direct_safety"]["score_temperature"] = (
+            exp.direct_safety_score_temperature
+        )
+    if exp.direct_safety_focus_deletion_weight != 0.0:
+        payload["training_config"]["direct_safety"]["focus_deletion_weight"] = (
+            exp.direct_safety_focus_deletion_weight
+        )
+    if exp.initialization_proposal_name is not None:
+        initialization_tag = f"{exp.initialization_proposal_name}__{variant}__{encoding}"
+        payload["training_config"]["initialization_checkpoint"] = (
+            f"../{initialization_tag}/checkpoint.pth"
+        )
+    if exp.save_last_checkpoint:
+        payload["training_config"]["save_last_checkpoint"] = True
+    if exp.max_valid_edit_logit_abs is not None:
+        payload["training_config"]["max_valid_edit_logit_abs"] = exp.max_valid_edit_logit_abs
     if exp.expected_trainable_parameters is not None:
         payload["expected_trainable_parameters"] = int(exp.expected_trainable_parameters)
     return payload
@@ -332,7 +363,7 @@ def _reranker_config_payload(
     num_factor_types: int,
     proposal_config_tag: str,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "model_config": {
             "dataset_variant": variant,
             "encoding": encoding,
@@ -369,6 +400,13 @@ def _reranker_config_payload(
             "config_tag": proposal_config_tag,
         },
     }
+    if exp.seed is not None:
+        payload["training_config"]["seed"] = exp.seed
+    if exp.focus_deletion_weight != 0.0:
+        payload["training_config"]["focus_deletion_weight"] = exp.focus_deletion_weight
+    if exp.save_last_checkpoint:
+        payload["training_config"]["save_last_checkpoint"] = True
+    return payload
 
 
 def main() -> None:
@@ -376,17 +414,31 @@ def main() -> None:
     parser.add_argument("--processed-root", type=Path, default=Path("data/processed"))
     parser.add_argument("--interim-root", type=Path, default=Path("data/interim"))
     parser.add_argument("--models-root", type=Path, default=Path("models"))
+    parser.add_argument("--variant", default=None, help="Optional exact dataset-variant filter.")
+    parser.add_argument("--encoding", default=None, help="Optional exact encoding filter.")
     parser.add_argument("--limit", type=int, default=0, help="Limit variant/encoding pairs (0 = no limit).")
     parser.add_argument("--include-experimental", action="store_true")
+    parser.add_argument(
+        "--study",
+        choices=("canonical", "deletion-shortcut-v2"),
+        default="canonical",
+        help="Emit the canonical suite or only the isolated deletion-shortcut study configs.",
+    )
     parser.add_argument(
         "--include-h2-ablations",
         action="store_true",
         help="Emit the three H2 supporting ablation configs. Existing config files are left untouched.",
     )
     args = parser.parse_args()
+    if args.study != "canonical" and (args.include_experimental or args.include_h2_ablations):
+        parser.error("--study deletion-shortcut-v2 cannot be combined with other config bundles")
     assert_parameter_match()
 
     pairs = list(_iter_variant_encodings(args.processed_root))
+    if args.variant is not None:
+        pairs = [pair for pair in pairs if pair[0] == args.variant]
+    if args.encoding is not None:
+        pairs = [pair for pair in pairs if pair[1] == args.encoding]
     if args.limit > 0:
         pairs = pairs[: args.limit]
     if not pairs:
@@ -473,6 +525,65 @@ def main() -> None:
             proposal_name="a1_factorized_imitation_compact_grouped",
             constraint_scope="local",
         )
+    ]
+    deletion_study_proposals: list[ProposalExperiment] = [
+        ProposalExperiment(
+            name="m1d_safe_factor_direct_v2",
+            model_name="GIN_PRESSURE",
+            constraint_representation="factorized",
+            pressure_enabled=True,
+            pressure_type_conditioning="concat",
+            direct_safety_enabled=True,
+            direct_safety_alpha_primary=1.0,
+            direct_safety_beta_secondary=0.5,
+            direct_safety_loss_weight=0.25,
+            direct_safety_score_temperature=6.0,
+            direct_safety_focus_deletion_weight=0.0,
+            initialization_proposal_name="a1_factorized_imitation_compact_grouped",
+            learning_rate=1e-5,
+            save_last_checkpoint=True,
+            max_valid_edit_logit_abs=10_000.0,
+            validate_factor_labels=True,
+            compact_grouped=True,
+        ),
+        ProposalExperiment(
+            name="m1d_safe_factor_direct_base_preserving_v2",
+            model_name="GIN_PRESSURE",
+            constraint_representation="factorized",
+            pressure_enabled=True,
+            pressure_type_conditioning="concat",
+            direct_safety_enabled=True,
+            direct_safety_alpha_primary=1.0,
+            direct_safety_beta_secondary=0.5,
+            direct_safety_loss_weight=0.25,
+            direct_safety_score_temperature=6.0,
+            direct_safety_focus_deletion_weight=1.0,
+            initialization_proposal_name="a1_factorized_imitation_compact_grouped",
+            learning_rate=1e-5,
+            save_last_checkpoint=True,
+            max_valid_edit_logit_abs=10_000.0,
+            validate_factor_labels=True,
+            compact_grouped=True,
+        ),
+    ]
+    deletion_study_rerankers: list[RerankerExperiment] = [
+        RerankerExperiment(
+            name="g0_globalfix_reference_v2",
+            objective="global_fix",
+            proposal_name="a1_factorized_imitation_compact_grouped",
+            constraint_scope="local",
+            seed=42,
+            save_last_checkpoint=True,
+        ),
+        RerankerExperiment(
+            name="g0_globalfix_base_preserving_v2",
+            objective="global_fix",
+            proposal_name="a1_factorized_imitation_compact_grouped",
+            constraint_scope="local",
+            focus_deletion_weight=1.0,
+            seed=42,
+            save_last_checkpoint=True,
+        ),
     ]
     h2_ablation_proposals: list[ProposalExperiment] = [
         ProposalExperiment(
@@ -566,13 +677,17 @@ def main() -> None:
                 f"{unseen_test_ids}"
             )
 
-        proposal_experiments = list(canonical_proposals)
-        reranker_experiments = list(canonical_rerankers)
-        if args.include_h2_ablations:
-            proposal_experiments.extend(h2_ablation_proposals)
-        if args.include_experimental:
-            proposal_experiments.extend(experimental_proposals)
-            reranker_experiments.extend(experimental_rerankers)
+        if args.study == "deletion-shortcut-v2":
+            proposal_experiments = list(deletion_study_proposals)
+            reranker_experiments = list(deletion_study_rerankers)
+        else:
+            proposal_experiments = list(canonical_proposals)
+            reranker_experiments = list(canonical_rerankers)
+            if args.include_h2_ablations:
+                proposal_experiments.extend(h2_ablation_proposals)
+            if args.include_experimental:
+                proposal_experiments.extend(experimental_proposals)
+                reranker_experiments.extend(experimental_rerankers)
 
         for exp in proposal_experiments:
             exp_dir_name = f"{exp.name}__{variant}__{encoding}"
@@ -587,7 +702,8 @@ def main() -> None:
             )
             if exp.name == "x2_factor_loss_only_appendix":
                 payload["training_config"]["factor_loss"]["enabled"] = True
-            if _write_json(cfg_path, payload, overwrite=not args.include_h2_ablations):
+            overwrite = args.study == "canonical" and not args.include_h2_ablations
+            if _write_json(cfg_path, payload, overwrite=overwrite):
                 created += 1
 
         for exp in reranker_experiments:
@@ -602,7 +718,8 @@ def main() -> None:
                 num_factor_types=num_factor_types,
                 proposal_config_tag=proposal_config_tag,
             )
-            if _write_json(cfg_path, payload, overwrite=not args.include_h2_ablations):
+            overwrite = args.study == "canonical" and not args.include_h2_ablations
+            if _write_json(cfg_path, payload, overwrite=overwrite):
                 created += 1
 
     print(f"[ok] wrote {created} configs under {args.models_root}")

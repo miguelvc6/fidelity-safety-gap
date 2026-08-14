@@ -65,6 +65,9 @@ class CandidateMetrics:
     sir: float
     add_count: int
     del_count: int
+    focus_preserved: int = 0
+    focus_deleted: int = 0
+    candidate_deletes_focus: int = 0
 
 
 class _ReusableEvidenceState:
@@ -1371,4 +1374,7 @@ def _metrics_from_details(details: Dict[str, Any]) -> CandidateMetrics:
         sir=float(details.get("sir", 0.0)),
         add_count=int(details.get("add_count", 0)),
         del_count=int(details.get("del_count", 0)),
+        focus_preserved=int(details.get("focus_preserved", 0)),
+        focus_deleted=int(details.get("focus_deleted", 0)),
+        candidate_deletes_focus=int(details.get("candidate_deletes_focus", 0)),
     )
