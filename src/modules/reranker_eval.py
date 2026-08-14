@@ -16,6 +16,11 @@ from modules.constraint_checkers import (
     normalize_token,
 )
 from modules.data_encoders import GlobalIntEncoder
+from modules.evidence_state import (
+    apply_evidence_edits as _shared_apply_evidence_edits,
+    build_facts_state as _shared_build_facts_state,
+    compute_p_local as _shared_compute_p_local,
+)
 
 PARAM_P2306 = "P2306"
 PARAM_P2309 = "P2309"
@@ -323,29 +328,7 @@ def _resolve_placeholder_token_ids(encoder: GlobalIntEncoder | None) -> Dict[str
 
 
 def _compute_p_local(row: Any, *, cast_int: bool = True) -> Set[Any]:
-    p_local: Set[Any] = set()
-    for name in ("predicate", "other_predicate"):
-        value = _coerce_value(getattr(row, name, None), cast_int=cast_int)
-        if value not in (None, "", 0):
-            p_local.add(value)
-    for name in ("subject_predicates", "object_predicates", "other_entity_predicates"):
-        raw = getattr(row, name, None)
-        if isinstance(raw, np.ndarray) and raw.ndim == 1 and raw.dtype != object:
-            if cast_int and np.issubdtype(raw.dtype, np.integer):
-                for pred_id in raw:
-                    value = int(pred_id)
-                    if value != 0:
-                        p_local.add(value)
-            else:
-                for pred in raw.tolist():
-                    value = _coerce_value(pred, cast_int=cast_int)
-                    if value not in (None, "", 0):
-                        p_local.add(value)
-            continue
-        for pred in _coerce_sequence(raw, cast_int=cast_int):
-            if pred not in (None, "", 0):
-                p_local.add(pred)
-    return p_local
+    return _shared_compute_p_local(row, cast_int=cast_int)
 
 
 def _pick_other_entity_id(row: Any, *, cast_int: bool = True) -> Any:
@@ -419,40 +402,13 @@ def _build_facts_state(
     assume_complete: bool,
     cast_int: bool,
 ) -> Tuple[Dict[int, Dict[int, Set[int]]], Dict[int, Set[int]]]:
-    facts_by_entity: Dict[int, Dict[int, Set[int]]] = {}
-    predicates_present: Dict[int, Set[int]] = {}
-
-    subject_id = _coerce_value(getattr(row, "subject", None), cast_int=cast_int)
-    object_id = _coerce_value(getattr(row, "object", None), cast_int=cast_int)
-    other_entity_id = _pick_other_entity_id(row, cast_int=cast_int)
-
-    subject_preds = getattr(row, "subject_predicates", None)
-    subject_objs = getattr(row, "subject_objects", None)
-    subject_facts, subject_present = _build_facts_for_entity(
-        subject_preds, subject_objs, p_local=p_local, cast_int=cast_int
+    facts, present = _shared_build_facts_state(
+        row,
+        p_local=p_local,
+        assume_complete=assume_complete,
+        cast_int=cast_int,
     )
-    facts_by_entity[subject_id] = subject_facts
-    predicates_present[subject_id] = subject_present
-
-    if object_id not in (None, "", 0):
-        object_preds = getattr(row, "object_predicates", None)
-        object_objs = getattr(row, "object_objects", None)
-        object_facts, object_present = _build_facts_for_entity(
-            object_preds, object_objs, p_local=p_local, cast_int=cast_int
-        )
-        facts_by_entity[object_id] = object_facts
-        predicates_present[object_id] = object_present
-
-    if other_entity_id not in (None, "", 0):
-        other_preds = getattr(row, "other_entity_predicates", None)
-        other_objs = getattr(row, "other_entity_objects", None)
-        other_facts, other_present = _build_facts_for_entity(
-            other_preds, other_objs, p_local=p_local, cast_int=cast_int
-        )
-        facts_by_entity[other_entity_id] = other_facts
-        predicates_present[other_entity_id] = other_present
-
-    return facts_by_entity, predicates_present
+    return facts, present
 
 
 def _build_placeholder_map(
@@ -534,84 +490,26 @@ def _build_post_state_for_candidate(
     placeholder_map: Dict[Any, Any],
     assume_complete: bool,
 ) -> Tuple[Dict[Any, Dict[Any, Set[Any]]], Dict[Any, Set[Any]], Set[Tuple[Any, Any]]]:
-    post_facts = base_facts_by_entity
-    post_predicates = base_predicates_present
-    missing_edits: Set[Tuple[Any, Any]] | None = None
-
-    copied_entity_maps: Dict[Any, Dict[Any, Set[Any]]] = {}
-    copied_value_sets: Set[Tuple[Any, Any]] = set()
-    copied_predicate_sets: Dict[Any, Set[Any]] = {}
-
-    for kind, base_idx in (("del", 3), ("add", 0)):
-        subj = _resolve_placeholder(int(candidate_slots[base_idx]), placeholder_map)
-        pred = _resolve_placeholder(int(candidate_slots[base_idx + 1]), placeholder_map)
-        obj = _resolve_placeholder(int(candidate_slots[base_idx + 2]), placeholder_map)
-        if subj in (None, "", 0) or pred in (None, "", 0) or obj in (None, "", 0):
-            continue
-        if not assume_complete and pred not in base_predicates_present.get(subj, set()):
-            if missing_edits is None:
-                missing_edits = set()
-            missing_edits.add((subj, pred))
-            continue
-        if pred not in p_local:
-            if missing_edits is None:
-                missing_edits = set()
-            missing_edits.add((subj, pred))
-            continue
-
-        entity_facts = copied_entity_maps.get(subj)
-        if entity_facts is None:
-            source_facts = base_facts_by_entity.get(subj)
-            if source_facts is None:
-                if missing_edits is None:
-                    missing_edits = set()
-                missing_edits.add((subj, pred))
-                continue
-            if post_facts is base_facts_by_entity:
-                post_facts = dict(base_facts_by_entity)
-            entity_facts = dict(source_facts)
-            post_facts[subj] = entity_facts
-            copied_entity_maps[subj] = entity_facts
-
-        key = (subj, pred)
-        values = entity_facts.get(pred)
-        if kind == "del":
-            if values is None or obj not in values:
-                continue
-            if key not in copied_value_sets:
-                entity_facts[pred] = set(values)
-                copied_value_sets.add(key)
-                values = entity_facts[pred]
-            values.discard(obj)
-            continue
-
-        if values is None:
-            entity_facts[pred] = {obj}
-            copied_value_sets.add(key)
-        else:
-            if obj in values:
-                pass
-            else:
-                if key not in copied_value_sets:
-                    entity_facts[pred] = set(values)
-                    copied_value_sets.add(key)
-                    values = entity_facts[pred]
-                values.add(obj)
-
-        base_subject_preds = base_predicates_present.get(subj, set())
-        if pred in base_subject_preds:
-            continue
-
-        subject_preds = copied_predicate_sets.get(subj)
-        if subject_preds is None:
-            if post_predicates is base_predicates_present:
-                post_predicates = dict(base_predicates_present)
-            subject_preds = set(base_subject_preds)
-            post_predicates[subj] = subject_preds
-            copied_predicate_sets[subj] = subject_preds
-        subject_preds.add(pred)
-
-    return post_facts, post_predicates, missing_edits if missing_edits is not None else _EMPTY_MISSING_EDITS
+    pre_state = EvidenceState(
+        facts_by_entity=base_facts_by_entity,
+        predicates_present=base_predicates_present,
+        assume_complete=assume_complete,
+        missing_edits=set(),
+        focus_subject=0,
+        focus_predicate=0,
+        focus_object=0,
+        other_subject=0,
+        other_predicate=0,
+        other_object=0,
+    )
+    post_state, _ = _shared_apply_evidence_edits(
+        pre_state,
+        p_local=p_local,
+        delete=candidate_slots[3:6],
+        add=candidate_slots[0:3],
+        resolver=lambda value: _resolve_placeholder(int(value), placeholder_map),
+    )
+    return post_state.facts_by_entity, post_state.predicates_present, post_state.missing_edits
 
 
 def _local_satisfied_fraction(checkable: Sequence[bool], satisfied: Sequence[int]) -> float:
@@ -667,6 +565,8 @@ def _evidence_preservation_details(
         "focus_preserved": int(focus_preserved),
         "focus_deleted": int(focus_deleted),
         "candidate_deletes_focus": int(candidate_deletes_focus),
+        "resolved_add": resolved.get("add"),
+        "resolved_del": resolved.get("del"),
         "non_vacuous_primary_fix": int(int(primary_satisfied) == 1 and focus_preserved),
         "vacuous_satisfaction_improvement": int(
             focus_deleted and post_global_satisfied_fraction > pre_global_satisfied_fraction
@@ -1047,6 +947,8 @@ class CandidateConstraintEvaluator:
             other_predicate=other_predicate,
             other_object=other_object,
         )
+        if not pre_state.focus_statement_present():
+            raise AssertionError("Corrected evaluation pre-state is missing its base statement")
 
         placeholder_map = _build_placeholder_map(self._encoder, row, self._placeholder_token_ids)
         post_facts, post_predicates, missing_edits = _build_post_state_for_candidate(

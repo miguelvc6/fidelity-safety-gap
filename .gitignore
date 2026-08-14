@@ -13,3 +13,6 @@ logs/*
 models/baselines/full_strat1m/parquet/baselines_all.json
 models/baselines/full_strat1m_minocc100/parquet/baselines_all.json
 models/*/*/model.json
+latex_paper/
+.tools/
+models/**/evaluations/*.pre-schema-v2.*

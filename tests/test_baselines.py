@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 import torch
-from torch_geometric.data import Data
+from torch_geometric.data import Batch, Data
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -13,8 +13,10 @@ if str(SRC) not in sys.path:
 
 from modules.baselines import (  # noqa: E402
     BASELINE_NAMES,
+    BaselineAdapter,
     ConstraintDefinitionMajorityBaseline,
     ConstraintFamilyMajorityBaseline,
+    DeleteFocusBaseline,
 )
 
 
@@ -53,7 +55,20 @@ def test_baseline_registry_exposes_explicit_majority_names() -> None:
     assert "ConstraintShapeMajorityBaseline" not in BASELINE_NAMES
 
 
+def test_baseline_adapter_evaluation_hook_uses_plain_forward() -> None:
+    graph = _graph(1, "single", [0, 0, 0, 0, 0, 0])
+    graph.focus_triple = torch.tensor([1, 2, 3], dtype=torch.long)
+    batch = Batch.from_data_list([graph])
+    adapter = BaselineAdapter(DeleteFocusBaseline(num_graph_nodes=30))
+
+    logits = adapter.forward_for_evaluation(batch)
+
+    assert logits.shape == (1, 6, 30)
+    assert logits.argmax(dim=-1).tolist() == [[0, 0, 0, 1, 2, 3]]
+
+
 if __name__ == "__main__":
     test_definition_and_family_majority_use_different_keys()
     test_baseline_registry_exposes_explicit_majority_names()
+    test_baseline_adapter_evaluation_hook_uses_plain_forward()
     print("baseline tests passed")

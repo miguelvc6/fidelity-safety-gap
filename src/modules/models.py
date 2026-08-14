@@ -10,6 +10,8 @@ from torch.nn import Linear, ReLU, Sequential
 from torch_geometric.nn import GATConv, GCNConv, GINConv, GINEConv, global_mean_pool
 
 from .config import ModelConfig
+from .factor_dispatch import GroupedDispatch, GroupedLinearBank, build_grouped_dispatch
+from .factor_types import normalize_active_factor_type_ids
 
 
 FACTOR_ROLE_PREDICATE = 0
@@ -27,6 +29,8 @@ class FactorScopeRuntime(NamedTuple):
     factor_node_emb: torch.Tensor
     factor_graph_index: torch.Tensor
     factor_type_ids: torch.Tensor
+    factor_type_indices: torch.Tensor
+    factor_dispatch: GroupedDispatch | None
     predicate_summary: torch.Tensor
     subject_summary: torch.Tensor
     object_summary: torch.Tensor
@@ -69,6 +73,69 @@ class FactorPostEditHead(nn.Module):
 
     def forward(self, state: torch.Tensor, edit_repr: torch.Tensor) -> torch.Tensor:
         return self.net(torch.cat([state, edit_repr], dim=-1)).squeeze(-1)
+
+
+class GroupedFactorTypeExecutor(nn.Module):
+    """Independent per-type executors stored in compact packed banks."""
+
+    def __init__(self, num_types: int, input_dim: int, state_dim: int):
+        super().__init__()
+        self.input_layer = GroupedLinearBank(num_types, input_dim, state_dim)
+        self.state_layer = GroupedLinearBank(num_types, state_dim, state_dim)
+        self.pre_head = GroupedLinearBank(num_types, state_dim, 1)
+
+    def forward(
+        self,
+        inputs: torch.Tensor,
+        dispatch: GroupedDispatch,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        sorted_inputs = inputs.index_select(0, dispatch.order)
+        state = F.relu(self.input_layer.forward_sorted(sorted_inputs, dispatch))
+        state = F.relu(self.state_layer.forward_sorted(state, dispatch))
+        logits = self.pre_head.forward_sorted(state, dispatch).squeeze(-1)
+        return (
+            state.index_select(0, dispatch.inverse_order),
+            logits.index_select(0, dispatch.inverse_order),
+        )
+
+    @property
+    def last_backend(self) -> str:
+        return self.input_layer.last_backend
+
+
+class GroupedFactorPostEditHead(nn.Module):
+    """Independent per-type post-edit heads stored in compact packed banks."""
+
+    def __init__(self, num_types: int, state_dim: int, edit_dim: int):
+        super().__init__()
+        self.hidden = GroupedLinearBank(num_types, state_dim + edit_dim, state_dim)
+        self.output = GroupedLinearBank(num_types, state_dim, 1)
+
+    def forward(
+        self,
+        state: torch.Tensor,
+        edit_repr: torch.Tensor,
+        dispatch: GroupedDispatch,
+    ) -> torch.Tensor:
+        joint = torch.cat([state, edit_repr], dim=-1).index_select(0, dispatch.order)
+        hidden = F.relu(self.hidden.forward_sorted(joint, dispatch))
+        logits = self.output.forward_sorted(hidden, dispatch).squeeze(-1)
+        return logits.index_select(0, dispatch.inverse_order)
+
+
+class GroupedPressureRole(nn.Module):
+    """Independent per-type pressure MLPs stored in compact packed banks."""
+
+    def __init__(self, num_types: int, input_dim: int, hidden_dim: int):
+        super().__init__()
+        self.hidden = GroupedLinearBank(num_types, input_dim, hidden_dim)
+        self.output = GroupedLinearBank(num_types, hidden_dim, hidden_dim)
+
+    def forward(self, inputs: torch.Tensor, dispatch: GroupedDispatch) -> torch.Tensor:
+        sorted_inputs = inputs.index_select(0, dispatch.order)
+        hidden = F.relu(self.hidden.forward_sorted(sorted_inputs, dispatch))
+        outputs = self.output.forward_sorted(hidden, dispatch)
+        return outputs.index_select(0, dispatch.inverse_order)
 
 
 def _select_factor_node_indices(
@@ -161,6 +228,8 @@ def _build_factor_scope_runtime(
     *,
     factor_edge_types: tuple[int, int, int],
     num_factor_types: int,
+    factor_type_id_to_compact: torch.Tensor | None = None,
+    num_active_factor_types: int | None = None,
 ) -> FactorScopeRuntime | None:
     factor_node_index, factor_graph_index = _select_factor_node_indices(node_emb, data)
     if factor_node_index is None or factor_graph_index is None or factor_node_index.numel() == 0:
@@ -183,13 +252,40 @@ def _build_factor_scope_runtime(
             raise ValueError("factor_types were provided but num_factor_types is not positive.")
         invalid_mask = (raw_factor_types < 0) | (raw_factor_types >= int(num_factor_types))
         if invalid_mask.any():
-            invalid_values = sorted({int(v) for v in raw_factor_types[invalid_mask].tolist()})
+            invalid_values = sorted(
+                {int(v) for v in raw_factor_types[invalid_mask].detach().cpu().tolist()}
+            )
             raise ValueError(
                 f"factor_types contain values outside [0, {num_factor_types}): {invalid_values[:8]}"
             )
         factor_type_ids = raw_factor_types
     else:
-        raise ValueError("Missing factor_types on factorized graph; per-type factor execution requires dense type ids.")
+        raise ValueError("Missing factor_types on factorized graph; per-type factor execution requires type ids.")
+
+    if factor_type_id_to_compact is None:
+        factor_type_indices = factor_type_ids
+        factor_dispatch = None
+    else:
+        lookup = factor_type_id_to_compact.to(device=node_emb.device)
+        factor_type_indices = lookup.index_select(0, factor_type_ids)
+        inactive_mask = factor_type_indices < 0
+        if inactive_mask.any():
+            inactive_values = sorted(
+                {int(v) for v in factor_type_ids[inactive_mask].detach().cpu().tolist()}
+            )
+            raise ValueError(
+                "factor_types contain stable ids absent from active_factor_type_ids: "
+                f"{inactive_values[:8]}"
+            )
+        active_type_count = int(
+            num_active_factor_types
+            if num_active_factor_types is not None
+            else int(factor_type_indices.max().item()) + 1
+        )
+        factor_dispatch = build_grouped_dispatch(
+            factor_type_indices,
+            num_types=active_type_count,
+        )
 
     edge_index = getattr(data, "edge_index", None)
     edge_type = getattr(data, "edge_type", None)
@@ -202,6 +298,8 @@ def _build_factor_scope_runtime(
             factor_node_emb=factor_node_emb,
             factor_graph_index=factor_graph_index,
             factor_type_ids=factor_type_ids,
+            factor_type_indices=factor_type_indices,
+            factor_dispatch=factor_dispatch,
             predicate_summary=zero_summary,
             subject_summary=zero_summary.clone(),
             object_summary=zero_summary.clone(),
@@ -276,6 +374,8 @@ def _build_factor_scope_runtime(
         factor_node_emb=factor_node_emb,
         factor_graph_index=factor_graph_index,
         factor_type_ids=factor_type_ids,
+        factor_type_indices=factor_type_indices,
+        factor_dispatch=factor_dispatch,
         predicate_summary=predicate_summary,
         subject_summary=subject_summary,
         object_summary=object_summary,
@@ -315,8 +415,10 @@ class BaseGraphModel(nn.Module, ABC):
         entity_class_ids: Sequence[int] | torch.Tensor | None = None,
         predicate_class_ids: Sequence[int] | torch.Tensor | None = None,
         num_factor_types: int = 0,
+        active_factor_type_ids: Sequence[int] | torch.Tensor | None = None,
         factor_type_embedding_dim: int = 8,
         factor_executor_impl: str = "per_type_v1",
+        gold_edit_embedding_mode: str = "full",
         constraint_representation: str = "factorized",
         pressure_enabled: bool = False,
         pressure_type_conditioning: str = "none",
@@ -438,8 +540,62 @@ class BaseGraphModel(nn.Module, ABC):
         self._num_factor_types = int(num_factor_types)
         self._factor_type_embedding_dim = int(factor_type_embedding_dim)
         self._factor_executor_impl = str(factor_executor_impl).lower()
-        if self._factor_executor_impl not in {"per_type_v1", "legacy_shared"}:
-            raise ValueError("factor_executor_impl must be 'per_type_v1' or 'legacy_shared'")
+        if self._factor_executor_impl not in {
+            "per_type_v1",
+            "per_type_grouped_v2",
+            "legacy_shared",
+        }:
+            raise ValueError(
+                "factor_executor_impl must be 'per_type_v1', 'per_type_grouped_v2', "
+                "or 'legacy_shared'"
+            )
+        normalized_active_factor_type_ids = normalize_active_factor_type_ids(
+            active_factor_type_ids,
+            num_factor_types=self._num_factor_types,
+            require_explicit=self._factor_executor_impl == "per_type_grouped_v2",
+        )
+        if (
+            self._factor_executor_impl != "per_type_grouped_v2"
+            and normalized_active_factor_type_ids
+            != tuple(range(max(self._num_factor_types, 0)))
+        ):
+            raise ValueError(
+                f"{self._factor_executor_impl} only supports the dense legacy "
+                "factor-type layout."
+            )
+        self._num_active_factor_types = len(normalized_active_factor_type_ids)
+        compact_to_stable = torch.tensor(
+            normalized_active_factor_type_ids,
+            dtype=torch.long,
+        )
+        stable_to_compact = torch.full(
+            (max(self._num_factor_types, 0),),
+            -1,
+            dtype=torch.long,
+        )
+        if compact_to_stable.numel():
+            stable_to_compact.index_copy_(
+                0,
+                compact_to_stable,
+                torch.arange(compact_to_stable.numel(), dtype=torch.long),
+            )
+        persistent_type_mapping = (
+            active_factor_type_ids is not None
+            and self._factor_executor_impl == "per_type_grouped_v2"
+        )
+        self.register_buffer(
+            "factor_type_ids_compact_to_stable",
+            compact_to_stable,
+            persistent=persistent_type_mapping,
+        )
+        self.register_buffer(
+            "factor_type_id_to_compact",
+            stable_to_compact,
+            persistent=persistent_type_mapping,
+        )
+        self._gold_edit_embedding_mode = str(gold_edit_embedding_mode).lower()
+        if self._gold_edit_embedding_mode not in {"full", "compact"}:
+            raise ValueError("gold_edit_embedding_mode must be 'full' or 'compact'")
         self._constraint_representation = str(constraint_representation).lower()
         if self._constraint_representation not in {"factorized", "eswc_passive"}:
             raise ValueError("constraint_representation must be 'factorized' or 'eswc_passive'")
@@ -450,7 +606,38 @@ class BaseGraphModel(nn.Module, ABC):
         self._pressure_residual_scale = float(pressure_residual_scale)
         self._factor_state_dim = head_hidden
         self._factor_scope_feature_dim = (hidden_mp * 4) + 3
-        self._num_factor_executor_modules = max(1, self._num_factor_types)
+        self._num_factor_executor_modules = max(1, self._num_active_factor_types)
+        gold_edit_class_ids = torch.unique(
+            torch.cat(
+                [
+                    entity_ids_tensor,
+                    predicate_ids_tensor,
+                    torch.tensor([0], dtype=torch.long),
+                ]
+            ),
+            sorted=True,
+        )
+        gold_edit_id_to_compact = torch.full(
+            (self.num_target_ids,),
+            -1,
+            dtype=torch.long,
+        )
+        gold_edit_id_to_compact.index_copy_(
+            0,
+            gold_edit_class_ids,
+            torch.arange(gold_edit_class_ids.numel(), dtype=torch.long),
+        )
+        persistent_gold_mapping = self._gold_edit_embedding_mode == "compact"
+        self.register_buffer(
+            "gold_edit_class_ids",
+            gold_edit_class_ids,
+            persistent=persistent_gold_mapping,
+        )
+        self.register_buffer(
+            "gold_edit_id_to_compact",
+            gold_edit_id_to_compact,
+            persistent=persistent_gold_mapping,
+        )
         if self._factor_executor_impl == "legacy_shared":
             if self._num_factor_types > 0 and self._factor_type_embedding_dim > 0:
                 self.factor_type_embeddings = nn.Embedding(
@@ -468,6 +655,28 @@ class BaseGraphModel(nn.Module, ABC):
             self._factor_executors = None
             self._factor_post_heads = None
             self._gold_edit_embeddings = None
+        elif self._factor_executor_impl == "per_type_grouped_v2":
+            self.factor_type_embeddings = None
+            self.factor_pre_head = None
+            self._factor_executors = GroupedFactorTypeExecutor(
+                self._num_factor_executor_modules,
+                self._factor_scope_feature_dim,
+                self._factor_state_dim,
+            )
+            self._factor_post_heads = GroupedFactorPostEditHead(
+                self._num_factor_executor_modules,
+                self._factor_state_dim,
+                self._factor_state_dim,
+            )
+            gold_embedding_rows = (
+                int(gold_edit_class_ids.numel())
+                if self._gold_edit_embedding_mode == "compact"
+                else self.num_target_ids
+            )
+            self._gold_edit_embeddings = nn.Embedding(
+                gold_embedding_rows,
+                self._factor_state_dim,
+            )
         else:
             self.factor_type_embeddings = None
             self.factor_pre_head = None
@@ -483,7 +692,15 @@ class BaseGraphModel(nn.Module, ABC):
                     for _ in range(self._num_factor_executor_modules)
                 ]
             )
-            self._gold_edit_embeddings = nn.Embedding(self.num_target_ids, self._factor_state_dim)
+            gold_embedding_rows = (
+                int(gold_edit_class_ids.numel())
+                if self._gold_edit_embedding_mode == "compact"
+                else self.num_target_ids
+            )
+            self._gold_edit_embeddings = nn.Embedding(
+                gold_embedding_rows,
+                self._factor_state_dim,
+            )
         self._policy_enabled = bool(enable_policy_choice)
         self._policy_num_classes = int(policy_num_classes)
         if self._policy_enabled:
@@ -528,6 +745,17 @@ class BaseGraphModel(nn.Module, ABC):
     @property
     def chooser_enabled(self) -> bool:
         return bool(self._chooser_enabled)
+
+    @property
+    def factor_dispatch_backend(self) -> str:
+        executors = self._factor_executors
+        if isinstance(executors, GroupedFactorTypeExecutor):
+            return executors.last_backend
+        if isinstance(executors, nn.ModuleList):
+            return "module_loop"
+        if self._factor_executor_impl == "legacy_shared":
+            return "shared_linear"
+        return "disabled"
 
     def enable_chooser(self) -> None:
         if self._chooser_enabled:
@@ -611,11 +839,18 @@ class BaseGraphModel(nn.Module, ABC):
         )
 
     def _build_factor_scope_runtime(self, node_emb: torch.Tensor, data) -> FactorScopeRuntime | None:
+        compact_execution = self._factor_executor_impl == "per_type_grouped_v2"
         return _build_factor_scope_runtime(
             node_emb,
             data,
             factor_edge_types=self._factor_edge_types(),
             num_factor_types=self._num_factor_types,
+            factor_type_id_to_compact=(
+                self.factor_type_id_to_compact if compact_execution else None
+            ),
+            num_active_factor_types=(
+                self._num_active_factor_types if compact_execution else None
+            ),
         )
 
     def _factor_scope_features(self, runtime: FactorScopeRuntime) -> torch.Tensor:
@@ -645,6 +880,10 @@ class BaseGraphModel(nn.Module, ABC):
         if self._factor_executors is None:
             raise RuntimeError("Per-type factor executors are not initialized.")
         inputs = self._factor_scope_features(runtime)
+        if isinstance(self._factor_executors, GroupedFactorTypeExecutor):
+            if runtime.factor_dispatch is None:
+                raise RuntimeError("Grouped factor executor requires compact dispatch metadata.")
+            return self._factor_executors(inputs, runtime.factor_dispatch)
         states = inputs.new_zeros((inputs.size(0), self._factor_state_dim))
         logits = inputs.new_zeros((inputs.size(0),))
         for type_id in torch.unique(runtime.factor_type_ids).tolist():
@@ -659,12 +898,21 @@ class BaseGraphModel(nn.Module, ABC):
     def _run_per_type_post_heads(
         self,
         factor_states: torch.Tensor,
-        factor_type_ids: torch.Tensor,
+        runtime: FactorScopeRuntime,
         edit_repr: torch.Tensor,
     ) -> torch.Tensor:
         if self._factor_post_heads is None:
             raise RuntimeError("Per-type factor post heads are not initialized.")
+        if isinstance(self._factor_post_heads, GroupedFactorPostEditHead):
+            if runtime.factor_dispatch is None:
+                raise RuntimeError("Grouped factor post head requires compact dispatch metadata.")
+            return self._factor_post_heads(
+                factor_states,
+                edit_repr,
+                runtime.factor_dispatch,
+            )
         logits = factor_states.new_zeros((factor_states.size(0),))
+        factor_type_ids = runtime.factor_type_ids
         for type_id in torch.unique(factor_type_ids).tolist():
             mask = factor_type_ids == int(type_id)
             if not mask.any():
@@ -685,13 +933,44 @@ class BaseGraphModel(nn.Module, ABC):
             targets = targets.view(1, -1)
         if targets.dim() != 2 or targets.size(-1) != 6:
             raise ValueError(f"Expected gold targets shape (B,6), got {tuple(targets.shape)}")
-        target_ids = targets.to(dtype=torch.long, device=factor_graph_index.device).clamp(
-            min=0, max=self.num_target_ids - 1
-        )
-        edit_emb = self._gold_edit_embeddings(target_ids).mean(dim=1)
+        target_ids = targets.to(dtype=torch.long, device=factor_graph_index.device)
+        if self._gold_edit_embedding_mode == "compact":
+            invalid = (target_ids < 0) | (target_ids >= self.num_target_ids)
+            if invalid.any():
+                values = sorted(
+                    {int(v) for v in target_ids[invalid].detach().cpu().tolist()}
+                )
+                raise ValueError(
+                    f"Gold edit target ids outside [0, {self.num_target_ids}): {values[:8]}"
+                )
+            compact_ids = self.gold_edit_id_to_compact.index_select(
+                0,
+                target_ids.view(-1),
+            ).view_as(target_ids)
+            unreachable = compact_ids < 0
+            if unreachable.any():
+                values = sorted(
+                    {int(v) for v in target_ids[unreachable].detach().cpu().tolist()}
+                )
+                raise ValueError(
+                    f"Gold edit targets absent from compact target vocabulary: {values[:8]}"
+                )
+            embedding_ids = compact_ids
+        else:
+            # Preserve the legacy full-vocabulary behavior for old configs and
+            # checkpoints. Compact mode is deliberately strict because its
+            # sparse lookup cannot represent arbitrary stable ids.
+            embedding_ids = target_ids.clamp(min=0, max=self.num_target_ids - 1)
+        edit_emb = self._gold_edit_embeddings(embedding_ids).mean(dim=1)
         return edit_emb.index_select(0, factor_graph_index)
 
-    def _compute_factor_outputs(self, node_emb: torch.Tensor, data) -> dict[str, torch.Tensor | None]:
+    def _compute_factor_outputs(
+        self,
+        node_emb: torch.Tensor,
+        data,
+        *,
+        include_post_gold: bool = True,
+    ) -> dict[str, torch.Tensor | None]:
         factor_mask_pre = None
         factor_checkable = getattr(data, "factor_checkable_pre", None)
         if factor_checkable is not None:
@@ -761,7 +1040,7 @@ class BaseGraphModel(nn.Module, ABC):
             }
 
         factor_states, factor_logits_pre = self._run_per_type_factor_executors(runtime)
-        targets = getattr(data, "y", None)
+        targets = getattr(data, "y", None) if include_post_gold else None
         if targets is not None:
             gold_edit_repr = self._gold_edit_representation(
                 torch.as_tensor(targets, device=node_emb.device),
@@ -770,7 +1049,7 @@ class BaseGraphModel(nn.Module, ABC):
             if gold_edit_repr is not None:
                 factor_logits_post_gold = self._run_per_type_post_heads(
                     factor_states,
-                    runtime.factor_type_ids,
+                    runtime,
                     gold_edit_repr,
                 )
 
@@ -786,7 +1065,7 @@ class BaseGraphModel(nn.Module, ABC):
         """Return a torch_geometric convolution layer."""
         raise NotImplementedError
 
-    def forward(self, data):
+    def forward(self, data, *, include_factor_post_gold: bool = True):
         # Extract data
         x, batch = data.x, data.batch
         if self.use_edge_attributes:
@@ -890,7 +1169,11 @@ class BaseGraphModel(nn.Module, ABC):
             6,
             self.num_target_ids,
         ), f"Expected {(graph_emb.shape[0], 6, self.num_target_ids)}, got {prediction.shape}"
-        factor_outputs = self._compute_factor_outputs(node_emb, data)
+        factor_outputs = self._compute_factor_outputs(
+            node_emb,
+            data,
+            include_post_gold=include_factor_post_gold,
+        )
 
         return {
             "edit_logits": prediction,
@@ -902,6 +1185,11 @@ class BaseGraphModel(nn.Module, ABC):
             "factor_graph_index": factor_outputs["factor_graph_index"],
             "policy_logits": policy_logits,
         }
+
+    def forward_for_evaluation(self, data):
+        """Run inference without the training-only gold-edit factor branch."""
+
+        return self.forward(data, include_factor_post_gold=False)
 
     @staticmethod
     def _prepare_class_ids(
@@ -1035,27 +1323,43 @@ class RepairGINFactorPressure(BaseGraphModel):
             self._pressure_type_gate = nn.Linear(self._pressure_type_dim, self.hidden_channels)
         else:
             self._pressure_type_gate = None
-        if self._factor_executor_impl == "per_type_v1":
+        if self._factor_executor_impl in {"per_type_v1", "per_type_grouped_v2"}:
             pressure_modules_per_role = (
                 self._num_factor_executor_modules
                 if self._pressure_module_sharing == "per_type"
                 else 1
             )
-            self._pressure_role_modules = nn.ModuleDict(
-                {
-                    str(role_id): nn.ModuleList(
-                        [
-                            nn.Sequential(
-                                nn.Linear(self._factor_state_dim + self.hidden_channels, self.hidden_channels),
-                                nn.ReLU(),
-                                nn.Linear(self.hidden_channels, self.hidden_channels),
-                            )
-                            for _ in range(pressure_modules_per_role)
-                        ]
-                    )
-                    for role_id in FACTOR_ROLE_IDS
-                }
-            )
+            pressure_input_dim = self._factor_state_dim + self.hidden_channels
+            if (
+                self._factor_executor_impl == "per_type_grouped_v2"
+                and self._pressure_module_sharing == "per_type"
+            ):
+                self._pressure_role_modules = nn.ModuleDict(
+                    {
+                        str(role_id): GroupedPressureRole(
+                            pressure_modules_per_role,
+                            pressure_input_dim,
+                            self.hidden_channels,
+                        )
+                        for role_id in FACTOR_ROLE_IDS
+                    }
+                )
+            else:
+                self._pressure_role_modules = nn.ModuleDict(
+                    {
+                        str(role_id): nn.ModuleList(
+                            [
+                                nn.Sequential(
+                                    nn.Linear(pressure_input_dim, self.hidden_channels),
+                                    nn.ReLU(),
+                                    nn.Linear(self.hidden_channels, self.hidden_channels),
+                                )
+                                for _ in range(pressure_modules_per_role)
+                            ]
+                        )
+                        for role_id in FACTOR_ROLE_IDS
+                    }
+                )
         else:
             self._pressure_role_modules = None
 
@@ -1081,7 +1385,7 @@ class RepairGINFactorPressure(BaseGraphModel):
     def _apply_pressure(self, x: torch.Tensor, data) -> torch.Tensor:
         if not self._pressure_enabled or self._constraint_representation != "factorized":
             return x
-        if self._factor_executor_impl == "per_type_v1":
+        if self._factor_executor_impl in {"per_type_v1", "per_type_grouped_v2"}:
             runtime = self._build_factor_scope_runtime(x, data)
             if runtime is None:
                 return x
@@ -1098,18 +1402,34 @@ class RepairGINFactorPressure(BaseGraphModel):
                 role_modules = self._pressure_role_modules
                 if role_modules is None:
                     return
-                per_edge_messages = x.new_zeros((dst_index.numel(), self.hidden_channels))
                 role_key = str(role_id)
-                type_ids = runtime.factor_type_ids.index_select(0, factor_pos)
+                compact_type_ids = runtime.factor_type_indices.index_select(0, factor_pos)
                 dst_emb = x.index_select(0, dst_index)
                 factor_state = factor_states.index_select(0, factor_pos)
-                for type_id in torch.unique(type_ids).tolist():
-                    mask = type_ids == int(type_id)
-                    if not mask.any():
-                        continue
-                    message_input = torch.cat([factor_state[mask], dst_emb[mask]], dim=-1)
-                    module_index = int(type_id) if self._pressure_module_sharing == "per_type" else 0
-                    per_edge_messages[mask] = role_modules[role_key][module_index](message_input)
+                message_input = torch.cat([factor_state, dst_emb], dim=-1)
+                role_module = role_modules[role_key]
+                if self._pressure_module_sharing == "shared":
+                    if not isinstance(role_module, nn.ModuleList):
+                        raise RuntimeError("Shared pressure role module has an invalid layout.")
+                    per_edge_messages = role_module[0](message_input)
+                elif isinstance(role_module, GroupedPressureRole):
+                    edge_dispatch = build_grouped_dispatch(
+                        compact_type_ids,
+                        num_types=self._num_active_factor_types,
+                    )
+                    per_edge_messages = role_module(message_input, edge_dispatch)
+                else:
+                    per_edge_messages = x.new_zeros(
+                        (dst_index.numel(), self.hidden_channels)
+                    )
+                    stable_type_ids = runtime.factor_type_ids.index_select(0, factor_pos)
+                    for type_id in torch.unique(stable_type_ids).tolist():
+                        mask = stable_type_ids == int(type_id)
+                        if not mask.any():
+                            continue
+                        per_edge_messages[mask] = role_module[int(type_id)](
+                            message_input[mask]
+                        )
                 aggregated.index_add_(0, dst_index, per_edge_messages)
 
             _apply_role(FACTOR_ROLE_PREDICATE, runtime.predicate_factor_pos, runtime.predicate_dst_index)
@@ -1237,7 +1557,7 @@ class RepairGINFactorPressure(BaseGraphModel):
         x = x + (self._pressure_residual_scale * aggregated)
         return x
 
-    def forward(self, data):
+    def forward(self, data, *, include_factor_post_gold: bool = True):
         x, batch = data.x, data.batch
         if self.use_edge_attributes:
             edge_index = data.edge_index_non_flattened
@@ -1331,7 +1651,11 @@ class RepairGINFactorPressure(BaseGraphModel):
             self.num_target_ids,
         ), f"Expected {(graph_emb.shape[0], 6, self.num_target_ids)}, got {prediction.shape}"
 
-        factor_outputs = self._compute_factor_outputs(node_emb, data)
+        factor_outputs = self._compute_factor_outputs(
+            node_emb,
+            data,
+            include_post_gold=include_factor_post_gold,
+        )
 
         return {
             "edit_logits": prediction,
@@ -1391,8 +1715,10 @@ def build_model(model_name: str, num_input_graph_nodes: int, config: ModelConfig
         entity_class_ids=config.entity_class_ids,
         predicate_class_ids=config.predicate_class_ids,
         num_factor_types=config.num_factor_types,
+        active_factor_type_ids=getattr(config, "active_factor_type_ids", None),
         factor_type_embedding_dim=config.factor_type_embedding_dim,
         factor_executor_impl=getattr(config, "factor_executor_impl", "per_type_v1"),
+        gold_edit_embedding_mode=getattr(config, "gold_edit_embedding_mode", "full"),
         constraint_representation=getattr(config, "constraint_representation", "factorized"),
         pressure_enabled=config.pressure_enabled,
         pressure_type_conditioning=getattr(config, "pressure_type_conditioning", "none"),
@@ -1405,6 +1731,11 @@ def build_model(model_name: str, num_input_graph_nodes: int, config: ModelConfig
 
 __all__ = [
     "BaseGraphModel",
+    "FactorPostEditHead",
+    "FactorTypeExecutor",
+    "GroupedFactorPostEditHead",
+    "GroupedFactorTypeExecutor",
+    "GroupedPressureRole",
     "RepairGAT",
     "RepairGIN",
     "RepairGINFactorPressure",

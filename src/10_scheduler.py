@@ -193,7 +193,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--eval-global-metrics",
         action="store_true",
-        help="Enable global metrics during evaluation (GFR/SRR/SIR).",
+        help="Enable corrected symbolic paper metrics during evaluation.",
     )
     parser.add_argument(
         "--eval-per-constraint-csv",

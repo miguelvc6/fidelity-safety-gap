@@ -25,10 +25,20 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from modules.config import ModelConfig
+from modules.data_encoders import (
+    dataset_variant_name,
+    discover_graph_artifacts,
+    graph_dataset_filename,
+)
+from modules.evaluation_artifacts import (
+    EVALUATION_SCHEMA_VERSION,
+    atomic_write_json,
+    load_and_validate_predictions,
+)
 from modules.model_store import config_copy_path
+from modules.repair_eval import PaperMetricsAccumulator, evaluate_paper_metric_instance
 
 NONE_CLASS_INDEX = 0
-EQUIVALENCE_TOLERANCE = 1e-12
 
 
 def _load_eval_module():
@@ -48,9 +58,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Audit G0 delete-focus degeneracy against H1.")
     parser.add_argument("--g0-run-directory", required=True, help="G0 run directory under models/.")
     parser.add_argument(
+        "--predictions",
         "--reranker-predictions",
+        dest="predictions",
         default=None,
-        help="Optional predictions path. Defaults to <g0-run-directory>/reranker_predictions.json.",
+        help=(
+            "Schema-v2 Parquet predictions. --reranker-predictions is retained as an alias. "
+            "Defaults to <g0-run-directory>/evaluations/predictions.parquet."
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -136,13 +151,6 @@ def _row_context(row: Any) -> tuple[str, str, int]:
     return str(constraint_type), _density_bucket(len(local_ids)), constraint_id
 
 
-def _primary_factor_index(row: Any) -> int | None:
-    value = getattr(row, "primary_factor_index", None)
-    if value is None:
-        return None
-    return _as_int(value, default=-1)
-
-
 def _slots_from_prediction(item: Any) -> list[int]:
     if isinstance(item, dict):
         add = item.get("add") or [NONE_CLASS_INDEX, NONE_CLASS_INDEX, NONE_CLASS_INDEX]
@@ -165,21 +173,8 @@ def _h1_slots(row: Any) -> list[int]:
     ]
 
 
-def _total_ops(metrics: dict[str, Any]) -> int:
-    return int(metrics.get("add_count", 0)) + int(metrics.get("del_count", 0))
-
-
 def _metric_equivalent(g0: dict[str, Any], h1: dict[str, Any]) -> bool:
-    numeric_keys = ("primary_satisfied", "global_satisfied_fraction", "sir", "srr")
-    for key in numeric_keys:
-        if abs(float(g0.get(key, 0.0)) - float(h1.get(key, 0.0))) > EQUIVALENCE_TOLERANCE:
-            return False
-    if _total_ops(g0) != _total_ops(h1):
-        return False
-    for key in ("focus_preserved", "focus_deleted", "candidate_deletes_focus"):
-        if int(g0.get(key, 0)) != int(h1.get(key, 0)):
-            return False
-    return True
+    return g0.get("events") == h1.get("events")
 
 
 class Aggregate:
@@ -187,49 +182,39 @@ class Aggregate:
         self.support = 0
         self.prediction_exact = 0
         self.metric_equivalent = 0
-        self.g0_focus_deleted = 0
-        self.h1_focus_deleted = 0
-        self.g0_candidate_deletes_focus = 0
-        self.h1_candidate_deletes_focus = 0
-        self.g0_vacuous = 0
-        self.h1_vacuous = 0
-        self.g0_non_vacuous_primary_fix = 0
-        self.h1_non_vacuous_primary_fix = 0
+        self.resolved_operation_equivalent = 0
+        self.g0_metrics = PaperMetricsAccumulator()
+        self.h1_metrics = PaperMetricsAccumulator()
 
     def add(self, *, g0_slots: list[int], h1_slots: list[int], g0: dict[str, Any], h1: dict[str, Any]) -> None:
         self.support += 1
         self.prediction_exact += int(g0_slots == h1_slots)
         self.metric_equivalent += int(_metric_equivalent(g0, h1))
-        self.g0_focus_deleted += int(g0.get("focus_deleted", 0))
-        self.h1_focus_deleted += int(h1.get("focus_deleted", 0))
-        self.g0_candidate_deletes_focus += int(g0.get("candidate_deletes_focus", 0))
-        self.h1_candidate_deletes_focus += int(h1.get("candidate_deletes_focus", 0))
-        self.g0_vacuous += int(g0.get("vacuous_satisfaction_improvement", 0))
-        self.h1_vacuous += int(h1.get("vacuous_satisfaction_improvement", 0))
-        self.g0_non_vacuous_primary_fix += int(g0.get("non_vacuous_primary_fix", 0))
-        self.h1_non_vacuous_primary_fix += int(h1.get("non_vacuous_primary_fix", 0))
+        self.resolved_operation_equivalent += int(
+            g0.get("resolved_add") == h1.get("resolved_add")
+            and g0.get("resolved_del") == h1.get("resolved_del")
+        )
+        self.g0_metrics.update(g0["events"])
+        self.h1_metrics.update(h1["events"])
 
-    def to_dict(self) -> dict[str, float | int]:
+    def to_dict(self) -> dict[str, object]:
         support = self.support
         return {
             "support": support,
             "prediction_exact_match_rate": self.prediction_exact / support if support else 0.0,
             "metric_equivalent_rate": self.metric_equivalent / support if support else 0.0,
-            "g0_focus_deleted_rate": self.g0_focus_deleted / support if support else 0.0,
-            "h1_focus_deleted_rate": self.h1_focus_deleted / support if support else 0.0,
-            "g0_candidate_deletes_focus_rate": self.g0_candidate_deletes_focus / support if support else 0.0,
-            "h1_candidate_deletes_focus_rate": self.h1_candidate_deletes_focus / support if support else 0.0,
-            "g0_vacuous_satisfaction_improvement_rate": self.g0_vacuous / support if support else 0.0,
-            "h1_vacuous_satisfaction_improvement_rate": self.h1_vacuous / support if support else 0.0,
-            "g0_non_vacuous_primary_fix_rate": self.g0_non_vacuous_primary_fix / support if support else 0.0,
-            "h1_non_vacuous_primary_fix_rate": self.h1_non_vacuous_primary_fix / support if support else 0.0,
+            "resolved_operation_equivalent_rate": (
+                self.resolved_operation_equivalent / support if support else 0.0
+            ),
+            "g0_paper_metrics": self.g0_metrics.as_dict(),
+            "dfb_paper_metrics": self.h1_metrics.as_dict(),
         }
 
 
 def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer = csv.DictWriter(fh, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
@@ -244,16 +229,6 @@ def run_analysis(args: argparse.Namespace) -> None:
     )
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    predictions_path = (
-        Path(args.reranker_predictions).resolve()
-        if args.reranker_predictions
-        else run_directory / "reranker_predictions.json"
-    )
-    if not predictions_path.exists():
-        raise FileNotFoundError(f"G0 reranker predictions not found at {predictions_path}")
-    with predictions_path.open("r", encoding="utf-8") as fh:
-        g0_predictions = json.load(fh)
-
     model_cfg = _load_model_config(run_directory)
     global_support = EVAL._maybe_prepare_global_support(
         model_cfg.dataset_variant,
@@ -267,7 +242,34 @@ def run_analysis(args: argparse.Namespace) -> None:
         raise RuntimeError("Deletion-degeneracy analysis requires symbolic global support.")
 
     rows = global_support.rows
-    limit = min(len(rows), len(g0_predictions))
+    if global_support.dataset_path is None:
+        raise RuntimeError("Deletion-degeneracy analysis requires a concrete interim dataset artifact.")
+    variant = dataset_variant_name(model_cfg.dataset_variant, model_cfg.min_occurrence)
+    test_graph_path = (
+        ROOT
+        / "data"
+        / "processed"
+        / variant
+        / graph_dataset_filename(
+            "test",
+            model_cfg.encoding,
+            constraint_representation=model_cfg.constraint_representation,
+        )
+    )
+    graph_paths = [item.path for item in discover_graph_artifacts(test_graph_path)]
+    predictions_path = (
+        Path(args.predictions).resolve()
+        if args.predictions
+        else run_directory / "evaluations" / "predictions.parquet"
+    )
+    g0_predictions, predictions_manifest = load_and_validate_predictions(
+        predictions_path,
+        rows=rows,
+        dataset_path=global_support.dataset_path,
+        graph_paths=graph_paths,
+        dataset_variant=variant,
+    )
+    limit = len(rows)
     if args.limit is not None:
         limit = min(limit, args.limit)
 
@@ -281,18 +283,23 @@ def run_analysis(args: argparse.Namespace) -> None:
         row = rows[idx]
         g0_slots = _slots_from_prediction(g0_predictions[idx])
         h1_slots = _h1_slots(row)
-        primary_idx = _primary_factor_index(row)
-        g0_detail = global_support.evaluator.evaluate_full(
-            row,
-            candidate_slots=g0_slots,
-            primary_factor_index=primary_idx,
-        )
-        h1_detail = global_support.evaluator.evaluate_full(
-            row,
-            candidate_slots=h1_slots,
-            primary_factor_index=primary_idx,
-        )
         constraint_type, density_bucket, constraint_id = _row_context(row)
+        g0_detail = evaluate_paper_metric_instance(
+            row=row,
+            evaluator=global_support.evaluator,
+            candidate_slots=g0_slots,
+            constraint_type=constraint_type,
+            row_index=idx,
+            none_class=NONE_CLASS_INDEX,
+        )
+        h1_detail = evaluate_paper_metric_instance(
+            row=row,
+            evaluator=global_support.evaluator,
+            candidate_slots=h1_slots,
+            constraint_type=constraint_type,
+            row_index=idx,
+            none_class=NONE_CLASS_INDEX,
+        )
         constraint_counter[constraint_type] += 1
         overall.add(g0_slots=g0_slots, h1_slots=h1_slots, g0=g0_detail, h1=h1_detail)
         by_density[density_bucket].add(g0_slots=g0_slots, h1_slots=h1_slots, g0=g0_detail, h1=h1_detail)
@@ -308,44 +315,36 @@ def run_analysis(args: argparse.Namespace) -> None:
                     "density_bucket": density_bucket,
                     "prediction_exact_match": int(g0_slots == h1_slots),
                     "metric_equivalent": int(equivalent),
+                    "resolved_operation_equivalent": int(
+                        g0_detail.get("resolved_add") == h1_detail.get("resolved_add")
+                        and g0_detail.get("resolved_del") == h1_detail.get("resolved_del")
+                    ),
                     "g0_slots": json.dumps(g0_slots),
                     "h1_slots": json.dumps(h1_slots),
-                    "g0_primary_satisfied": g0_detail.get("primary_satisfied", 0),
-                    "h1_primary_satisfied": h1_detail.get("primary_satisfied", 0),
-                    "g0_gfr": g0_detail.get("global_satisfied_fraction", 0.0),
-                    "h1_gfr": h1_detail.get("global_satisfied_fraction", 0.0),
-                    "g0_srr": g0_detail.get("srr", 0.0),
-                    "h1_srr": h1_detail.get("srr", 0.0),
-                    "g0_sir": g0_detail.get("sir", 0.0),
-                    "h1_sir": h1_detail.get("sir", 0.0),
-                    "g0_disruption": _total_ops(g0_detail),
-                    "h1_disruption": _total_ops(h1_detail),
-                    "g0_focus_deleted": g0_detail.get("focus_deleted", 0),
-                    "h1_focus_deleted": h1_detail.get("focus_deleted", 0),
-                    "g0_candidate_deletes_focus": g0_detail.get("candidate_deletes_focus", 0),
-                    "h1_candidate_deletes_focus": h1_detail.get("candidate_deletes_focus", 0),
-                    "g0_vacuous_satisfaction_improvement": g0_detail.get(
-                        "vacuous_satisfaction_improvement", 0
-                    ),
-                    "h1_vacuous_satisfaction_improvement": h1_detail.get(
-                        "vacuous_satisfaction_improvement", 0
-                    ),
-                    "g0_non_vacuous_primary_fix": g0_detail.get("non_vacuous_primary_fix", 0),
-                    "h1_non_vacuous_primary_fix": h1_detail.get("non_vacuous_primary_fix", 0),
+                    "g0_resolved_add": json.dumps(g0_detail.get("resolved_add")),
+                    "g0_resolved_del": json.dumps(g0_detail.get("resolved_del")),
+                    "dfb_resolved_add": json.dumps(h1_detail.get("resolved_add")),
+                    "dfb_resolved_del": json.dumps(h1_detail.get("resolved_del")),
+                    "g0_events": json.dumps(g0_detail.get("events"), sort_keys=True),
+                    "dfb_events": json.dumps(h1_detail.get("events"), sort_keys=True),
                 }
             )
 
     summary = {
+        "schema_version": EVALUATION_SCHEMA_VERSION,
         "g0_run_directory": str(run_directory),
-        "reranker_predictions": str(predictions_path),
-        "dataset_variant": model_cfg.dataset_variant,
+        "predictions": {
+            "path": str(predictions_path),
+            "sha256": predictions_manifest["predictions"]["sha256"],
+            "row_count": predictions_manifest["row_count"],
+        },
+        "dataset_variant": variant,
         "min_occurrence": model_cfg.min_occurrence,
         "encoding": model_cfg.encoding,
         "constraint_type_support": dict(sorted(constraint_counter.items())),
         "overall": overall.to_dict(),
     }
-    with (output_dir / "deletion_degeneracy_summary.json").open("w", encoding="utf-8") as fh:
-        json.dump(summary, fh, indent=2)
+    atomic_write_json(output_dir / "deletion_degeneracy_summary.json", summary)
 
     slice_fields = ["slice", *overall.to_dict().keys()]
     density_rows = [{"slice": key, **agg.to_dict()} for key, agg in sorted(by_density.items())]
@@ -362,26 +361,15 @@ def run_analysis(args: argparse.Namespace) -> None:
             "density_bucket",
             "prediction_exact_match",
             "metric_equivalent",
+            "resolved_operation_equivalent",
             "g0_slots",
             "h1_slots",
-            "g0_primary_satisfied",
-            "h1_primary_satisfied",
-            "g0_gfr",
-            "h1_gfr",
-            "g0_srr",
-            "h1_srr",
-            "g0_sir",
-            "h1_sir",
-            "g0_disruption",
-            "h1_disruption",
-            "g0_focus_deleted",
-            "h1_focus_deleted",
-            "g0_candidate_deletes_focus",
-            "h1_candidate_deletes_focus",
-            "g0_vacuous_satisfaction_improvement",
-            "h1_vacuous_satisfaction_improvement",
-            "g0_non_vacuous_primary_fix",
-            "h1_non_vacuous_primary_fix",
+            "g0_resolved_add",
+            "g0_resolved_del",
+            "dfb_resolved_add",
+            "dfb_resolved_del",
+            "g0_events",
+            "dfb_events",
         ],
     )
     logging.info("Wrote deletion-degeneracy outputs to %s", output_dir)

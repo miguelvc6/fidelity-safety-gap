@@ -670,90 +670,46 @@ def evaluate_repair_samples(
     return aggregator.as_dict()
 
 
+PAPER_METRIC_KEYS: tuple[str, ...] = (
+    "pfr",
+    "local_satisfaction",
+    "delta_local_satisfaction",
+    "sir",
+    "srr",
+    "disruption",
+    "base_deletion_rate",
+    "deletes_base_action_rate",
+    "eppf",
+    "vacuous_improvement",
+)
+
+
 @dataclass
-class GlobalMetricsAccumulator:
-    support: int = 0
-    gfr_sum: float = 0.0
-    srr_sum: float = 0.0
-    sir_sum: float = 0.0
-    srr_denom: int = 0
-    sir_denom: int = 0
-    srr_num: int = 0
-    sir_num: int = 0
-    add_sum: int = 0
-    del_sum: int = 0
-    total_ops_sum: int = 0
-    changed_sum: int = 0
-    focus_preserved: int = 0
-    focus_deleted: int = 0
-    candidate_deletes_focus: int = 0
-    non_vacuous_primary_fix: int = 0
-    vacuous_satisfaction_improvement: int = 0
+class PaperMetricsAccumulator:
+    numerators: dict[str, int] = field(
+        default_factory=lambda: {key: 0 for key in PAPER_METRIC_KEYS}
+    )
+    denominators: dict[str, int] = field(
+        default_factory=lambda: {key: 0 for key in PAPER_METRIC_KEYS}
+    )
 
-    def update(
-        self,
-        *,
-        gfr: float,
-        srr: float,
-        sir: float,
-        srr_num: int,
-        srr_denom: int,
-        sir_num: int,
-        sir_denom: int,
-        add_count: int,
-        del_count: int,
-        focus_preserved: int = 0,
-        focus_deleted: int = 0,
-        candidate_deletes_focus: int = 0,
-        non_vacuous_primary_fix: int = 0,
-        vacuous_satisfaction_improvement: int = 0,
-    ) -> None:
-        self.support += 1
-        self.gfr_sum += gfr
-        self.srr_sum += srr
-        self.sir_sum += sir
-        self.srr_num += srr_num
-        self.srr_denom += srr_denom
-        self.sir_num += sir_num
-        self.sir_denom += sir_denom
-        self.add_sum += add_count
-        self.del_sum += del_count
-        ops = add_count + del_count
-        self.total_ops_sum += ops
-        self.changed_sum += ops
-        self.focus_preserved += int(focus_preserved)
-        self.focus_deleted += int(focus_deleted)
-        self.candidate_deletes_focus += int(candidate_deletes_focus)
-        self.non_vacuous_primary_fix += int(non_vacuous_primary_fix)
-        self.vacuous_satisfaction_improvement += int(vacuous_satisfaction_improvement)
+    def update(self, events: dict[str, dict[str, int]]) -> None:
+        for key in PAPER_METRIC_KEYS:
+            event = events[key]
+            self.numerators[key] += int(event["numerator"])
+            self.denominators[key] += int(event["denominator"])
 
-    def as_dict(self) -> dict[str, object]:
-        support = self.support or 1
-        return {
-            "support": self.support,
-            "gfr": self.gfr_sum / support,
-            "srr": self.srr_sum / support,
-            "sir": self.sir_sum / support,
-            "srr_total": self.srr_num,
-            "srr_denom_total": self.srr_denom,
-            "sir_total": self.sir_num,
-            "sir_denom_total": self.sir_denom,
-            "focus_preserved_rate": self.focus_preserved / support,
-            "focus_deleted_rate": self.focus_deleted / support,
-            "candidate_deletes_focus_rate": self.candidate_deletes_focus / support,
-            "non_vacuous_primary_fix_rate": self.non_vacuous_primary_fix / support,
-            "vacuous_satisfaction_improvement_rate": self.vacuous_satisfaction_improvement / support,
-            "disruption": {
-                "added_triples_mean": self.add_sum / support,
-                "deleted_triples_mean": self.del_sum / support,
-                "total_ops_mean": self.total_ops_sum / support,
-                "changed_triples_mean": self.changed_sum / support,
-                "added_triples_total": self.add_sum,
-                "deleted_triples_total": self.del_sum,
-                "total_ops_total": self.total_ops_sum,
-                "changed_triples_total": self.changed_sum,
-            },
-        }
+    def as_dict(self) -> dict[str, dict[str, float | int]]:
+        metrics: dict[str, dict[str, float | int]] = {}
+        for key in PAPER_METRIC_KEYS:
+            numerator = self.numerators[key]
+            denominator = self.denominators[key]
+            metrics[key] = {
+                "value": float(numerator) / denominator if denominator else 0.0,
+                "numerator": numerator,
+                "denominator": denominator,
+            }
+        return metrics
 
 
 def _coerce_factor_sequence(value: object) -> list[int] | list[bool] | None:
@@ -810,6 +766,134 @@ def _resolve_primary_index_from_row(row: object, local_constraint_ids: Sequence[
         return -1
 
 
+def evaluate_paper_metric_instance(
+    *,
+    row: object,
+    evaluator: CandidateConstraintEvaluator,
+    candidate_slots: Sequence[int],
+    constraint_type: str,
+    row_index: int,
+    none_class: int,
+    details: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Reconstruct one edit and return its corrected paper-metric events.
+
+    This is the single source of truth used by model evaluation and sidecar
+    diagnostics.  In particular, it recomputes both symbolic states from the
+    interim row and never consumes stored graph factor-label tensors.
+    """
+
+    slots = tuple(int(value) for value in candidate_slots)
+    if len(slots) != 6:
+        raise ValueError(f"Candidate slots must contain six values, got {len(slots)}.")
+    if any(value < 0 for value in slots):
+        raise ValueError("Candidate slots contain negative class indices.")
+
+    if details is None:
+        details = evaluator.evaluate_full(
+            row,
+            candidate_slots=slots,
+            primary_factor_index=None,
+            factor_constraint_ids=None,
+        )
+
+    local_constraint_ids = details["local_constraint_ids"]
+    primary_index = details["primary_factor_index"]
+    pre_checkable = details["pre_checkable"]
+    pre_satisfied = details["pre_satisfied"]
+    post_checkable = details["post_checkable"]
+    post_satisfied = details["post_satisfied"]
+
+    if primary_index < 0:
+        primary_index = _resolve_primary_index_from_row(row, local_constraint_ids)
+
+    if not (
+        len(pre_checkable)
+        == len(pre_satisfied)
+        == len(post_checkable)
+        == len(post_satisfied)
+    ):
+        raise AssertionError("Pre/post factor arrays differ in length during paper evaluation.")
+
+    local_num = sum(
+        int(post_satisfied[i])
+        for i, checkable in enumerate(post_checkable)
+        if checkable
+    )
+    local_denom = sum(int(bool(checkable)) for checkable in post_checkable)
+
+    delta_num = 0
+    delta_denom = 0
+    srr_num = srr_denom = 0
+    sir_num = sir_denom = 0
+    for i in range(len(local_constraint_ids)):
+        common_support = bool(pre_checkable[i]) and bool(post_checkable[i])
+        if common_support:
+            delta_num += int(post_satisfied[i]) - int(pre_satisfied[i])
+            delta_denom += 1
+        if i == primary_index or not common_support:
+            continue
+        if pre_satisfied[i]:
+            srr_denom += 1
+            if not post_satisfied[i]:
+                srr_num += 1
+        else:
+            sir_denom += 1
+            if post_satisfied[i]:
+                sir_num += 1
+
+    # A slot group is an operation only when all three components resolve.
+    # This matches `_triples_from_indices` and the resolved operations written
+    # to schema-v2 prediction artifacts. Partially populated slot groups do not
+    # mutate the symbolic state and therefore do not count as disruption.
+    add_count = int(all(value != none_class for value in slots[:3]))
+    del_count = int(all(value != none_class for value in slots[3:]))
+    pre_base_present = int(details.get("pre_focus_present", 0))
+    post_base_present = int(details.get("post_focus_present", 0))
+    base_deleted = int(bool(pre_base_present) and not bool(post_base_present))
+    deletes_base_action = int(details.get("candidate_deletes_focus", 0))
+
+    pfr_eligible = int(
+        0 <= primary_index < len(pre_checkable)
+        and bool(pre_checkable[primary_index])
+        and not bool(pre_satisfied[primary_index])
+    )
+    pfr_event = int(
+        pfr_eligible
+        and bool(post_checkable[primary_index])
+        and bool(post_satisfied[primary_index])
+    )
+    eppf_event = int(pfr_event and bool(post_base_present))
+    vacuous_event = int(base_deleted and delta_denom > 0 and delta_num > 0)
+
+    events = {
+        "pfr": {"numerator": pfr_event, "denominator": pfr_eligible},
+        "local_satisfaction": {"numerator": local_num, "denominator": local_denom},
+        "delta_local_satisfaction": {"numerator": delta_num, "denominator": delta_denom},
+        "sir": {"numerator": sir_num, "denominator": sir_denom},
+        "srr": {"numerator": srr_num, "denominator": srr_denom},
+        "disruption": {"numerator": add_count + del_count, "denominator": 1},
+        "base_deletion_rate": {"numerator": base_deleted, "denominator": pre_base_present},
+        "deletes_base_action_rate": {"numerator": deletes_base_action, "denominator": 1},
+        "eppf": {"numerator": eppf_event, "denominator": pfr_eligible},
+        "vacuous_improvement": {"numerator": vacuous_event, "denominator": 1},
+    }
+    return {
+        "row_index": row_index,
+        "constraint_type": constraint_type,
+        "events": events,
+        "pre_checkable": [bool(value) for value in pre_checkable],
+        "pre_satisfied": [int(value) for value in pre_satisfied],
+        "post_checkable": [bool(value) for value in post_checkable],
+        "post_satisfied": [int(value) for value in post_satisfied],
+        "primary_factor_index": int(primary_index),
+        "pre_base_present": pre_base_present,
+        "post_base_present": post_base_present,
+        "resolved_add": details.get("resolved_add"),
+        "resolved_del": details.get("resolved_del"),
+    }
+
+
 def evaluate_global_repair_samples(
     *,
     samples: Sequence[RepairSample],
@@ -823,169 +907,37 @@ def evaluate_global_repair_samples(
             f"Mismatch between prediction samples ({len(samples)}) and parquet rows ({len(rows)})."
         )
 
-    per_sample_gfr: list[float] = []
-    per_sample_srr: list[float] = []
-    per_sample_sir: list[float] = []
-    per_sample_disruption: list[dict[str, int]] = []
-    per_sample_evidence: list[dict[str, int | float]] = []
+    if pre_vectors is not None:
+        raise ValueError(
+            "Stored graph pre-label tensors are not valid paper-metric truth; "
+            "recompute both states from interim rows."
+        )
 
-    overall = GlobalMetricsAccumulator()
-    per_constraint: dict[str, GlobalMetricsAccumulator] = {}
-
-    asserted_length_match = False
+    overall = PaperMetricsAccumulator()
+    per_constraint: dict[str, PaperMetricsAccumulator] = {}
+    per_instance: list[dict[str, object]] = []
 
     for idx, (sample, row) in enumerate(zip(samples, rows)):
-        candidate_slots = _candidate_slots_from_sample(sample, none_class)
-        factor_constraint_ids_override = None
-        primary_index_override = None
-        if pre_vectors is not None and idx < len(pre_vectors):
-            override = pre_vectors[idx]
-            factor_constraint_ids_override = _coerce_factor_sequence(override.get("factor_constraint_ids"))
-            primary_index_override = override.get("primary_factor_index")
-        details = evaluator.evaluate_full(
-            row,
-            candidate_slots=candidate_slots,
-            primary_factor_index=primary_index_override,
-            factor_constraint_ids=factor_constraint_ids_override,
+        instance = evaluate_paper_metric_instance(
+            row=row,
+            evaluator=evaluator,
+            candidate_slots=_candidate_slots_from_sample(sample, none_class),
+            constraint_type=sample.constraint_type,
+            row_index=idx,
+            none_class=none_class,
         )
-
-        local_constraint_ids = details["local_constraint_ids"]
-        primary_index = details["primary_factor_index"]
-
-        pre_checkable = details["pre_checkable"]
-        pre_satisfied = details["pre_satisfied"]
-
-        if pre_vectors is not None and idx < len(pre_vectors):
-            override = pre_vectors[idx]
-            pre_checkable_override = _coerce_factor_sequence(override.get("pre_checkable"))
-            pre_satisfied_override = _coerce_factor_sequence(override.get("pre_satisfied"))
-            if pre_checkable_override is not None and pre_satisfied_override is not None:
-                pre_checkable = [bool(v) for v in pre_checkable_override]
-                pre_satisfied = [int(v) for v in pre_satisfied_override]
-            if primary_index_override is not None:
-                try:
-                    primary_index = int(primary_index_override)
-                except (TypeError, ValueError):
-                    pass
-
-        if primary_index < 0:
-            primary_index = _resolve_primary_index_from_row(row, local_constraint_ids)
-
-        post_checkable = details["post_checkable"]
-        post_satisfied = details["post_satisfied"]
-
-        if not asserted_length_match and len(post_checkable) > 0:
-            if len(pre_checkable) != len(post_checkable):
-                raise AssertionError(
-                    "Pre/post factor arrays length mismatch while computing global metrics."
-                )
-            asserted_length_match = True
-
-        checkable_total = sum(1 for flag in post_checkable if flag)
-        if checkable_total:
-            gfr = sum(
-                post_satisfied[i] for i, flag in enumerate(post_checkable) if flag
-            ) / float(checkable_total)
-        else:
-            gfr = 0.0
-
-        srr_num = 0
-        srr_denom = 0
-        sir_num = 0
-        sir_denom = 0
-        for i in range(len(post_checkable)):
-            if i == primary_index:
-                continue
-            if i >= len(pre_checkable):
-                continue
-            if not pre_checkable[i]:
-                continue
-            if not post_checkable[i]:
-                continue
-            if pre_satisfied[i]:
-                srr_denom += 1
-                if not post_satisfied[i]:
-                    srr_num += 1
-            else:
-                sir_denom += 1
-                if post_satisfied[i]:
-                    sir_num += 1
-
-        srr = float(srr_num) / srr_denom if srr_denom else 0.0
-        sir = float(sir_num) / sir_denom if sir_denom else 0.0
-
-        add_count = 1 if sample.predicted.get("add") is not None else 0
-        del_count = 1 if sample.predicted.get("del") is not None else 0
-        evidence = {
-            "pre_global_satisfied_fraction": float(details.get("pre_global_satisfied_fraction", 0.0)),
-            "post_global_satisfied_fraction": float(details.get("post_global_satisfied_fraction", gfr)),
-            "pre_focus_present": int(details.get("pre_focus_present", 0)),
-            "post_focus_present": int(details.get("post_focus_present", 0)),
-            "focus_preserved": int(details.get("focus_preserved", 0)),
-            "focus_deleted": int(details.get("focus_deleted", 0)),
-            "candidate_deletes_focus": int(details.get("candidate_deletes_focus", 0)),
-            "non_vacuous_primary_fix": int(details.get("non_vacuous_primary_fix", 0)),
-            "vacuous_satisfaction_improvement": int(details.get("vacuous_satisfaction_improvement", 0)),
-        }
-
-        per_sample_gfr.append(gfr)
-        per_sample_srr.append(srr)
-        per_sample_sir.append(sir)
-        per_sample_evidence.append(evidence)
-        per_sample_disruption.append(
-            {
-                "added_triples": add_count,
-                "deleted_triples": del_count,
-                "total_ops": add_count + del_count,
-                "changed_triples": add_count + del_count,
-            }
-        )
-
-        overall.update(
-            gfr=gfr,
-            srr=srr,
-            sir=sir,
-            srr_num=srr_num,
-            srr_denom=srr_denom,
-            sir_num=sir_num,
-            sir_denom=sir_denom,
-            add_count=add_count,
-            del_count=del_count,
-            focus_preserved=int(evidence["focus_preserved"]),
-            focus_deleted=int(evidence["focus_deleted"]),
-            candidate_deletes_focus=int(evidence["candidate_deletes_focus"]),
-            non_vacuous_primary_fix=int(evidence["non_vacuous_primary_fix"]),
-            vacuous_satisfaction_improvement=int(evidence["vacuous_satisfaction_improvement"]),
-        )
-
-        bucket = per_constraint.setdefault(sample.constraint_type, GlobalMetricsAccumulator())
-        bucket.update(
-            gfr=gfr,
-            srr=srr,
-            sir=sir,
-            srr_num=srr_num,
-            srr_denom=srr_denom,
-            sir_num=sir_num,
-            sir_denom=sir_denom,
-            add_count=add_count,
-            del_count=del_count,
-            focus_preserved=int(evidence["focus_preserved"]),
-            focus_deleted=int(evidence["focus_deleted"]),
-            candidate_deletes_focus=int(evidence["candidate_deletes_focus"]),
-            non_vacuous_primary_fix=int(evidence["non_vacuous_primary_fix"]),
-            vacuous_satisfaction_improvement=int(evidence["vacuous_satisfaction_improvement"]),
-        )
+        events = instance["events"]
+        overall.update(events)
+        per_constraint.setdefault(sample.constraint_type, PaperMetricsAccumulator()).update(events)
+        per_instance.append(instance)
 
     return {
-        "overall": overall.as_dict(),
-        "per_constraint_type": {k: v.as_dict() for k, v in sorted(per_constraint.items())},
-        "per_sample": {
-            "gfr": per_sample_gfr,
-            "srr": per_sample_srr,
-            "sir": per_sample_sir,
-            "disruption": per_sample_disruption,
-            "evidence_preservation": per_sample_evidence,
+        "paper_metrics": overall.as_dict(),
+        "per_constraint_type": {
+            key: accumulator.as_dict()
+            for key, accumulator in sorted(per_constraint.items())
         },
+        "per_instance": per_instance,
     }
 
 

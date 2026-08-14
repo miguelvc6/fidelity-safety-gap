@@ -89,6 +89,37 @@ class CandidateReranker(nn.Module):
         combined = torch.cat([graph_features, cand_features], dim=-1)
         return self.scorer(combined).squeeze(-1)
 
+    def score_candidates_packed(
+        self,
+        graph_emb: torch.Tensor,
+        candidate_slots: torch.Tensor,
+        candidate_graph_index: torch.Tensor,
+    ) -> torch.Tensor:
+        """Score packed candidate rows for a batch without per-graph GPU calls."""
+        if graph_emb.dim() != 2:
+            raise ValueError(f"graph_emb must be shaped (batch, hidden); got {tuple(graph_emb.shape)}")
+        if candidate_slots.dim() != 2 or candidate_slots.size(-1) != 6:
+            raise ValueError(
+                f"candidate_slots must be shaped (num_candidates, 6); got {tuple(candidate_slots.shape)}"
+            )
+        candidate_slots = candidate_slots.to(device=graph_emb.device, dtype=torch.long)
+        candidate_graph_index = candidate_graph_index.to(
+            device=graph_emb.device, dtype=torch.long
+        ).view(-1)
+        if candidate_graph_index.numel() != candidate_slots.size(0):
+            raise ValueError("candidate_graph_index length must match candidate_slots rows.")
+        if candidate_graph_index.numel() and (
+            int(candidate_graph_index.min().item()) < 0
+            or int(candidate_graph_index.max().item()) >= graph_emb.size(0)
+        ):
+            raise ValueError("candidate_graph_index contains out-of-range graph ids.")
+
+        cand_embed = self.candidate_embeddings(candidate_slots)
+        cand_features = self.candidate_mlp(cand_embed.view(candidate_slots.size(0), -1))
+        graph_features = graph_emb.index_select(0, candidate_graph_index)
+        combined = torch.cat([graph_features, cand_features], dim=-1)
+        return self.scorer(combined).squeeze(-1)
+
 
 def build_reranker(
     *,

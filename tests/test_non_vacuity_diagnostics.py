@@ -127,6 +127,36 @@ def _detail(*, focus_deleted: int, non_vacuous: int) -> dict[str, object]:
     }
 
 
+def _paper_instance(
+    *,
+    pfr: int = 1,
+    local_num: int = 1,
+    local_denom: int = 1,
+    base_deleted: int = 0,
+    deletes_base: int = 0,
+    eppf: int = 1,
+    vacuous: int = 0,
+    disruption: int = 1,
+) -> dict[str, object]:
+    return {
+        "events": {
+            "pfr": {"numerator": pfr, "denominator": 1},
+            "local_satisfaction": {"numerator": local_num, "denominator": local_denom},
+            "delta_local_satisfaction": {"numerator": 1, "denominator": 1},
+            "sir": {"numerator": 0, "denominator": 1},
+            "srr": {"numerator": 0, "denominator": 1},
+            "disruption": {"numerator": disruption, "denominator": 1},
+            "base_deletion_rate": {"numerator": base_deleted, "denominator": 1},
+            "deletes_base_action_rate": {"numerator": deletes_base, "denominator": 1},
+            "eppf": {"numerator": eppf, "denominator": 1},
+            "vacuous_improvement": {"numerator": vacuous, "denominator": 1},
+        },
+        "post_base_present": 1 - base_deleted,
+        "resolved_add": None,
+        "resolved_del": (1, 10, 2) if base_deleted else None,
+    }
+
+
 def test_global_aggregation_includes_evidence_preservation_rates() -> None:
     samples = [
         RepairSample("single", predicted={"add": None, "del": None}, gold={"add": None, "del": None}),
@@ -139,33 +169,24 @@ def test_global_aggregation_includes_evidence_preservation_rates() -> None:
         none_class=0,
     )
 
-    overall = metrics["overall"]
-    assert overall["focus_preserved_rate"] == 0.5
-    assert overall["focus_deleted_rate"] == 0.5
-    assert overall["candidate_deletes_focus_rate"] == 0.5
-    assert overall["non_vacuous_primary_fix_rate"] == 0.5
-    assert overall["vacuous_satisfaction_improvement_rate"] == 0.5
-    assert len(metrics["per_sample"]["evidence_preservation"]) == 2
+    paper = metrics["paper_metrics"]
+    assert paper["base_deletion_rate"] == {"value": 0.5, "numerator": 1, "denominator": 2}
+    assert paper["deletes_base_action_rate"] == {"value": 0.5, "numerator": 1, "denominator": 2}
+    assert paper["eppf"] == {"value": 0.5, "numerator": 1, "denominator": 2}
+    assert paper["vacuous_improvement"] == {"value": 0.5, "numerator": 1, "denominator": 2}
+    assert len(metrics["per_instance"]) == 2
 
 
 def test_candidate_oracle_aggregate_tracks_non_vacuous_safe_gap() -> None:
     oracle = _load_script("analyze_candidate_oracle")
     agg = oracle.Aggregate()
-    safe_delete = {
-        "primary_satisfied": 1,
-        "secondary_regressions": 0,
-        "secondary_regressions_denom": 1,
-        "secondary_improvements": 0,
-        "secondary_improvements_denom": 1,
-        "global_satisfied_fraction": 1.0,
-        "srr": 0.0,
-        "sir": 0.0,
-        "add_count": 0,
-        "del_count": 1,
-        "focus_deleted": 1,
-        "vacuous_satisfaction_improvement": 1,
-    }
-    selected = {**safe_delete, "primary_satisfied": 0, "global_satisfied_fraction": 0.5, "focus_deleted": 0}
+    safe_delete = _paper_instance(
+        base_deleted=1,
+        deletes_base=1,
+        eppf=0,
+        vacuous=1,
+    )
+    selected = _paper_instance(pfr=0, local_num=1, local_denom=2, eppf=0)
 
     agg.add(
         candidate_count=2,
@@ -181,32 +202,26 @@ def test_candidate_oracle_aggregate_tracks_non_vacuous_safe_gap() -> None:
     assert result["oracle_safe_available_rate"] == 1.0
     assert result["oracle_non_vacuous_safe_available_rate"] == 0.0
     assert result["selected_non_vacuous_safe_rate"] == 0.0
-    assert result["oracle_focus_deleted_rate"] == 1.0
-    assert result["oracle_vacuous_satisfaction_improvement_rate"] == 1.0
+    assert result["oracle_paper_metrics"]["base_deletion_rate"]["value"] == 1.0
+    assert result["oracle_paper_metrics"]["vacuous_improvement"]["value"] == 1.0
 
 
 def test_deletion_degeneracy_aggregate_exact_and_metric_equivalent_cases() -> None:
     deletion = _load_script("analyze_deletion_degeneracy")
     agg = deletion.Aggregate()
     h1_slots = [0, 0, 0, 1, 10, 2]
-    same = {
-        "primary_satisfied": 1,
-        "global_satisfied_fraction": 1.0,
-        "srr": 0.0,
-        "sir": 0.0,
-        "add_count": 0,
-        "del_count": 1,
-        "focus_preserved": 0,
-        "focus_deleted": 1,
-        "candidate_deletes_focus": 1,
-        "vacuous_satisfaction_improvement": 1,
-        "non_vacuous_primary_fix": 0,
-    }
+    same = _paper_instance(
+        base_deleted=1,
+        deletes_base=1,
+        eppf=0,
+        vacuous=1,
+    )
     agg.add(g0_slots=h1_slots, h1_slots=h1_slots, g0=same, h1=same)
     agg.add(g0_slots=[0, 0, 0, 3, 10, 4], h1_slots=h1_slots, g0=same, h1=same)
 
     result = agg.to_dict()
     assert result["prediction_exact_match_rate"] == 0.5
     assert result["metric_equivalent_rate"] == 1.0
-    assert result["g0_focus_deleted_rate"] == 1.0
-    assert result["h1_candidate_deletes_focus_rate"] == 1.0
+    assert result["g0_paper_metrics"]["base_deletion_rate"]["value"] == 1.0
+    assert result["dfb_paper_metrics"]["deletes_base_action_rate"]["value"] == 1.0
+    assert result["dfb_paper_metrics"]["eppf"]["value"] == 0.0

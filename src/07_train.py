@@ -1481,6 +1481,8 @@ def train(
                         precomputed_add_topk=add_topk,
                         precomputed_del_topk=del_topk,
                     )
+                    if gold_index is None:
+                        raise RuntimeError("Chooser training requires include_gold=True.")
                     candidate_groups.append(candidates)
                     gold_indices.append(gold_index)
                     candidate_rows.append(row)
@@ -2278,6 +2280,8 @@ def train(
                             precomputed_add_topk=add_topk,
                             precomputed_del_topk=del_topk,
                         )
+                        if gold_index is None:
+                            raise RuntimeError("Chooser validation requires include_gold=True.")
                         candidate_groups.append(candidates)
                         gold_indices.append(gold_index)
                         candidate_rows.append(row)
@@ -2878,7 +2882,6 @@ def _write_effective_experiment_config(
 
 
 def main():
-    set_seed(42)
     args = parse_args()
 
     # Load experiment configuration (model + training sections).
@@ -2887,6 +2890,7 @@ def main():
         experiment_config = json.load(f)
     model_cfg = ModelConfig.from_mapping(experiment_config["model_config"])
     training_cfg = TrainingConfig.from_mapping(experiment_config["training_config"])
+    set_seed(training_cfg.seed)
 
     # Prepare run directory
     run_directory = ensure_run_dir_for_config(config_path)

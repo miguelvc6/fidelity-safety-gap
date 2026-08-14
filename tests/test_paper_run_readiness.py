@@ -174,9 +174,9 @@ def test_global_support_ignores_passive_graph_factor_ids_without_labels() -> Non
     postprocess(predictions, targets, ["single"])
 
     assert calls == [{"primary_factor_index": None, "factor_constraint_ids": None}]
-    overall = state["global_metrics"]["overall"]
-    assert overall["srr_denom_total"] == 1
-    assert overall["srr_total"] == 1
+    paper = state["paper_metrics"]
+    assert paper["srr"]["denominator"] == 1
+    assert paper["srr"]["numerator"] == 1
 
 
 def test_make_experiment_configs_empty_processed_root_message() -> None:

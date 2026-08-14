@@ -3,8 +3,11 @@ import json
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import torch
+import pandas as pd
+import pytest
 from torch_geometric.data import Data
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,7 +18,9 @@ if str(SRC) not in sys.path:
 from modules.config import ModelConfig
 from modules.h2_eval import (
     aggregate_semantic_records,
+    _select_batch_predictions,
     clone_with_factor_pressure_mask,
+    collect_h2_variant_outputs,
     count_train_factor_exposure,
     density_bucket,
     exposure_bucket,
@@ -90,6 +95,113 @@ def test_transfer_and_density_helpers_are_deterministic() -> None:
     assert density_bucket(5) == "5_16"
 
 
+def test_train_factor_exposure_can_be_read_from_labeled_parquet(tmp_path: Path) -> None:
+    path = tmp_path / "df_train.parquet"
+    pd.DataFrame({"factor_constraint_ids": [[1, 2, 2], [2, 3]]}).to_parquet(path, index=False)
+
+    counts = count_train_factor_exposure(path)
+
+    assert counts == {1: 1, 2: 3, 3: 1}
+
+
+def test_h2_prediction_selection_matches_configured_selector(monkeypatch) -> None:
+    graphs = [Data(context_index=0)]
+    logits = torch.tensor([[[3.0, 1.0], [3.0, 1.0], [3.0, 1.0], [3.0, 1.0], [3.0, 1.0], [3.0, 1.0]]])
+    candidates = [[0, 0, 0, 0, 0, 0], [1, 1, 1, 1, 1, 1]]
+    support = SimpleNamespace(
+        contexts=[object()],
+        heuristics=SimpleNamespace(placeholder_ids={"x": 99}),
+        candidate_cfg=object(),
+    )
+
+    monkeypatch.setattr("modules.h2_eval.build_candidates", lambda **_: (candidates, {}))
+
+    class FakeModel:
+        num_target_ids = 2
+
+        @staticmethod
+        def score_candidates(graph_emb, candidate_tensor):
+            return torch.tensor([0.0, 1.0], device=candidate_tensor.device)
+
+    chooser = _select_batch_predictions(
+        model=FakeModel(),
+        graphs=graphs,
+        logits=logits,
+        graph_emb=torch.ones((1, 2)),
+        chooser_support=support,
+        direct_safety_support=None,
+    )
+    assert chooser.tolist() == [candidates[1]]
+
+    monkeypatch.setattr(
+        "modules.h2_eval.score_candidates_from_logits",
+        lambda proposal_logits, candidate_tensor: torch.tensor([1.0, 0.0], device=candidate_tensor.device),
+    )
+    direct = _select_batch_predictions(
+        model=FakeModel(),
+        graphs=graphs,
+        logits=logits,
+        graph_emb=None,
+        chooser_support=None,
+        direct_safety_support=support,
+    )
+    assert direct.tolist() == [candidates[0]]
+
+
+def test_h2_normal_prediction_replay_is_exact_and_count_checked() -> None:
+    graphs = []
+    for idx in range(2):
+        graph = Data(
+            x=torch.tensor([idx], dtype=torch.long),
+            edge_index=torch.empty((2, 0), dtype=torch.long),
+            edge_type=torch.empty((0,), dtype=torch.long),
+            y=torch.zeros((1, 6), dtype=torch.long),
+        )
+        graph.constraint_type = "single"
+        graphs.append(graph)
+
+    class FakeModel:
+        num_target_ids = 3
+
+        @staticmethod
+        def eval():
+            return None
+
+        @staticmethod
+        def forward_for_evaluation(batch):
+            return {
+                "edit_logits": torch.zeros((batch.num_graphs, 6, 3)),
+                "graph_emb": torch.zeros((batch.num_graphs, 2)),
+            }
+
+    expected = torch.tensor([[1, 1, 1, 0, 0, 0], [2, 2, 2, 0, 0, 0]], dtype=torch.long)
+    output = collect_h2_variant_outputs(
+        model=FakeModel(),
+        dataset=graphs,
+        device=torch.device("cpu"),
+        variant_name="normal",
+        exposure_counts={},
+        family_lookup=lambda constraint_id, factor_type: "single",
+        batch_size=2,
+        collect_factor_records=False,
+        precomputed_predictions=expected,
+    )
+    assert torch.equal(output["predictions"], expected)
+
+    with pytest.raises(ValueError, match="shorter than the graph dataset"):
+        collect_h2_variant_outputs(
+            model=FakeModel(),
+            dataset=graphs,
+            device=torch.device("cpu"),
+            variant_name="normal",
+            exposure_counts={},
+            family_lookup=lambda constraint_id, factor_type: "single",
+            batch_size=2,
+            collect_factor_records=False,
+            precomputed_predictions=expected[:1],
+        )
+
+
 def test_counterfactual_masking_removes_expected_edges_without_mutation() -> None:
     graph = _factor_graph()
     original_edge_count = int(graph.edge_index.size(1))
@@ -137,6 +249,13 @@ def test_h2_ablation_config_generation_is_opt_in() -> None:
         processed.mkdir(parents=True)
         graph = _factor_graph()
         torch.save([graph], processed / "train_graph-node_id-shard000.pt")
+        interim = root / "data" / "interim" / "toy_minocc100_labeled"
+        interim.mkdir(parents=True)
+        for split in ("train", "val", "test"):
+            pd.DataFrame({"factor_types": [[0, 1]]}).to_parquet(
+                interim / f"df_{split}.parquet",
+                index=False,
+            )
         models = root / "models"
 
         argv_backup = list(sys.argv)
@@ -147,11 +266,13 @@ def test_h2_ablation_config_generation_is_opt_in() -> None:
                 str(root / "data" / "processed"),
                 "--models-root",
                 str(models),
+                "--interim-root",
+                str(root / "data" / "interim"),
             ]
             module.main()
             default_dirs = sorted(path.name for path in models.iterdir() if path.is_dir())
             assert not any(name.startswith("h2_") for name in default_dirs)
-            assert len(default_dirs) == 5
+            assert len(default_dirs) == 6
 
             sys.argv = [
                 "make_experiment_configs.py",
@@ -159,6 +280,8 @@ def test_h2_ablation_config_generation_is_opt_in() -> None:
                 str(root / "data" / "processed"),
                 "--models-root",
                 str(models),
+                "--interim-root",
+                str(root / "data" / "interim"),
                 "--include-h2-ablations",
             ]
             module.main()

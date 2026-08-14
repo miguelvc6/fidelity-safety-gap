@@ -115,8 +115,8 @@ def test_global_metrics_postprocess_accepts_streaming_test_data() -> None:
         captured: dict[str, object] = {}
 
         def fake_evaluate_global_repair_samples(**kwargs):
-            captured["pre_vectors"] = kwargs["pre_vectors"]
-            return {"overall": {}, "per_constraint_type": {}}
+            captured["kwargs"] = kwargs
+            return {"paper_metrics": {}, "per_constraint_type": {}, "per_instance": []}
 
         original = eval_module.evaluate_global_repair_samples
         eval_module.evaluate_global_repair_samples = fake_evaluate_global_repair_samples
@@ -132,9 +132,8 @@ def test_global_metrics_postprocess_accepts_streaming_test_data() -> None:
         finally:
             eval_module.evaluate_global_repair_samples = original
 
-    assert "global_metrics" in state
-    assert captured["pre_vectors"] is not None
-    assert len(captured["pre_vectors"]) == 2
+    assert "paper_metrics" in state
+    assert "pre_vectors" not in captured["kwargs"]
 
 
 def test_eval_loads_chooser_checkpoint_without_chooser_mode() -> None:

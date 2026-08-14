@@ -412,6 +412,11 @@ class BaselineAdapter(BaseGraphModel):
         logits.scatter_(2, idx.unsqueeze(-1), 0.0)
         return logits
 
+    def forward_for_evaluation(self, data) -> torch.Tensor:
+        """Evaluate a baseline without factor-model-only forward arguments."""
+
+        return self.forward(data)
+
 
 def _maybe_load_json(path: Optional[str]) -> Optional[Any]:
     if path is None:

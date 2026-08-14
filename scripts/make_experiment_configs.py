@@ -25,6 +25,7 @@ import torch
 import pandas as pd
 
 from modules.data_encoders import base_dataset_name, graph_dataset_filename
+from modules.factor_types import dataset_factor_type_ids
 
 VARIANT_MINOCC_RE = re.compile(r"minocc(\d+)", re.IGNORECASE)
 FACTORIZED_RE = re.compile(r"^train_graph-(?P<encoding>.+)\.pkl$")
@@ -50,6 +51,22 @@ LOCKED_FACTOR_LOSS_WEIGHT_PRE = 0.1
 LOCKED_FACTOR_LOSS_WEIGHT_POST_GOLD = 0.1
 LOCKED_CHOOSER_TOPK_CANDIDATES = 20
 LOCKED_CHOOSER_MAX_CANDIDATES_TOTAL = 80
+ORIGINAL_B0_TRAINABLE_PARAMETERS = 27_920_000
+MATCHED_B0_TRAINABLE_PARAMETERS = 50_110_102
+COMPACT_A1_TRAINABLE_PARAMETERS = 50_072_465
+MAX_PARAMETER_RELATIVE_DIFFERENCE = 0.001
+
+
+def assert_parameter_match(
+    matched_b0: int = MATCHED_B0_TRAINABLE_PARAMETERS,
+    compact_a1: int = COMPACT_A1_TRAINABLE_PARAMETERS,
+) -> None:
+    relative_difference = abs(int(matched_b0) - int(compact_a1)) / float(compact_a1)
+    if relative_difference > MAX_PARAMETER_RELATIVE_DIFFERENCE:
+        raise AssertionError(
+            "Parameter-matched B0 differs from Compact A1 by "
+            f"{relative_difference:.4%}, above the 0.1% limit."
+        )
 
 
 def _parse_min_occurrence(variant: str) -> int:
@@ -178,6 +195,12 @@ class ProposalExperiment:
     pressure_module_sharing: str = "per_type"
     factor_executor_impl: str = "per_type_v1"
     factor_loss_enabled: bool | None = None
+    compact_grouped: bool = False
+    num_layers: int | None = None
+    hidden_channels: int | None = None
+    head_hidden: int | None = None
+    dropout: float | None = None
+    expected_trainable_parameters: int | None = None
 
 
 @dataclass(frozen=True)
@@ -195,6 +218,7 @@ def _proposal_config_payload(
     encoding: str,
     min_occurrence: int,
     num_factor_types: int,
+    active_factor_type_ids: tuple[int, ...] | None = None,
 ) -> dict[str, Any]:
     model_config = {
         "dataset_variant": variant,
@@ -224,7 +248,25 @@ def _proposal_config_payload(
                 "dropout": LOCKED_DROPOUT,
             }
         )
-    return {
+    explicit_backbone = {
+        "num_layers": exp.num_layers,
+        "hidden_channels": exp.hidden_channels,
+        "head_hidden": exp.head_hidden,
+        "dropout": exp.dropout,
+    }
+    model_config.update({key: value for key, value in explicit_backbone.items() if value is not None})
+    if exp.compact_grouped:
+        if not active_factor_type_ids:
+            raise ValueError(f"{exp.name} requires train/validation active factor ids.")
+        model_config.update(
+            {
+                "factor_executor_impl": "per_type_grouped_v2",
+                "gold_edit_embedding_mode": "compact",
+                "pressure_module_sharing": exp.pressure_module_sharing,
+                "active_factor_type_ids": list(active_factor_type_ids),
+            }
+        )
+    payload = {
         "model_config": model_config,
         "training_config": {
             "batch_size": 256,
@@ -273,8 +315,12 @@ def _proposal_config_payload(
                 "max_candidates_total": LOCKED_CHOOSER_MAX_CANDIDATES_TOTAL,
             },
             "policy_filter_strict": True,
+            "seed": 42,
         },
     }
+    if exp.expected_trainable_parameters is not None:
+        payload["expected_trainable_parameters"] = int(exp.expected_trainable_parameters)
+    return payload
 
 
 def _reranker_config_payload(
@@ -313,6 +359,7 @@ def _reranker_config_payload(
             "heuristic_max_candidates": 30,
             "heuristic_max_values": 3,
             "include_gold": True,
+            "prediction_include_gold": False,
             "max_candidates_total": 80,
             "assume_complete_entity_facts": True,
             "constraint_scope": exp.constraint_scope,
@@ -327,6 +374,7 @@ def _reranker_config_payload(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--processed-root", type=Path, default=Path("data/processed"))
+    parser.add_argument("--interim-root", type=Path, default=Path("data/interim"))
     parser.add_argument("--models-root", type=Path, default=Path("models"))
     parser.add_argument("--limit", type=int, default=0, help="Limit variant/encoding pairs (0 = no limit).")
     parser.add_argument("--include-experimental", action="store_true")
@@ -336,6 +384,7 @@ def main() -> None:
         help="Emit the three H2 supporting ablation configs. Existing config files are left untouched.",
     )
     args = parser.parse_args()
+    assert_parameter_match()
 
     pairs = list(_iter_variant_encodings(args.processed_root))
     if args.limit > 0:
@@ -360,17 +409,38 @@ def main() -> None:
             pressure_type_conditioning="none",
             validate_factor_labels=False,
             locked_backbone=False,
+            num_layers=2,
+            hidden_channels=128,
+            head_hidden=128,
+            dropout=0.5,
+            expected_trainable_parameters=ORIGINAL_B0_TRAINABLE_PARAMETERS,
         ),
         ProposalExperiment(
-            name="a1_factorized_imitation",
+            name="b0_parameter_matched",
+            model_name="GIN",
+            constraint_representation="eswc_passive",
+            pressure_enabled=False,
+            pressure_type_conditioning="none",
+            validate_factor_labels=False,
+            locked_backbone=False,
+            num_layers=4,
+            hidden_channels=304,
+            head_hidden=304,
+            dropout=0.17,
+            expected_trainable_parameters=MATCHED_B0_TRAINABLE_PARAMETERS,
+        ),
+        ProposalExperiment(
+            name="a1_factorized_imitation_compact_grouped",
             model_name="GIN_PRESSURE",
             constraint_representation="factorized",
             pressure_enabled=True,
             pressure_type_conditioning="concat",
             validate_factor_labels=True,
+            compact_grouped=True,
+            expected_trainable_parameters=COMPACT_A1_TRAINABLE_PARAMETERS,
         ),
         ProposalExperiment(
-            name="m1c_safe_factor_chooser",
+            name="m1c_safe_factor_chooser_compact_grouped",
             model_name="GIN_PRESSURE",
             constraint_representation="factorized",
             pressure_enabled=True,
@@ -379,11 +449,12 @@ def main() -> None:
             chooser_loss_mode="fix1",
             chooser_loss_weight=0.25,
             chooser_beta_no_regression=0.25,
-            chooser_gamma_primary=0.0,
+            chooser_gamma_primary=0.2,
             validate_factor_labels=True,
+            compact_grouped=True,
         ),
         ProposalExperiment(
-            name="m1d_safe_factor_direct",
+            name="m1d_safe_factor_direct_compact_grouped",
             model_name="GIN_PRESSURE",
             constraint_representation="factorized",
             pressure_enabled=True,
@@ -392,13 +463,14 @@ def main() -> None:
             direct_safety_alpha_primary=1.0,
             direct_safety_beta_secondary=0.5,
             validate_factor_labels=True,
+            compact_grouped=True,
         ),
     ]
     canonical_rerankers: list[RerankerExperiment] = [
         RerankerExperiment(
             name="g0_globalfix_reference",
             objective="global_fix",
-            proposal_name="a1_factorized_imitation",
+            proposal_name="a1_factorized_imitation_compact_grouped",
             constraint_scope="local",
         )
     ]
@@ -411,6 +483,7 @@ def main() -> None:
             pressure_type_conditioning="concat",
             validate_factor_labels=True,
             factor_loss_enabled=False,
+            compact_grouped=True,
         ),
         ProposalExperiment(
             name="h2_a1_shared_pressure",
@@ -420,6 +493,7 @@ def main() -> None:
             pressure_type_conditioning="concat",
             pressure_module_sharing="shared",
             validate_factor_labels=True,
+            compact_grouped=True,
         ),
         ProposalExperiment(
             name="h2_a1_legacy_shared_executor",
@@ -474,6 +548,24 @@ def main() -> None:
             sample = _load_first_data_obj(factorized_path) or _load_first_data_obj(passive_path)
             num_factor_types = _infer_num_factor_types(sample)
 
+        labeled_interim = args.interim_root / f"{variant}_labeled"
+        if not labeled_interim.exists():
+            labeled_interim = args.interim_root / variant
+        active_factor_type_ids = dataset_factor_type_ids(
+            labeled_interim,
+            splits=("train", "val"),
+        )
+        test_factor_type_ids = dataset_factor_type_ids(
+            labeled_interim,
+            splits=("test",),
+        )
+        unseen_test_ids = sorted(set(test_factor_type_ids) - set(active_factor_type_ids))
+        if unseen_test_ids:
+            raise ValueError(
+                f"{variant} test contains factor types absent from train/validation: "
+                f"{unseen_test_ids}"
+            )
+
         proposal_experiments = list(canonical_proposals)
         reranker_experiments = list(canonical_rerankers)
         if args.include_h2_ablations:
@@ -491,6 +583,7 @@ def main() -> None:
                 encoding=encoding,
                 min_occurrence=min_occurrence,
                 num_factor_types=num_factor_types,
+                active_factor_type_ids=active_factor_type_ids,
             )
             if exp.name == "x2_factor_loss_only_appendix":
                 payload["training_config"]["factor_loss"]["enabled"] = True

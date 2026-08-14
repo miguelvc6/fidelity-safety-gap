@@ -33,7 +33,13 @@ from torch_geometric.loader import DataLoader
 from tqdm.autonotebook import tqdm
 
 from modules.baselines import evaluate_baselines
-from modules.candidates import CandidateConfig, build_candidates, score_candidates_from_logits
+from modules.candidates import (
+    CandidateConfig,
+    batch_topk_candidate_triples,
+    build_candidates,
+    score_candidates_from_logits,
+    score_candidates_from_logits_packed,
+)
 from modules.config import ModelConfig, TrainingConfig
 from modules.data_encoders import (
     GlobalIntEncoder,
@@ -46,6 +52,15 @@ from modules.data_encoders import (
 from modules.model_store import baseline_dir, config_copy_path, evaluations_dir, get_checkpoint_path
 from modules.models import BaseGraphModel, build_model
 from modules.h2_eval import H2RunSupport, write_h2_report
+from modules.evaluation_artifacts import (
+    EVALUATION_SCHEMA_VERSION,
+    atomic_write_csv,
+    atomic_write_json,
+    backup_schema_v1_once,
+    build_predictions_frame,
+    load_and_validate_predictions,
+    write_prediction_artifacts,
+)
 from modules.repair_eval import (
     ConstraintRepairHeuristics,
     RepairSample,
@@ -67,9 +82,10 @@ NONE_CLASS_INDEX = 0  # Bass-style datasets reserve class 0 for "no triple"
 ACTIONS = ("add", "del")
 PAPER_SUITE_TAGS: set[str] = {
     "b0_eswc_reproduction",
-    "a1_factorized_imitation",
-    "m1c_safe_factor_chooser",
-    "m1d_safe_factor_direct",
+    "b0_parameter_matched",
+    "a1_factorized_imitation_compact_grouped",
+    "m1c_safe_factor_chooser_compact_grouped",
+    "m1d_safe_factor_direct_compact_grouped",
     "g0_globalfix_reference",
 }
 
@@ -119,49 +135,27 @@ class RepairSupport:
 class GlobalMetricsSupport:
     rows: list[object]
     evaluator: CandidateConstraintEvaluator
+    dataset_path: Path | None = None
     none_class: int = NONE_CLASS_INDEX
 
     def build_postprocess(
         self,
         test_data: Sequence[Data] | GraphStreamDataset | None = None,
     ) -> tuple[Callable[[torch.Tensor, torch.Tensor, list[str]], None], dict[str, object]]:
+        del test_data
         state: dict[str, object] = {}
-
-        pre_vectors: list[dict[str, object]] | None = None
-        # Streamed datasets intentionally do not implement truthiness via __len__.
-        if test_data is not None:
-            vectors: list[dict[str, object]] = []
-            any_vectors = False
-            for data in test_data:
-                pre_satisfied = getattr(data, "factor_satisfied_pre", None)
-                pre_checkable = getattr(data, "factor_checkable_pre", None)
-                primary_index = getattr(data, "primary_factor_index", None)
-                factor_constraint_ids = getattr(data, "factor_constraint_ids", None)
-                if pre_satisfied is None and pre_checkable is None:
-                    vectors.append({})
-                    continue
-                any_vectors = True
-                vectors.append(
-                    {
-                        "factor_constraint_ids": factor_constraint_ids,
-                        "pre_satisfied": pre_satisfied,
-                        "pre_checkable": pre_checkable,
-                        "primary_factor_index": primary_index,
-                    }
-                )
-            if any_vectors:
-                pre_vectors = vectors
 
         def _postprocess(predictions: torch.Tensor, targets: torch.Tensor, kinds: list[str]) -> None:
             samples = _repair_samples_from_predictions(predictions, targets, kinds, self.none_class)
-            state["global_metrics"] = evaluate_global_repair_samples(
+            report = evaluate_global_repair_samples(
                 samples=samples,
                 rows=self.rows,
                 evaluator=self.evaluator,
                 none_class=self.none_class,
-                pre_vectors=pre_vectors,
             )
-            state["global_metrics_per_constraint_type"] = state["global_metrics"].get("per_constraint_type", {})
+            state["paper_metrics"] = report["paper_metrics"]
+            state["paper_metrics_per_constraint_type"] = report["per_constraint_type"]
+            state["paper_metric_instances"] = report["per_instance"]
 
         return _postprocess, state
 
@@ -321,6 +315,33 @@ def _load_reranker_predictions(path: Path) -> torch.Tensor:
     raise ValueError("Unsupported reranker predictions payload structure.")
 
 
+def _validate_legacy_prediction_import(
+    predictions: torch.Tensor,
+    *,
+    expected_count: int,
+    encoder_path: Path,
+) -> torch.Tensor:
+    """Validate a one-time index-ordered legacy prediction import."""
+
+    normalized = _normalize_precomputed_predictions(predictions, NONE_CLASS_INDEX)
+    if normalized.shape[0] != expected_count:
+        raise ValueError(
+            "Legacy prediction count mismatch: "
+            f"received {normalized.shape[0]}, expected {expected_count}."
+        )
+    if not encoder_path.exists():
+        raise FileNotFoundError(f"Global encoder not found at {encoder_path}")
+    encoder = GlobalIntEncoder()
+    encoder.load(encoder_path)
+    maximum_class = max(encoder._decoding, default=NONE_CLASS_INDEX)
+    if normalized.numel() and int(normalized.max().item()) > maximum_class:
+        raise ValueError(
+            "Legacy predictions contain a class index outside the stored encoder: "
+            f"maximum prediction={int(normalized.max().item())}, maximum class={maximum_class}."
+        )
+    return normalized
+
+
 def _maybe_prepare_repair_support(
     dataset_variant: str,
     min_occurrence: int,
@@ -434,7 +455,12 @@ def _maybe_prepare_global_support(
         logging.warning("Constraint evaluator unavailable: %s", exc)
         return None
 
-    return GlobalMetricsSupport(rows=rows, evaluator=evaluator, none_class=none_class)
+    return GlobalMetricsSupport(
+        rows=rows,
+        evaluator=evaluator,
+        dataset_path=interim_base / f"df_{split}.parquet",
+        none_class=none_class,
+    )
 
 
 def _aggregate_counts(
@@ -509,6 +535,7 @@ def eval(
     chooser_support: ChooserSupport | None = None,
     direct_safety_support: DirectSafetySupport | None = None,
     policy_support: PolicySupport | None = None,
+    prediction_state: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Evaluate a model and return Bass-style precision/recall/F1 metrics."""
     if isinstance(device, str):
@@ -537,7 +564,7 @@ def eval(
         kinds.extend((getattr(graph, "constraint_type", None) or "UNKNOWN") for graph in batch_graphs)
         if precomputed_predictions is None:
             data = data.to(device)
-            out = model(data)  # raw logits expected
+            out = model.forward_for_evaluation(data)  # raw logits expected
             if isinstance(out, dict):
                 if not output_logged:
                     logging.info("Model forward returned dict outputs; using edit_logits.")
@@ -552,6 +579,20 @@ def eval(
                     output_logged = True
                 logits = out
                 graph_emb = None
+            candidate_logits_cpu = (
+                logits.detach().cpu()
+                if chooser_support is not None
+                or direct_safety_support is not None
+                or policy_support is not None
+                else None
+            )
+            candidate_support = policy_support or chooser_support or direct_safety_support
+            if candidate_support is not None:
+                batch_add_topk, batch_del_topk = batch_topk_candidate_triples(
+                    logits.detach(),
+                    topk_triples=candidate_support.candidate_cfg.topk_candidates,
+                    topk_per_slot=candidate_support.candidate_cfg.topk_per_slot,
+                )
             if policy_support is not None:
                 if graph_emb is None:
                     raise RuntimeError("Policy choice requires graph_emb from model outputs.")
@@ -570,10 +611,12 @@ def eval(
                         graph=graph,
                         context=context,
                         heuristics=policy_support.heuristics,
-                        proposal_logits=logits[idx].detach(),
+                        proposal_logits=candidate_logits_cpu[idx],
                         cfg=policy_support.candidate_cfg,
                         placeholder_ids=set(policy_support.heuristics.placeholder_ids.values()),
                         num_target_ids=model.num_target_ids if model is not None else logits.size(-1),
+                        precomputed_add_topk=batch_add_topk[idx],
+                        precomputed_del_topk=batch_del_topk[idx],
                     )
                     candidates_filtered, match_mask = filter_candidates_by_policy(
                         candidates,
@@ -601,7 +644,9 @@ def eval(
                 if graph_emb is None:
                     raise RuntimeError("Chooser mode requires graph_emb from model outputs.")
                 graphs = data.to_data_list()
-                batch_preds = []
+                candidate_groups = []
+                packed_candidates = []
+                packed_graph_index = []
                 for idx, graph in enumerate(graphs):
                     context_index = int(getattr(graph, "context_index", idx))
                     if context_index >= len(chooser_support.contexts):
@@ -611,19 +656,40 @@ def eval(
                         graph=graph,
                         context=context,
                         heuristics=chooser_support.heuristics,
-                        proposal_logits=logits[idx].detach(),
+                        proposal_logits=candidate_logits_cpu[idx],
                         cfg=chooser_support.candidate_cfg,
                         placeholder_ids=set(chooser_support.heuristics.placeholder_ids.values()),
                         num_target_ids=model.num_target_ids if model is not None else logits.size(-1),
+                        precomputed_add_topk=batch_add_topk[idx],
+                        precomputed_del_topk=batch_del_topk[idx],
                     )
-                    candidate_tensor = torch.tensor(candidates, dtype=torch.long, device=logits.device)
-                    scores = model.score_candidates(graph_emb[idx], candidate_tensor)
-                    best_idx = int(torch.argmax(scores).item())
+                    if not candidates:
+                        raise RuntimeError("Chooser produced an empty evaluation candidate set.")
+                    candidate_groups.append(candidates)
+                    packed_candidates.extend(candidates)
+                    packed_graph_index.extend([idx] * len(candidates))
+                candidate_tensor = torch.tensor(
+                    packed_candidates, dtype=torch.long, device=logits.device
+                )
+                graph_index_tensor = torch.tensor(
+                    packed_graph_index, dtype=torch.long, device=logits.device
+                )
+                packed_scores = model.score_candidates_packed(
+                    graph_emb, candidate_tensor, graph_index_tensor
+                ).detach().cpu()
+                batch_preds = []
+                offset = 0
+                for candidates in candidate_groups:
+                    next_offset = offset + len(candidates)
+                    best_idx = int(torch.argmax(packed_scores[offset:next_offset]).item())
                     batch_preds.append(list(candidates[best_idx]))
+                    offset = next_offset
                 predictions.append(torch.tensor(batch_preds, dtype=torch.long).cpu())
             elif direct_safety_support is not None:
                 graphs = data.to_data_list()
-                batch_preds = []
+                candidate_groups = []
+                packed_candidates = []
+                packed_graph_index = []
                 for idx, graph in enumerate(graphs):
                     context_index = int(getattr(graph, "context_index", idx))
                     if context_index >= len(direct_safety_support.contexts):
@@ -633,15 +699,34 @@ def eval(
                         graph=graph,
                         context=context,
                         heuristics=direct_safety_support.heuristics,
-                        proposal_logits=logits[idx].detach(),
+                        proposal_logits=candidate_logits_cpu[idx],
                         cfg=direct_safety_support.candidate_cfg,
                         placeholder_ids=set(direct_safety_support.heuristics.placeholder_ids.values()),
                         num_target_ids=model.num_target_ids if model is not None else logits.size(-1),
+                        precomputed_add_topk=batch_add_topk[idx],
+                        precomputed_del_topk=batch_del_topk[idx],
                     )
-                    candidate_tensor = torch.tensor(candidates, dtype=torch.long, device=logits.device)
-                    scores = score_candidates_from_logits(logits[idx], candidate_tensor)
-                    best_idx = int(torch.argmax(scores).item())
+                    if not candidates:
+                        raise RuntimeError("Direct-safety evaluation produced an empty candidate set.")
+                    candidate_groups.append(candidates)
+                    packed_candidates.extend(candidates)
+                    packed_graph_index.extend([idx] * len(candidates))
+                candidate_tensor = torch.tensor(
+                    packed_candidates, dtype=torch.long, device=logits.device
+                )
+                graph_index_tensor = torch.tensor(
+                    packed_graph_index, dtype=torch.long, device=logits.device
+                )
+                packed_scores = score_candidates_from_logits_packed(
+                    logits, candidate_tensor, graph_index_tensor
+                ).detach().cpu()
+                batch_preds = []
+                offset = 0
+                for candidates in candidate_groups:
+                    next_offset = offset + len(candidates)
+                    best_idx = int(torch.argmax(packed_scores[offset:next_offset]).item())
                     batch_preds.append(list(candidates[best_idx]))
+                    offset = next_offset
                 predictions.append(torch.tensor(batch_preds, dtype=torch.long).cpu())
             else:
                 out = logits.argmax(dim=-1)  # class predictions per action
@@ -661,6 +746,14 @@ def eval(
 
     if postprocess is not None:
         postprocess(predictions, targets, kinds)
+    if prediction_state is not None:
+        prediction_state.update(
+            {
+                "predictions": predictions.detach().cpu(),
+                "targets": targets.detach().cpu(),
+                "constraint_types": list(kinds),
+            }
+        )
 
     global_counts, per_type_counts = _aggregate_counts(predictions, targets, kinds, none_class)
 
@@ -789,10 +882,14 @@ def _run_and_save(
     policy_support: PolicySupport | None = None,
     selection_weights: dict[str, float] | None = None,
     selection_disruption_field: str = "mean_disruption_total",
+    batch_size: int = 16,
+    prediction_rows: Sequence[object] | None = None,
+    artifact_context: dict[str, object] | None = None,
 ) -> dict[str, object]:
     normalized_predictions = None
     if precomputed_predictions is not None:
         normalized_predictions = _normalize_precomputed_predictions(precomputed_predictions, NONE_CLASS_INDEX)
+    prediction_state: dict[str, object] = {}
     metrics = eval(
         model,
         test_data,
@@ -802,40 +899,64 @@ def _run_and_save(
         chooser_support=chooser_support,
         direct_safety_support=direct_safety_support,
         policy_support=policy_support,
+        batch_size=batch_size,
+        prediction_state=prediction_state,
     )
-    metrics["global_metrics_computed"] = bool(
-        postprocess_state and isinstance(postprocess_state, dict) and "global_metrics" in postprocess_state
+    metrics["paper_metrics_computed"] = bool(
+        postprocess_state and isinstance(postprocess_state, dict) and "paper_metrics" in postprocess_state
     )
     if postprocess_state and "repair_metrics" in postprocess_state:
         metrics["repair_metrics"] = postprocess_state["repair_metrics"]
-    if postprocess_state and "global_metrics" in postprocess_state:
-        metrics["global_metrics"] = postprocess_state["global_metrics"]
-    if postprocess_state and "global_metrics_per_constraint_type" in postprocess_state:
-        metrics["global_metrics_per_constraint_type"] = postprocess_state["global_metrics_per_constraint_type"]
-    if "global_metrics" in metrics and isinstance(metrics["global_metrics"], dict):
-        overall = metrics["global_metrics"].get("overall")
-        if isinstance(overall, dict):
-            metrics["overall_gfr"] = overall.get("gfr", 0.0)
-            metrics["overall_srr"] = overall.get("srr", 0.0)
-            metrics["overall_sir"] = overall.get("sir", 0.0)
-            disruption = overall.get("disruption", {}) if isinstance(overall.get("disruption"), dict) else {}
-            metrics["mean_disruption_add"] = disruption.get("added_triples_mean", 0.0)
-            metrics["mean_disruption_del"] = disruption.get("deleted_triples_mean", 0.0)
-            metrics["mean_disruption_total"] = disruption.get("total_ops_mean", 0.0)
+    if postprocess_state and "paper_metrics" in postprocess_state:
+        metrics["paper_metrics"] = postprocess_state["paper_metrics"]
+    if postprocess_state and "paper_metrics_per_constraint_type" in postprocess_state:
+        metrics["paper_metrics_per_constraint_type"] = postprocess_state[
+            "paper_metrics_per_constraint_type"
+        ]
     output_dir.mkdir(parents=True, exist_ok=True)
     results_path = output_dir / "model.json"
-    with open(results_path, "w", encoding="utf-8") as f:
-        weights = selection_weights or {}
-        selection_block = compute_model_selection_block(
-            metrics,
-            weights=weights,
-            disruption_field=selection_disruption_field,
-        )
-        if logging.getLogger().isEnabledFor(logging.DEBUG):
-            logging.debug("Model selection block: %s", selection_block)
-        payload = {"model_selection": selection_block}
-        payload.update(metrics)
-        json.dump(payload, f, indent=4)
+    weights = selection_weights or {}
+    selection_block = compute_model_selection_block(
+        metrics,
+        weights=weights,
+        disruption_field=selection_disruption_field,
+    )
+    if logging.getLogger().isEnabledFor(logging.DEBUG):
+        logging.debug("Model selection block: %s", selection_block)
+
+    if prediction_rows is None or artifact_context is None:
+        raise RuntimeError("Schema-v2 evaluation requires interim rows and artifact provenance.")
+    metric_instances = (
+        postprocess_state.get("paper_metric_instances", []) if postprocess_state else []
+    )
+    frame = build_predictions_frame(
+        prediction_state["predictions"],
+        rows=prediction_rows,
+        kinds=prediction_state["constraint_types"],
+        metric_instances=metric_instances,
+    )
+    predictions_path, manifest_path, manifest = write_prediction_artifacts(
+        output_dir,
+        frame,
+        config_path=artifact_context.get("config_path"),
+        checkpoint_path=artifact_context.get("checkpoint_path"),
+        dataset_path=artifact_context["dataset_path"],
+        graph_paths=artifact_context.get("graph_paths", []),
+        dataset_variant=str(artifact_context["dataset_variant"]),
+        source_predictions_path=artifact_context.get("source_predictions_path"),
+    )
+    payload = {
+        "schema_version": EVALUATION_SCHEMA_VERSION,
+        "model_selection": selection_block,
+        "prediction_artifacts": {
+            "predictions": predictions_path.name,
+            "manifest": manifest_path.name,
+            "predictions_sha256": manifest["predictions"]["sha256"],
+        },
+        **metrics,
+    }
+    backup_schema_v1_once(results_path)
+    atomic_write_json(results_path, payload)
     if write_per_constraint_csv:
         _write_per_constraint_csv(metrics, output_dir)
     return metrics
@@ -970,64 +1091,36 @@ def _summarize_repair_per_type(repair_metrics: dict[str, object] | None) -> dict
     return summary
 
 
-def _compute_primary_fix_rate(repair_metrics: dict[str, object] | None) -> float | None:
-    if not repair_metrics:
-        return None
-    per_type = _summarize_repair_per_type(repair_metrics)
-    total = 0
-    exact = 0
-    alternative = 0
-    for metrics in per_type.values():
-        total += int(metrics.get("total", 0))
-        exact += int(metrics.get("exact", 0))
-        alternative += int(metrics.get("alternative", 0))
-    if total == 0:
-        return 0.0
-    return float(exact + alternative) / total
-
-
 def compute_model_selection_block(
     metrics: dict[str, object],
     weights: dict[str, float],
     disruption_field: str,
 ) -> dict[str, object]:
     missing_fields: list[str] = []
+    paper_metrics = metrics.get("paper_metrics")
+    if not isinstance(paper_metrics, dict):
+        paper_metrics = {}
 
-    primary_fix_rate = _compute_primary_fix_rate(metrics.get("repair_metrics"))
-    if primary_fix_rate is None:
-        missing_fields.append("primary_fix_rate")
+    pfr_metric = paper_metrics.get("pfr")
+    pfr = float(pfr_metric["value"]) if isinstance(pfr_metric, dict) else None
+    if pfr is None:
+        missing_fields.append("pfr")
 
     fidelity_micro_f1 = float(metrics.get("micro_f1", 0.0))
     if "micro_f1" not in metrics:
         missing_fields.append("fidelity_micro_f1")
 
-    srr_value = metrics.get("overall_srr")
-    secondary_regression_rate_srr = float(srr_value) if srr_value is not None else None
-    if secondary_regression_rate_srr is None:
-        missing_fields.append("secondary_regression_rate_srr")
+    srr_metric = paper_metrics.get("srr")
+    pooled_srr = float(srr_metric["value"]) if isinstance(srr_metric, dict) else None
+    if pooled_srr is None:
+        missing_fields.append("pooled_srr")
 
-    disruption_total_ops_mean = metrics.get("mean_disruption_total")
-    disruption_changed_triples_mean = metrics.get("disruption_changed_triples_mean")
-    overall = metrics.get("global_metrics")
-    if isinstance(overall, dict):
-        overall = overall.get("overall")
-    if isinstance(overall, dict):
-        disruption = overall.get("disruption", {})
-        if isinstance(disruption, dict):
-            if disruption_total_ops_mean is None:
-                disruption_total_ops_mean = disruption.get("total_ops_mean")
-            if disruption_changed_triples_mean is None:
-                disruption_changed_triples_mean = disruption.get("changed_triples_mean")
-
-    disruption_value = None
-    if disruption_field == "mean_disruption_total":
-        disruption_value = disruption_total_ops_mean
-    elif disruption_field == "disruption_changed_triples_mean":
-        disruption_value = disruption_changed_triples_mean
+    disruption_metric = paper_metrics.get("disruption")
+    disruption_value = (
+        float(disruption_metric["value"]) if isinstance(disruption_metric, dict) else None
+    )
     if disruption_value is None:
         missing_fields.append(disruption_field)
-    else:
-        disruption_value = float(disruption_value)
 
     score_raw = 0.0
     score_log = 0.0
@@ -1036,12 +1129,12 @@ def compute_model_selection_block(
     w_fidelity = float(weights.get("fidelity", 0.0))
     w_disrupt = float(weights.get("disrupt", 0.0))
 
-    if primary_fix_rate is not None:
-        score_raw += w_primary * primary_fix_rate
-        score_log += w_primary * primary_fix_rate
-    if secondary_regression_rate_srr is not None:
-        score_raw += w_srr * (1.0 - secondary_regression_rate_srr)
-        score_log += w_srr * (1.0 - secondary_regression_rate_srr)
+    if pfr is not None:
+        score_raw += w_primary * pfr
+        score_log += w_primary * pfr
+    if pooled_srr is not None:
+        score_raw += w_srr * (1.0 - pooled_srr)
+        score_log += w_srr * (1.0 - pooled_srr)
     score_raw += w_fidelity * fidelity_micro_f1
     score_log += w_fidelity * fidelity_micro_f1
     if disruption_value is not None:
@@ -1049,15 +1142,10 @@ def compute_model_selection_block(
         score_log -= w_disrupt * math.log1p(disruption_value)
 
     selection_block = {
-        "primary_fix_rate": primary_fix_rate,
-        "secondary_regression_rate_srr": secondary_regression_rate_srr,
+        "pfr": pfr,
+        "pooled_srr": pooled_srr,
         "fidelity_micro_f1": fidelity_micro_f1,
-        "disruption_total_ops_mean": float(disruption_total_ops_mean)
-        if disruption_total_ops_mean is not None
-        else None,
-        "disruption_changed_triples_mean": float(disruption_changed_triples_mean)
-        if disruption_changed_triples_mean is not None
-        else None,
+        "disruption": disruption_value,
         "score_weighted_sum": score_raw,
         "score_weighted_sum_log_disruption": score_log,
         "weights": {
@@ -1068,7 +1156,7 @@ def compute_model_selection_block(
             "disruption_field": disruption_field,
         },
         "missing_fields": sorted(set(missing_fields)),
-        "notes": "score = w_primary*primary_fix_rate + w_srr*(1 - srr) + w_fidelity*fidelity_micro_f1 - w_disrupt*disruption",
+        "notes": "score = w_primary*pfr + w_srr*(1 - pooled_srr) + w_fidelity*fidelity_micro_f1 - w_disrupt*disruption",
     }
     return selection_block
 
@@ -1076,37 +1164,31 @@ def compute_model_selection_block(
 def _write_per_constraint_csv(metrics: dict[str, object], output_dir: Path) -> None:
     per_type_metrics = metrics.get("per_constraint_type") or {}
     support_counts = metrics.get("support_per_constraint_type") or {}
-    repair_summary = _summarize_repair_per_type(metrics.get("repair_metrics"))
-    global_per_type = metrics.get("global_metrics_per_constraint_type") or {}
+    paper_per_type = metrics.get("paper_metrics_per_constraint_type") or {}
 
     rows: list[dict[str, object]] = []
     for constraint_type, type_metrics in per_type_metrics.items():
         micro = type_metrics.get("micro", {})
-        global_metrics = global_per_type.get(constraint_type, {})
-        disruption = global_metrics.get("disruption", {}) if isinstance(global_metrics, dict) else {}
-        repair = repair_summary.get(constraint_type, {})
-        rows.append(
-            {
-                "constraint_type": constraint_type,
-                "support": int(support_counts.get(constraint_type, 0)),
-                "fidelity_micro_f1": float(micro.get("f1", 0.0)),
-                "primary_fix_rate": float(repair.get("fix_rate", 0.0)),
-                "primary_exact_rate": float(repair.get("exact_rate", 0.0)),
-                "primary_alternative_rate": float(repair.get("alternative_rate", 0.0)),
-                "primary_total": int(repair.get("total", 0)),
-                "gfr": float(global_metrics.get("gfr", 0.0)) if isinstance(global_metrics, dict) else 0.0,
-                "srr": float(global_metrics.get("srr", 0.0)) if isinstance(global_metrics, dict) else 0.0,
-                "sir": float(global_metrics.get("sir", 0.0)) if isinstance(global_metrics, dict) else 0.0,
-                "disruption_add_mean": float(disruption.get("added_triples_mean", 0.0)),
-                "disruption_del_mean": float(disruption.get("deleted_triples_mean", 0.0)),
-                "disruption_total_ops_mean": float(disruption.get("total_ops_mean", 0.0)),
-                "disruption_changed_mean": float(disruption.get("changed_triples_mean", 0.0)),
-            }
-        )
+        paper_metrics = paper_per_type.get(constraint_type, {})
+        row = {
+            "schema_version": EVALUATION_SCHEMA_VERSION,
+            "constraint_type": constraint_type,
+            "support": int(support_counts.get(constraint_type, 0)),
+            "fidelity_micro_f1": float(micro.get("f1", 0.0)),
+        }
+        if isinstance(paper_metrics, dict):
+            for metric_name, metric in paper_metrics.items():
+                if not isinstance(metric, dict):
+                    continue
+                row[f"{metric_name}_value"] = float(metric.get("value", 0.0))
+                row[f"{metric_name}_numerator"] = int(metric.get("numerator", 0))
+                row[f"{metric_name}_denominator"] = int(metric.get("denominator", 0))
+        rows.append(row)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / "per_constraint.csv"
-    pd.DataFrame(rows).to_csv(out_path, index=False)
+    backup_schema_v1_once(out_path)
+    atomic_write_csv(out_path, pd.DataFrame(rows))
 
 
 def _smoke_check_global_metrics(
@@ -1327,6 +1409,9 @@ def evaluate_trained_model(
     policy_support: PolicySupport | None = None,
     selection_weights: dict[str, float] | None = None,
     selection_disruption_field: str = "mean_disruption_total",
+    batch_size: int = 16,
+    prediction_rows: Sequence[object] | None = None,
+    artifact_context: dict[str, object] | None = None,
 ) -> None:
     checkpoint_path = get_checkpoint_path(run_directory)
 
@@ -1356,6 +1441,9 @@ def evaluate_trained_model(
         policy_support=policy_support,
         selection_weights=selection_weights,
         selection_disruption_field=selection_disruption_field,
+        batch_size=batch_size,
+        prediction_rows=prediction_rows,
+        artifact_context=artifact_context,
     )
 
 
@@ -1400,7 +1488,7 @@ def parse_args():
     parser.add_argument(
         "--no-global-metrics",
         action="store_true",
-        help="Disable global metrics computation (GFR/SRR/SIR/disruption).",
+        help="Disable corrected symbolic paper-metric computation.",
     )
     parser.add_argument(
         "--per-constraint-csv",
@@ -1413,6 +1501,12 @@ def parse_args():
         help="Write H2 factor semantics/composition/counterfactual reports under evaluations/h2 without overwriting model.json.",
     )
     parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=16,
+        help="Batch size for standard trained-model evaluation (default: 16).",
+    )
+    parser.add_argument(
         "--h2-batch-size",
         type=int,
         default=16,
@@ -1421,12 +1515,26 @@ def parse_args():
     parser.add_argument(
         "--strict-global-metrics",
         action="store_true",
-        help="Fail fast unless global metrics (GFR/SRR/SIR/disruption) can be computed.",
+        help="Fail fast unless all corrected symbolic paper metrics can be computed.",
     )
     parser.add_argument(
+        "--predictions",
         "--reranker-predictions",
+        dest="predictions",
         type=Path,
-        help="Optional path to reranker predictions to evaluate without a model forward pass.",
+        help=(
+            "Replay schema-v2 Parquet predictions without a model forward pass. "
+            "--reranker-predictions is retained as an alias."
+        ),
+    )
+    parser.add_argument(
+        "--legacy-predictions-json",
+        type=Path,
+        help=(
+            "One-time migration of legacy index-ordered JSON/JSONL/PT predictions into a "
+            "fully evaluated schema-v2 artifact. The source checksum and canonical dataset "
+            "identity are recorded; future replay must use --predictions."
+        ),
     )
     parser.add_argument(
         "--use-chooser",
@@ -1479,8 +1587,10 @@ def parse_args():
     if args.run_baselines:
         if not args.dataset:
             raise ValueError("--run-baselines requires --dataset.")
-        if args.reranker_predictions:
-            raise ValueError("--reranker-predictions is only supported for trained model evaluation.")
+        if args.predictions:
+            raise ValueError("--predictions is only supported for trained model evaluation.")
+        if args.legacy_predictions_json:
+            raise ValueError("--legacy-predictions-json is only supported for run-directory evaluation.")
         if args.h2_eval:
             raise ValueError("--h2-eval is only supported for trained factorized model evaluation.")
         return args
@@ -1499,10 +1609,14 @@ def parse_args():
         raise FileNotFoundError(f"Run directory not found at {run_directory}")
     if not run_directory.is_dir():
         raise NotADirectoryError(f"Run directory path is not a directory: {run_directory}")
-    if args.h2_eval and args.reranker_predictions:
-        raise RuntimeError("--h2-eval cannot be combined with --reranker-predictions.")
+    if args.predictions and args.legacy_predictions_json:
+        raise RuntimeError("--predictions and --legacy-predictions-json are mutually exclusive.")
+    if args.h2_eval and (args.predictions or args.legacy_predictions_json):
+        raise RuntimeError("--h2-eval cannot be combined with prediction replay or migration.")
     if args.h2_batch_size <= 0:
         raise ValueError("--h2-batch-size must be positive.")
+    if args.batch_size <= 0:
+        raise ValueError("--batch-size must be positive.")
 
     args.run_directory = run_directory
     return args
@@ -1544,10 +1658,10 @@ def main():
                 "Strict global metrics cannot be combined with --no-global-metrics. "
                 "Remove --no-global-metrics or disable strict mode."
             )
-        if args.use_chooser and args.reranker_predictions:
-            raise RuntimeError("--use-chooser cannot be combined with --reranker-predictions.")
-        if args.use_policy_choice and args.reranker_predictions:
-            raise RuntimeError("--use-policy-choice cannot be combined with --reranker-predictions.")
+        if args.use_chooser and (args.predictions or args.legacy_predictions_json):
+            raise RuntimeError("--use-chooser cannot be combined with prediction replay or migration.")
+        if args.use_policy_choice and (args.predictions or args.legacy_predictions_json):
+            raise RuntimeError("--use-policy-choice cannot be combined with prediction replay or migration.")
 
         logging.info(
             "Evaluating dataset=%s min_occurrence=%s | encoding=%s model=%s",
@@ -1624,7 +1738,9 @@ def main():
                 candidate_cfg=candidate_cfg,
             )
 
-        if training_cfg.direct_safety.enabled and not args.reranker_predictions:
+        if training_cfg.direct_safety.enabled and not (
+            args.predictions or args.legacy_predictions_json
+        ):
             if args.use_chooser:
                 raise RuntimeError("Direct safety evaluation cannot be combined with chooser evaluation.")
             if args.use_policy_choice:
@@ -1697,17 +1813,12 @@ def main():
             )
 
         global_support = None
-        strict_requires_factor_fields = _strict_global_requires_factor_fields(model_cfg)
-        if strict_global and strict_requires_factor_fields and not _data_has_factor_fields(test_data):
+        if args.no_global_metrics:
             raise RuntimeError(
-                "Strict global metrics require factor fields on test graphs. "
-                "Rebuild graphs with factor labels (factor_* fields) or disable strict mode."
+                "Schema-v2 evaluation always computes paper metrics from interim rows; "
+                "--no-global-metrics is no longer supported for trained models."
             )
-        global_metrics_enabled = (
-            True
-            if strict_global
-            else (not args.no_global_metrics) and (args.global_metrics or _data_has_factor_fields(test_data))
-        )
+        global_metrics_enabled = True
         if global_metrics_enabled:
             global_support = _maybe_prepare_global_support(
                 model_cfg.dataset_variant,
@@ -1738,12 +1849,17 @@ def main():
                     "--h2-eval requires factor fields on test graphs. "
                     "Use processed graphs built from labeled interim parquet."
                 )
-            train_data = load_split(
-                base_path,
-                model_cfg.encoding,
-                "train",
-                constraint_representation=model_cfg.constraint_representation,
+            interim_root = Path("data/interim")
+            labeled_train_path = interim_root / f"{variant}_labeled" / "df_train.parquet"
+            train_factor_path = (
+                labeled_train_path
+                if labeled_train_path.exists()
+                else interim_root / variant / "df_train.parquet"
             )
+            if not train_factor_path.exists():
+                raise FileNotFoundError(
+                    f"H2 train factor-exposure source not found at {train_factor_path}"
+                )
             model = load_trained_model_for_eval(
                 run_directory=run_directory,
                 model_cfg=model_cfg,
@@ -1751,9 +1867,28 @@ def main():
                 chooser_support=chooser_support,
             )
             h2_dir = evaluations_dir(run_directory, create=True) / "h2"
+            normal_predictions = None
+            predictions_path = evaluations_dir(run_directory) / "predictions.parquet"
+            if predictions_path.exists():
+                if global_support is None or global_support.dataset_path is None:
+                    raise RuntimeError("H2 prediction replay requires corrected symbolic evaluation rows.")
+                graph_paths = [item.path for item in discover_graph_artifacts(test_graph_path)]
+                normal_predictions, _ = load_and_validate_predictions(
+                    predictions_path,
+                    rows=global_support.rows,
+                    dataset_path=global_support.dataset_path,
+                    graph_paths=graph_paths,
+                    dataset_variant=variant,
+                )
+                logging.info("H2 normal predictions loaded from validated schema-v2 replay: %s", predictions_path)
+            else:
+                logging.warning(
+                    "H2 schema-v2 predictions not found at %s; normal predictions will be recomputed.",
+                    predictions_path,
+                )
             report = write_h2_report(
                 model=model,
-                train_data=train_data,
+                train_data=train_factor_path,
                 test_data=test_data,
                 device=device,
                 output_dir=h2_dir,
@@ -1762,6 +1897,9 @@ def main():
                     global_support=global_support,
                 ),
                 batch_size=args.h2_batch_size,
+                chooser_support=chooser_support,
+                direct_safety_support=direct_safety_support,
+                normal_predictions=normal_predictions,
             )
             logging.info("Wrote H2 report to %s (status=%s)", h2_dir / "h2_report.json", report.get("status"))
             return
@@ -1780,9 +1918,35 @@ def main():
             postprocess_state = combined_state
 
         precomputed_predictions = None
-        if args.reranker_predictions:
-            precomputed_predictions = _load_reranker_predictions(Path(args.reranker_predictions))
-            logging.info("Loaded reranker predictions from %s", args.reranker_predictions)
+        source_predictions_path = None
+        if args.predictions:
+            if global_support is None or global_support.dataset_path is None:
+                raise RuntimeError("Prediction replay requires corrected symbolic evaluation rows.")
+            graph_paths = [item.path for item in discover_graph_artifacts(test_graph_path)]
+            precomputed_predictions, _ = load_and_validate_predictions(
+                Path(args.predictions),
+                rows=global_support.rows,
+                dataset_path=global_support.dataset_path,
+                graph_paths=graph_paths,
+                dataset_variant=variant,
+            )
+            logging.info("Loaded and validated schema-v2 predictions from %s", args.predictions)
+        elif args.legacy_predictions_json:
+            if global_support is None or global_support.dataset_path is None:
+                raise RuntimeError("Legacy prediction migration requires corrected symbolic evaluation rows.")
+            source_predictions_path = Path(args.legacy_predictions_json).resolve()
+            interim_base = Path("data/interim") / variant
+            precomputed_predictions = _validate_legacy_prediction_import(
+                _load_reranker_predictions(source_predictions_path),
+                expected_count=len(global_support.rows),
+                encoder_path=interim_base / "globalintencoder.txt",
+            )
+            logging.warning(
+                "Importing legacy predictions in canonical test-row order from %s. "
+                "The source format has no row identities; its checksum will be recorded and "
+                "all future replay must use the generated schema-v2 Parquet artifact.",
+                source_predictions_path,
+            )
 
         evaluate_trained_model(
             run_directory=run_directory,
@@ -1798,6 +1962,22 @@ def main():
             policy_support=policy_support,
             selection_weights=selection_weights,
             selection_disruption_field=args.score_disruption_field,
+            batch_size=args.batch_size,
+            prediction_rows=global_support.rows if global_support is not None else None,
+            artifact_context=(
+                {
+                    "config_path": config_path,
+                    "checkpoint_path": get_checkpoint_path(run_directory),
+                    "dataset_path": global_support.dataset_path,
+                    "graph_paths": [
+                        item.path for item in discover_graph_artifacts(test_graph_path)
+                    ],
+                    "dataset_variant": variant,
+                    "source_predictions_path": source_predictions_path,
+                }
+                if global_support is not None and global_support.dataset_path is not None
+                else None
+            ),
         )
 
     else:  # Evaluate baselines
@@ -1881,37 +2061,61 @@ def main():
             state: dict[str, object] | None = None
             if repair_builder:
                 postprocess, state = repair_builder()
-            metrics = eval(model, test_data, device=device, postprocess=postprocess)
+            prediction_state: dict[str, object] = {}
+            metrics = eval(
+                model,
+                test_data,
+                device=device,
+                postprocess=postprocess,
+                prediction_state=prediction_state,
+                batch_size=args.batch_size,
+            )
             if state and "repair_metrics" in state:
                 metrics["repair_metrics"] = state["repair_metrics"]
-            if state and "global_metrics" in state:
-                metrics["global_metrics"] = state["global_metrics"]
-            if state and "global_metrics_per_constraint_type" in state:
-                metrics["global_metrics_per_constraint_type"] = state["global_metrics_per_constraint_type"]
-            if "global_metrics" in metrics and isinstance(metrics["global_metrics"], dict):
-                overall = metrics["global_metrics"].get("overall")
-                if isinstance(overall, dict):
-                    metrics["overall_gfr"] = overall.get("gfr", 0.0)
-                    metrics["overall_srr"] = overall.get("srr", 0.0)
-                    metrics["overall_sir"] = overall.get("sir", 0.0)
-                    disruption = overall.get("disruption", {}) if isinstance(overall.get("disruption"), dict) else {}
-                    metrics["mean_disruption_add"] = disruption.get("added_triples_mean", 0.0)
-                    metrics["mean_disruption_del"] = disruption.get("deleted_triples_mean", 0.0)
-                    metrics["mean_disruption_total"] = disruption.get("total_ops_mean", 0.0)
+            if state and "paper_metrics" in state:
+                metrics["paper_metrics"] = state["paper_metrics"]
+            if state and "paper_metrics_per_constraint_type" in state:
+                metrics["paper_metrics_per_constraint_type"] = state[
+                    "paper_metrics_per_constraint_type"
+                ]
             output_root = baseline_dir(args.dataset, "parquet", create=True)
             output_root.mkdir(parents=True, exist_ok=True)
             output_path = output_root / f"{name}.json"
-            with output_path.open("w", encoding="utf-8") as handle:
-                selection_block = compute_model_selection_block(
-                    metrics,
-                    weights=selection_weights,
-                    disruption_field=args.score_disruption_field,
-                )
-                if logging.getLogger().isEnabledFor(logging.DEBUG):
-                    logging.debug("Model selection block: %s", selection_block)
-                payload = {"model_selection": selection_block}
-                payload.update(metrics)
-                json.dump(payload, handle, indent=4)
+            selection_block = compute_model_selection_block(
+                metrics,
+                weights=selection_weights,
+                disruption_field=args.score_disruption_field,
+            )
+            if global_support is None or global_support.dataset_path is None or state is None:
+                raise RuntimeError("Schema-v2 baseline evaluation requires paper-metric support.")
+            artifact_dir = output_root / name
+            frame = build_predictions_frame(
+                prediction_state["predictions"],
+                rows=global_support.rows,
+                kinds=prediction_state["constraint_types"],
+                metric_instances=state.get("paper_metric_instances", []),
+            )
+            _, _, manifest = write_prediction_artifacts(
+                artifact_dir,
+                frame,
+                config_path=None,
+                checkpoint_path=None,
+                dataset_path=global_support.dataset_path,
+                graph_paths=[],
+                dataset_variant=variant,
+            )
+            payload = {
+                "schema_version": EVALUATION_SCHEMA_VERSION,
+                "model_selection": selection_block,
+                "prediction_artifacts": {
+                    "predictions": str(Path(name) / "predictions.parquet"),
+                    "manifest": str(Path(name) / "predictions.manifest.json"),
+                    "predictions_sha256": manifest["predictions"]["sha256"],
+                },
+                **metrics,
+            }
+            backup_schema_v1_once(output_path)
+            atomic_write_json(output_path, payload)
             if strict_global or args.per_constraint_csv or global_metrics_enabled:
                 _write_per_constraint_csv(metrics, output_root / name)
             return metrics

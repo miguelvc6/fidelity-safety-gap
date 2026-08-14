@@ -34,7 +34,7 @@ from modules.model_store import (
 )
 from modules.models import build_model
 from modules.repair_eval import ConstraintRepairHeuristics, ViolationContext, load_violation_contexts
-from modules.candidates import CandidateConfig, build_candidates
+from modules.candidates import CandidateConfig, batch_topk_candidate_triples, build_candidates
 from modules.reranker import CandidateReranker, RerankerConfig, build_reranker
 from modules.reranker_eval import CandidateConstraintEvaluator
 from modules.training_utils import (
@@ -115,6 +115,7 @@ class RerankerTrainingConfig:
     heuristic_max_candidates: int = 30
     heuristic_max_values: int = 3
     include_gold: bool = True
+    prediction_include_gold: bool = False
     max_candidates_total: int = 80
     assume_complete_entity_facts: bool = True
     constraint_scope: str = "local"  # local | focus
@@ -154,6 +155,9 @@ class RerankerTrainingConfig:
             heuristic_max_candidates=int(payload.get("heuristic_max_candidates", cls.heuristic_max_candidates)),
             heuristic_max_values=int(payload.get("heuristic_max_values", cls.heuristic_max_values)),
             include_gold=bool(payload.get("include_gold", cls.include_gold)),
+            prediction_include_gold=bool(
+                payload.get("prediction_include_gold", cls.prediction_include_gold)
+            ),
             max_candidates_total=int(payload.get("max_candidates_total", cls.max_candidates_total)),
             assume_complete_entity_facts=bool(
                 payload.get("assume_complete_entity_facts", cls.assume_complete_entity_facts)
@@ -181,6 +185,7 @@ class RerankerTrainingConfig:
             "heuristic_max_candidates": self.heuristic_max_candidates,
             "heuristic_max_values": self.heuristic_max_values,
             "include_gold": self.include_gold,
+            "prediction_include_gold": self.prediction_include_gold,
             "max_candidates_total": self.max_candidates_total,
             "assume_complete_entity_facts": self.assume_complete_entity_facts,
             "constraint_scope": self.constraint_scope,
@@ -435,13 +440,16 @@ def _build_candidates(
     cfg: RerankerTrainingConfig,
     placeholder_ids: set[int],
     num_target_ids: int,
-) -> tuple[list[tuple[int, int, int, int, int, int]], int]:
+    include_gold: bool | None = None,
+    precomputed_add_topk: Sequence[tuple[int, int, int]] | None = None,
+    precomputed_del_topk: Sequence[tuple[int, int, int]] | None = None,
+) -> tuple[list[tuple[int, int, int, int, int, int]], int | None]:
     candidate_cfg = CandidateConfig(
         topk_candidates=cfg.topk_candidates,
         topk_per_slot=cfg.topk_per_slot,
         heuristic_max_candidates=cfg.heuristic_max_candidates,
         heuristic_max_values=cfg.heuristic_max_values,
-        include_gold=cfg.include_gold,
+        include_gold=cfg.include_gold if include_gold is None else include_gold,
         max_candidates_total=cfg.max_candidates_total,
     )
     return build_candidates(
@@ -452,6 +460,8 @@ def _build_candidates(
         cfg=candidate_cfg,
         placeholder_ids=placeholder_ids,
         num_target_ids=num_target_ids,
+        precomputed_add_topk=precomputed_add_topk,
+        precomputed_del_topk=precomputed_del_topk,
     )
 
 
@@ -542,6 +552,7 @@ def _predict_reranker_edits(
     evaluator: CandidateConstraintEvaluator,
     device: torch.device,
     cfg: RerankerTrainingConfig,
+    batch_size: int | None = None,
 ) -> list[dict[str, list[int]]]:
     model.eval()
     proposal_model.eval()
@@ -549,7 +560,7 @@ def _predict_reranker_edits(
 
     loader = DataLoader(
         data,
-        batch_size=cfg.batch_size,
+        batch_size=batch_size or cfg.batch_size,
         shuffle=False,
         num_workers=cfg.num_workers,
         pin_memory=cfg.pin_memory,
@@ -559,9 +570,18 @@ def _predict_reranker_edits(
         batch = batch.to(device)
         proposal_outputs = proposal_model(batch)
         proposal_logits = proposal_outputs["edit_logits"].detach()
+        proposal_logits_cpu = proposal_logits.cpu()
+        batch_add_topk, batch_del_topk = batch_topk_candidate_triples(
+            proposal_logits,
+            topk_triples=cfg.topk_candidates,
+            topk_per_slot=cfg.topk_per_slot,
+        )
         graph_emb = model.encode_graphs(batch)
         graphs = batch.to_data_list()
 
+        candidate_groups: list[list[tuple[int, int, int, int, int, int]]] = []
+        packed_candidates: list[tuple[int, int, int, int, int, int]] = []
+        packed_graph_index: list[int] = []
         for idx, graph in enumerate(graphs):
             context_index = int(getattr(graph, "context_index"))
             context = contexts[context_index]
@@ -570,17 +590,33 @@ def _predict_reranker_edits(
                 graph=graph,
                 context=context,
                 heuristics=heuristics,
-                proposal_logits=proposal_logits[idx],
+                proposal_logits=proposal_logits_cpu[idx],
                 cfg=cfg,
                 placeholder_ids=set(heuristics.placeholder_ids.values()),
                 num_target_ids=model.num_target_ids,
+                include_gold=cfg.prediction_include_gold,
+                precomputed_add_topk=batch_add_topk[idx],
+                precomputed_del_topk=batch_del_topk[idx],
             )
-            candidate_tensor = torch.tensor(candidates, dtype=torch.long, device=device)
-            scores = model.score_candidates(graph_emb[idx], candidate_tensor)
-            best_idx = int(torch.argmax(scores).item())
+            if not candidates:
+                raise RuntimeError("Reranker prediction produced an empty candidate set.")
+            candidate_groups.append(candidates)
+            packed_candidates.extend(candidates)
+            packed_graph_index.extend([idx] * len(candidates))
+
+        candidate_tensor = torch.tensor(packed_candidates, dtype=torch.long, device=device)
+        graph_index_tensor = torch.tensor(packed_graph_index, dtype=torch.long, device=device)
+        packed_scores = model.score_candidates_packed(
+            graph_emb, candidate_tensor, graph_index_tensor
+        ).detach().cpu()
+        offset = 0
+        for candidates in candidate_groups:
+            next_offset = offset + len(candidates)
+            best_idx = int(torch.argmax(packed_scores[offset:next_offset]).item())
             best_candidate = _candidate_to_slots(candidates[best_idx])
             predictions.append(_candidate_slots_to_actions(best_candidate))
             _ = evaluator  # keep evaluator in signature for future diagnostics
+            offset = next_offset
 
     return predictions
 
@@ -630,6 +666,10 @@ def _run_epoch(
                 placeholder_ids=set(heuristics.placeholder_ids.values()),
                 num_target_ids=model.num_target_ids,
             )
+            if cfg.objective != "global_fix" and gold_index is None:
+                raise RuntimeError(
+                    "Reranker training with objective='main' requires include_gold=True."
+                )
             candidate_tensor = torch.tensor(candidates, dtype=torch.long, device=device)
             scores = model.score_candidates(graph_emb[idx], candidate_tensor)
             log_probs = F.log_softmax(scores, dim=0)
@@ -718,6 +758,12 @@ def main() -> None:
         "--predict-only",
         action="store_true",
         help="Skip training and only generate reranker_predictions.json from the latest checkpoint.",
+    )
+    parser.add_argument(
+        "--prediction-batch-size",
+        type=int,
+        default=None,
+        help="Optional test-prediction batch size override; does not change the training config.",
     )
     args = parser.parse_args()
 
@@ -976,9 +1022,10 @@ def main() -> None:
                 logger.info("Early stopping at epoch %s", epoch + 1)
                 break
 
-    history_file = history_path(run_dir)
-    with history_file.open("w", encoding="utf-8") as fh:
-        json.dump(history, fh, indent=2)
+    if not args.predict_only:
+        history_file = history_path(run_dir)
+        with history_file.open("w", encoding="utf-8") as fh:
+            json.dump(history, fh, indent=2)
 
     # Generate reranker predictions for evaluation.
     test_path = processed_root / graph_dataset_filename(
@@ -1027,6 +1074,7 @@ def main() -> None:
                     evaluator=evaluator,
                     device=device,
                     cfg=training_cfg,
+                    batch_size=args.prediction_batch_size,
                 )
                 pred_path = run_dir / "reranker_predictions.json"
                 with pred_path.open("w", encoding="utf-8") as fh:

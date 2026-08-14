@@ -21,6 +21,12 @@ from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from torch.utils.data import IterableDataset
 
+from modules.candidates import (
+    batch_topk_candidate_triples,
+    build_candidates,
+    score_candidates_from_logits,
+    score_candidates_from_logits_packed,
+)
 from modules.data_encoders import GraphStreamDataset
 from modules.repair_eval import (
     RepairSample,
@@ -182,10 +188,31 @@ def clone_with_factor_pressure_mask(graph: Data, mode: str) -> Data:
     return cloned
 
 
-def count_train_factor_exposure(train_data: Iterable[Data]) -> Counter[int]:
+def count_train_factor_exposure(train_data: Iterable[Data] | Path) -> Counter[int]:
     counts: Counter[int] = Counter()
+    if isinstance(train_data, Path):
+        schema_columns = set(pd.read_parquet(train_data, columns=[]).columns)
+        # PyArrow-backed pandas does not expose schema columns for an empty
+        # projection on every version, so fall back to the Parquet metadata.
+        if not schema_columns:
+            import pyarrow.parquet as pq
+
+            schema_columns = set(pq.ParquetFile(train_data).schema_arrow.names)
+        column = "factor_constraint_ids" if "factor_constraint_ids" in schema_columns else "local_constraint_ids"
+        frame = pd.read_parquet(train_data, columns=[column])
+        for ids in frame[column]:
+            if ids is None:
+                continue
+            # Parquet list columns are commonly exposed as read-only NumPy
+            # arrays.  Iterating directly avoids asking Torch to wrap that
+            # buffer (and the corresponding undefined-write warning).
+            for value in ids:
+                counts[int(value)] += 1
+        return counts
     for graph in train_data:
         ids = getattr(graph, "factor_constraint_ids", None)
+        if ids is None:
+            ids = getattr(graph, "local_constraint_ids", None)
         if ids is None:
             continue
         for value in torch.as_tensor(ids).view(-1).tolist():
@@ -333,43 +360,20 @@ def _fidelity_metrics(predictions: torch.Tensor, targets: torch.Tensor) -> dict[
     }
 
 
-def _summarize_repair_metrics(repair_metrics: dict[str, Any] | None) -> dict[str, float | int]:
-    if not repair_metrics:
-        return {"primary_fix_rate": 0.0, "primary_total": 0}
-    total = exact = alternative = 0
-    for actions in (repair_metrics.get("per_constraint_type") or {}).values():
-        if not isinstance(actions, dict):
+def _summarize_paper_metrics(report: dict[str, Any] | None) -> dict[str, float | int]:
+    if not report:
+        return {}
+    paper_metrics = report.get("paper_metrics") if isinstance(report, dict) else None
+    if not isinstance(paper_metrics, dict):
+        return {}
+    summary: dict[str, float | int] = {}
+    for name, metric in paper_metrics.items():
+        if not isinstance(metric, dict):
             continue
-        for counts in actions.values():
-            if not isinstance(counts, dict):
-                continue
-            total += int(counts.get("total", 0))
-            exact += int(counts.get("exact", 0))
-            alternative += int(counts.get("alternative", 0))
-    return {
-        "primary_fix_rate": _safe_div(exact + alternative, total),
-        "primary_total": total,
-    }
-
-
-def _summarize_global_metrics(global_metrics: dict[str, Any] | None) -> dict[str, float | int]:
-    if not global_metrics:
-        return {}
-    overall = global_metrics.get("overall") if isinstance(global_metrics, dict) else None
-    if not isinstance(overall, dict):
-        return {}
-    disruption = overall.get("disruption", {})
-    if not isinstance(disruption, dict):
-        disruption = {}
-    return {
-        "gfr": float(overall.get("gfr", 0.0)),
-        "srr": float(overall.get("srr", 0.0)),
-        "sir": float(overall.get("sir", 0.0)),
-        "disruption_add_mean": float(disruption.get("added_triples_mean", 0.0)),
-        "disruption_del_mean": float(disruption.get("deleted_triples_mean", 0.0)),
-        "disruption_total_ops_mean": float(disruption.get("total_ops_mean", 0.0)),
-        "disruption_changed_mean": float(disruption.get("changed_triples_mean", 0.0)),
-    }
+        summary[name] = float(metric.get("value", 0.0))
+        summary[f"{name}_numerator"] = int(metric.get("numerator", 0))
+        summary[f"{name}_denominator"] = int(metric.get("denominator", 0))
+    return summary
 
 
 def _constraint_family_lookup(global_support: Any | None) -> Callable[[int, int | None], str]:
@@ -387,6 +391,94 @@ def _constraint_family_lookup(global_support: Any | None) -> Callable[[int, int 
     return lookup
 
 
+def _select_batch_predictions(
+    *,
+    model,
+    graphs: Sequence[Data],
+    logits: torch.Tensor,
+    graph_emb: torch.Tensor | None,
+    chooser_support: Any | None,
+    direct_safety_support: Any | None,
+) -> torch.Tensor:
+    """Apply the same candidate selector used by the main evaluator."""
+    if chooser_support is not None and direct_safety_support is not None:
+        raise ValueError("H2 chooser and direct-safety selection are mutually exclusive.")
+    support = chooser_support if chooser_support is not None else direct_safety_support
+    if support is None:
+        return logits.argmax(dim=-1).detach().cpu()
+    if chooser_support is not None and graph_emb is None:
+        raise RuntimeError("H2 chooser selection requires graph_emb from model outputs.")
+
+    proposal_logits_cpu = logits.detach().cpu()
+    if hasattr(support.candidate_cfg, "topk_candidates") and hasattr(
+        support.candidate_cfg, "topk_per_slot"
+    ):
+        batch_add_topk, batch_del_topk = batch_topk_candidate_triples(
+            logits.detach(),
+            topk_triples=support.candidate_cfg.topk_candidates,
+            topk_per_slot=support.candidate_cfg.topk_per_slot,
+        )
+    else:
+        batch_add_topk = [None] * len(graphs)
+        batch_del_topk = [None] * len(graphs)
+    candidate_groups: list[list[tuple[int, int, int, int, int, int]]] = []
+    packed_candidates: list[tuple[int, int, int, int, int, int]] = []
+    packed_graph_index: list[int] = []
+    for idx, graph in enumerate(graphs):
+        context_index = int(getattr(graph, "context_index", idx))
+        if context_index < 0 or context_index >= len(support.contexts):
+            raise RuntimeError("H2 candidate-selection context index out of bounds.")
+        candidates, _ = build_candidates(
+            graph=graph,
+            context=support.contexts[context_index],
+            heuristics=support.heuristics,
+            proposal_logits=proposal_logits_cpu[idx],
+            cfg=support.candidate_cfg,
+            placeholder_ids=set(support.heuristics.placeholder_ids.values()),
+            num_target_ids=model.num_target_ids,
+            precomputed_add_topk=batch_add_topk[idx],
+            precomputed_del_topk=batch_del_topk[idx],
+        )
+        if not candidates:
+            raise RuntimeError("H2 candidate selection produced an empty candidate set.")
+        candidate_groups.append(candidates)
+        packed_candidates.extend(candidates)
+        packed_graph_index.extend([idx] * len(candidates))
+
+    candidate_tensor = torch.tensor(packed_candidates, dtype=torch.long, device=logits.device)
+    graph_index_tensor = torch.tensor(
+        packed_graph_index, dtype=torch.long, device=logits.device
+    )
+    if chooser_support is not None:
+        if hasattr(model, "score_candidates_packed"):
+            packed_scores = model.score_candidates_packed(
+                graph_emb, candidate_tensor, graph_index_tensor
+            )
+        else:
+            score_groups = []
+            offset = 0
+            for idx, candidates in enumerate(candidate_groups):
+                next_offset = offset + len(candidates)
+                score_groups.append(
+                    model.score_candidates(graph_emb[idx], candidate_tensor[offset:next_offset])
+                )
+                offset = next_offset
+            packed_scores = torch.cat(score_groups)
+    else:
+        packed_scores = score_candidates_from_logits_packed(
+            logits, candidate_tensor, graph_index_tensor
+        )
+    packed_scores = packed_scores.detach().cpu()
+    batch_predictions: list[list[int]] = []
+    offset = 0
+    for candidates in candidate_groups:
+        next_offset = offset + len(candidates)
+        best_idx = int(torch.argmax(packed_scores[offset:next_offset]).item())
+        batch_predictions.append(list(candidates[best_idx]))
+        offset = next_offset
+    return torch.tensor(batch_predictions, dtype=torch.long)
+
+
 @torch.no_grad()
 def collect_h2_variant_outputs(
     *,
@@ -397,6 +489,10 @@ def collect_h2_variant_outputs(
     exposure_counts: Counter[int],
     family_lookup: Callable[[int, int | None], str],
     batch_size: int,
+    collect_factor_records: bool = True,
+    chooser_support: Any | None = None,
+    direct_safety_support: Any | None = None,
+    precomputed_predictions: torch.Tensor | None = None,
 ) -> dict[str, Any]:
     loader = DataLoader(dataset, batch_size=batch_size)
     predictions: list[torch.Tensor] = []
@@ -407,15 +503,33 @@ def collect_h2_variant_outputs(
     unsupported_reason = None
     graph_offset = 0
 
+    if precomputed_predictions is not None:
+        precomputed_predictions = torch.as_tensor(precomputed_predictions, dtype=torch.long).detach().cpu()
+        if precomputed_predictions.ndim != 2 or precomputed_predictions.size(1) != 6:
+            raise ValueError("H2 precomputed predictions must have shape [N, 6].")
+
     model.eval()
     for batch in loader:
         batch_graphs = batch.to_data_list()
         batch = batch.to(device)
-        outputs = model(batch)
+        outputs = model.forward_for_evaluation(batch)
         if not isinstance(outputs, dict) or outputs.get("edit_logits") is None:
             raise RuntimeError("H2 evaluation requires model outputs with edit_logits.")
         logits = outputs["edit_logits"]
-        batch_predictions = logits.argmax(dim=-1).detach().cpu()
+        if precomputed_predictions is not None:
+            batch_end = graph_offset + len(batch_graphs)
+            if batch_end > precomputed_predictions.size(0):
+                raise ValueError("H2 precomputed predictions are shorter than the graph dataset.")
+            batch_predictions = precomputed_predictions[graph_offset:batch_end]
+        else:
+            batch_predictions = _select_batch_predictions(
+                model=model,
+                graphs=batch_graphs,
+                logits=logits,
+                graph_emb=outputs.get("graph_emb"),
+                chooser_support=chooser_support,
+                direct_safety_support=direct_safety_support,
+            )
         predictions.append(batch_predictions)
         targets.append(batch.y.detach().cpu())
         kinds.extend(str(getattr(graph, "constraint_type", "UNKNOWN") or "UNKNOWN") for graph in batch_graphs)
@@ -423,9 +537,9 @@ def collect_h2_variant_outputs(
         factor_logits_pre = outputs.get("factor_logits_pre")
         factor_logits_post = outputs.get("factor_logits_post_gold")
         factor_graph_index = outputs.get("factor_graph_index")
-        if factor_logits_pre is None or factor_graph_index is None:
+        if collect_factor_records and (factor_logits_pre is None or factor_graph_index is None):
             unsupported_reason = "model did not emit factor_logits_pre/factor_graph_index"
-        else:
+        elif collect_factor_records:
             factor_logits_pre_cpu = torch.as_tensor(factor_logits_pre).detach().cpu().view(-1)
             factor_logits_post_cpu = (
                 torch.as_tensor(factor_logits_post).detach().cpu().view(-1)
@@ -520,6 +634,9 @@ def collect_h2_variant_outputs(
             )
         graph_offset += len(batch_graphs)
 
+    if precomputed_predictions is not None and graph_offset != precomputed_predictions.size(0):
+        raise ValueError("H2 precomputed prediction count does not match the graph dataset.")
+
     return {
         "variant": variant_name,
         "predictions": torch.cat(predictions, dim=0) if predictions else torch.empty((0, 6), dtype=torch.long),
@@ -563,24 +680,15 @@ def _bucket_eval_rows(
         fidelity = _fidelity_metrics(pred_subset, target_subset)
         row.update({f"fidelity_{key}": value for key, value in fidelity.items()})
         samples = _repair_samples(pred_subset, target_subset, kind_subset)
-        if support.repair_support is not None:
-            contexts = [support.repair_support.contexts[idx] for idx in indices]
-            repair_metrics = evaluate_repair_samples(
-                samples=samples,
-                contexts=contexts,
-                heuristics=support.repair_support.heuristics,
-                actions=("add", "del"),
-            )
-            row.update(_summarize_repair_metrics(repair_metrics))
         if support.global_support is not None:
-            global_metrics = evaluate_global_repair_samples(
+            paper_report = evaluate_global_repair_samples(
                 samples=samples,
                 rows=[support.global_support.rows[idx] for idx in indices],
                 evaluator=support.global_support.evaluator,
                 none_class=NONE_CLASS_INDEX,
                 pre_vectors=None,
             )
-            row.update(_summarize_global_metrics(global_metrics))
+            row.update(_summarize_paper_metrics(paper_report))
         rows.append(row)
     return rows
 
@@ -596,23 +704,15 @@ def _overall_eval_row(variant_output: Mapping[str, Any], support: H2RunSupport) 
     fidelity = _fidelity_metrics(predictions, targets)
     row.update({f"fidelity_{key}": value for key, value in fidelity.items()})
     samples = _repair_samples(predictions, targets, kinds)
-    if support.repair_support is not None:
-        repair_metrics = evaluate_repair_samples(
-            samples=samples,
-            contexts=support.repair_support.contexts,
-            heuristics=support.repair_support.heuristics,
-            actions=("add", "del"),
-        )
-        row.update(_summarize_repair_metrics(repair_metrics))
     if support.global_support is not None:
-        global_metrics = evaluate_global_repair_samples(
+        paper_report = evaluate_global_repair_samples(
             samples=samples,
             rows=support.global_support.rows,
             evaluator=support.global_support.evaluator,
             none_class=NONE_CLASS_INDEX,
             pre_vectors=None,
         )
-        row.update(_summarize_global_metrics(global_metrics))
+        row.update(_summarize_paper_metrics(paper_report))
     return row
 
 
@@ -624,11 +724,16 @@ def _delta_rows(rows: Sequence[Mapping[str, Any]], *, keys: Sequence[str]) -> li
     }
     delta_fields = (
         "fidelity_f1",
-        "primary_fix_rate",
-        "gfr",
+        "pfr",
+        "local_satisfaction",
+        "delta_local_satisfaction",
         "srr",
         "sir",
-        "disruption_total_ops_mean",
+        "disruption",
+        "base_deletion_rate",
+        "deletes_base_action_rate",
+        "eppf",
+        "vacuous_improvement",
     )
     deltas: list[dict[str, Any]] = []
     for row in rows:
@@ -739,7 +844,12 @@ def write_h2_report(
     output_dir: Path,
     support: H2RunSupport,
     batch_size: int,
+    chooser_support: Any | None = None,
+    direct_safety_support: Any | None = None,
+    normal_predictions: torch.Tensor | None = None,
 ) -> dict[str, Any]:
+    if chooser_support is not None and direct_safety_support is not None:
+        raise ValueError("H2 chooser and direct-safety selection are mutually exclusive.")
     output_dir.mkdir(parents=True, exist_ok=True)
     exposure_counts = count_train_factor_exposure(train_data)
     family_lookup = _constraint_family_lookup(support.global_support)
@@ -768,11 +878,16 @@ def write_h2_report(
                 exposure_counts=exposure_counts,
                 family_lookup=family_lookup,
                 batch_size=batch_size,
+                collect_factor_records=variant_name == "normal",
+                chooser_support=chooser_support,
+                direct_safety_support=direct_safety_support,
+                precomputed_predictions=normal_predictions if variant_name == "normal" else None,
             )
         )
 
     normal_output = next(item for item in variant_outputs if item["variant"] == "normal")
     factor_records = list(normal_output.get("factor_records", []))
+    post_gold_supported = any(record.get("state") == "post_gold" for record in factor_records)
     semantic_rows = aggregate_semantic_records(factor_records, ("state", "factor_family", "factor_type"))
     transfer_rows = aggregate_semantic_records(
         factor_records,
@@ -788,10 +903,16 @@ def write_h2_report(
     overall_rows: list[dict[str, Any]] = []
     for output in variant_outputs:
         overall_rows.append(_overall_eval_row(output, support))
-        density_rows.extend(_bucket_eval_rows(variant_output=output, support=support, bucket_field="density_bucket"))
-        counterfactual_rows.extend(
-            _bucket_eval_rows(variant_output=output, support=support, bucket_field="density_bucket")
+        variant_density_rows = _bucket_eval_rows(
+            variant_output=output,
+            support=support,
+            bucket_field="density_bucket",
         )
+        density_rows.extend(variant_density_rows)
+        # Both artifacts intentionally expose the same per-density metric
+        # slices; reuse the computed rows instead of repeating the complete
+        # corrected symbolic evaluation.
+        counterfactual_rows.extend(variant_density_rows)
 
     graph_rows = [record for output in variant_outputs for record in output.get("graph_records", [])]
     graph_density_summary = _graph_density_summary(graph_rows)
@@ -815,14 +936,28 @@ def write_h2_report(
     _write_csv(output_dir / "counterfactual_overall_deltas.csv", overall_delta_rows)
     _write_csv(output_dir / "graph_density.csv", graph_density_summary)
 
+    unsupported: dict[str, str] = {}
+    if normal_output.get("unsupported_reason"):
+        unsupported["factor_semantics"] = str(normal_output["unsupported_reason"])
+    if not post_gold_supported:
+        unsupported["post_gold_factor_semantics"] = (
+            "evaluation-safe compact forward omits post-gold logits because test gold edits "
+            "may be absent from the train/validation compact target vocabulary"
+        )
     report = {
-        "status": "ok" if not normal_output.get("unsupported_reason") else "partial",
+        "status": "ok" if not unsupported else "partial",
+        "selection_mode": (
+            "chooser"
+            if chooser_support is not None
+            else "direct_safety"
+            if direct_safety_support is not None
+            else "slot_argmax"
+        ),
+        "normal_prediction_source": (
+            "validated_schema_v2_replay" if normal_predictions is not None else "model_selector"
+        ),
         "unsupported_reason": normal_output.get("unsupported_reason"),
-        "unsupported": {
-            "factor_semantics": normal_output.get("unsupported_reason"),
-        }
-        if normal_output.get("unsupported_reason")
-        else {},
+        "unsupported": unsupported,
         "train_factor_exposure": {
             "unique_factor_constraints": len(exposure_counts),
             "total_factor_occurrences": int(sum(exposure_counts.values())),
@@ -877,7 +1012,7 @@ def _graph_density_summary(graph_rows: Sequence[Mapping[str, Any]]) -> list[dict
 
 def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(list(rows)).to_csv(path, index=False)
+    pd.DataFrame(list(rows)).to_csv(path, index=False, lineterminator="\n")
 
 
 __all__ = [

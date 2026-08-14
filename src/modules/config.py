@@ -354,7 +354,9 @@ class ModelConfig:
     predicate_class_ids: tuple[int, ...] | None = None  
     """Optional vocabulary subset for predicate targets."""
     num_factor_types: int = 0
-    """Number of distinct factor type ids (0 disables type conditioning)."""
+    """Upper bound of the stable factor-type id address space."""
+    active_factor_type_ids: tuple[int, ...] | None = None
+    """Stable factor ids allocated by compact executor implementations."""
     factor_type_embedding_dim: int = 8
     """Embedding dim for factor type conditioning."""
     pressure_enabled: bool = False
@@ -372,7 +374,9 @@ class ModelConfig:
     constraint_representation: str = "factorized"
     """Graph representation regime: factorized or eswc_passive."""
     factor_executor_impl: str = "per_type_v1"
-    """Factor executor implementation: per_type_v1 or legacy_shared."""
+    """Factor executor implementation: per_type_v1, per_type_grouped_v2, or legacy_shared."""
+    gold_edit_embedding_mode: str = "full"
+    """Gold-edit embedding storage: full or compact."""
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "ModelConfig":
@@ -392,7 +396,7 @@ class ModelConfig:
         filtered = _filter_fields(type(self), data_dict)
         filtered.update({k: v for k, v in overrides.items() if v is not None})
 
-        for field_name in ("entity_class_ids", "predicate_class_ids"):
+        for field_name in ("entity_class_ids", "predicate_class_ids", "active_factor_type_ids"):
             if field_name in filtered:
                 filtered[field_name] = _normalize_class_ids(filtered[field_name])
 
@@ -404,6 +408,22 @@ class ModelConfig:
             filtered["use_role_embeddings"] = bool(filtered["use_role_embeddings"])
         if "num_factor_types" in filtered and filtered["num_factor_types"] is not None:
             filtered["num_factor_types"] = int(filtered["num_factor_types"])
+        if "active_factor_type_ids" in filtered and filtered["active_factor_type_ids"] is not None:
+            active_ids = tuple(int(value) for value in filtered["active_factor_type_ids"])
+            if not active_ids:
+                raise ValueError("active_factor_type_ids must not be empty when provided")
+            if tuple(sorted(active_ids)) != active_ids:
+                raise ValueError("active_factor_type_ids must be strictly increasing")
+            if len(set(active_ids)) != len(active_ids):
+                raise ValueError("active_factor_type_ids must not contain duplicates")
+            if active_ids[0] < 0:
+                raise ValueError("active_factor_type_ids must be non-negative")
+            address_space = int(filtered.get("num_factor_types", self.num_factor_types))
+            if address_space <= 0 or active_ids[-1] >= address_space:
+                raise ValueError(
+                    "active_factor_type_ids must fit inside num_factor_types stable id address space"
+                )
+            filtered["active_factor_type_ids"] = active_ids
         if "factor_type_embedding_dim" in filtered and filtered["factor_type_embedding_dim"] is not None:
             filtered["factor_type_embedding_dim"] = int(filtered["factor_type_embedding_dim"])
         if "pressure_enabled" in filtered and filtered["pressure_enabled"] is not None:
@@ -436,9 +456,17 @@ class ModelConfig:
             filtered["constraint_representation"] = value
         if "factor_executor_impl" in filtered and filtered["factor_executor_impl"] is not None:
             value = str(filtered["factor_executor_impl"]).lower()
-            if value not in {"per_type_v1", "legacy_shared"}:
-                raise ValueError("factor_executor_impl must be 'per_type_v1' or 'legacy_shared'")
+            if value not in {"per_type_v1", "per_type_grouped_v2", "legacy_shared"}:
+                raise ValueError(
+                    "factor_executor_impl must be 'per_type_v1', 'per_type_grouped_v2', "
+                    "or 'legacy_shared'"
+                )
             filtered["factor_executor_impl"] = value
+        if "gold_edit_embedding_mode" in filtered and filtered["gold_edit_embedding_mode"] is not None:
+            value = str(filtered["gold_edit_embedding_mode"]).lower()
+            if value not in {"full", "compact"}:
+                raise ValueError("gold_edit_embedding_mode must be 'full' or 'compact'")
+            filtered["gold_edit_embedding_mode"] = value
 
         if filtered.get("enable_policy_choice") and "policy_num_classes" in filtered:
             if int(filtered["policy_num_classes"]) < 6:
@@ -446,6 +474,13 @@ class ModelConfig:
 
         current = asdict(self)
         current.update(filtered)
+        if (
+            str(current["factor_executor_impl"]).lower() == "per_type_grouped_v2"
+            and current["active_factor_type_ids"] is None
+        ):
+            raise ValueError(
+                "active_factor_type_ids must be explicit for per_type_grouped_v2"
+            )
         return type(self)(**current)
 
     def to_dict(self) -> dict[str, Any]:
@@ -454,6 +489,7 @@ class ModelConfig:
 
 @dataclass
 class TrainingConfig:
+    seed: int = 42  # Single paper-suite seed.
     batch_size: int = 124  # Number of graphs per optimization step.
     num_epochs: int = 8  # Maximum number of training epochs.
     early_stopping_rounds: int = 2  # Patience before early stopping triggers.
@@ -503,6 +539,8 @@ class TrainingConfig:
             if subset_size <= 0:
                 raise ValueError("TrainingConfig.validation_subset_size must be positive when set")
             filtered["validation_subset_size"] = subset_size
+        if "seed" in filtered and filtered["seed"] is not None:
+            filtered["seed"] = int(filtered["seed"])
 
         if dynamic_fallback is not None:
             if constraint_update is None:

@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any, Sequence
 
 import torch
-from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from tqdm.autonotebook import tqdm
 
@@ -29,10 +28,26 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from modules.candidates import CandidateConfig, build_candidates, score_candidates_from_logits
+from modules.candidates import (
+    CandidateConfig,
+    batch_topk_candidate_triples,
+    build_candidates,
+    score_candidates_from_logits,
+)
 from modules.config import ModelConfig, TrainingConfig
-from modules.data_encoders import dataset_variant_name, graph_dataset_filename
-from modules.model_store import config_copy_path
+from modules.data_encoders import (
+    dataset_variant_name,
+    discover_graph_artifacts,
+    graph_dataset_filename,
+)
+from modules.evaluation_artifacts import (
+    EVALUATION_SCHEMA_VERSION,
+    atomic_write_json,
+    load_and_validate_predictions,
+    sha256_file,
+)
+from modules.model_store import config_copy_path, get_checkpoint_path
+from modules.repair_eval import PaperMetricsAccumulator, evaluate_paper_metric_instance
 from modules.training_utils import load_graph_dataset
 
 NONE_CLASS_INDEX = 0
@@ -116,6 +131,15 @@ def _load_test_data(model_cfg: ModelConfig):
     return load_graph_dataset(graph_path)
 
 
+def _test_graph_path(model_cfg: ModelConfig) -> Path:
+    variant = dataset_variant_name(model_cfg.dataset_variant, model_cfg.min_occurrence)
+    return ROOT / "data" / "processed" / variant / graph_dataset_filename(
+        "test",
+        model_cfg.encoding,
+        constraint_representation=model_cfg.constraint_representation,
+    )
+
+
 def _set_context_indices(test_data: Any) -> None:
     if isinstance(test_data, list):
         for idx, graph in enumerate(test_data):
@@ -193,41 +217,33 @@ def _row_context(row: Any) -> tuple[str, str, int]:
     return str(constraint_type), _density_bucket(len(local_ids)), constraint_id
 
 
-def _primary_factor_index(graph: Data, row: Any) -> int:
-    graph_value = getattr(graph, "primary_factor_index", None)
-    if graph_value is not None:
-        return _as_int(graph_value, default=-1)
-    return _as_int(getattr(row, "primary_factor_index", None), default=-1)
+def _event(metrics: dict[str, Any], key: str) -> dict[str, int]:
+    return metrics["events"][key]
+
+
+def _event_rate(metrics: dict[str, Any], key: str) -> float:
+    event = _event(metrics, key)
+    denominator = int(event["denominator"])
+    return float(event["numerator"]) / denominator if denominator else 0.0
 
 
 def _total_ops(metrics: dict[str, Any]) -> int:
-    return int(metrics.get("add_count", 0)) + int(metrics.get("del_count", 0))
+    return int(_event(metrics, "disruption")["numerator"])
 
 
-def _safe_flag(metrics: dict[str, Any], *, pre_gfr: float, max_disruption: int) -> bool:
+def _safe_flag(metrics: dict[str, Any], *, max_disruption: int) -> bool:
     return (
-        int(metrics.get("primary_satisfied", 0)) == 1
-        and int(metrics.get("secondary_regressions", 0)) == 0
-        and float(metrics.get("global_satisfied_fraction", 0.0)) >= pre_gfr
+        int(_event(metrics, "pfr")["numerator"]) == 1
+        and int(_event(metrics, "srr")["numerator"]) == 0
+        and int(_event(metrics, "delta_local_satisfaction")["numerator"]) >= 0
         and _total_ops(metrics) <= max_disruption
     )
 
 
-def _non_vacuous_safe_flag(metrics: dict[str, Any], *, pre_gfr: float, max_disruption: int) -> bool:
-    return _safe_flag(metrics, pre_gfr=pre_gfr, max_disruption=max_disruption) and bool(
-        int(metrics.get("focus_preserved", 0))
+def _non_vacuous_safe_flag(metrics: dict[str, Any], *, max_disruption: int) -> bool:
+    return _safe_flag(metrics, max_disruption=max_disruption) and bool(
+        int(metrics.get("post_base_present", 0))
     )
-
-
-def _pre_gfr(details: dict[str, Any]) -> float:
-    if "pre_global_satisfied_fraction" in details:
-        return float(details.get("pre_global_satisfied_fraction", 0.0))
-    pre_checkable = details.get("pre_checkable") or []
-    pre_satisfied = details.get("pre_satisfied") or []
-    denom = sum(1 for flag in pre_checkable if flag)
-    if not denom:
-        return 0.0
-    return float(sum(int(v) for v, flag in zip(pre_satisfied, pre_checkable) if flag)) / denom
 
 
 def _oracle_index(details: list[dict[str, Any]], scores: Sequence[float]) -> int:
@@ -237,11 +253,11 @@ def _oracle_index(details: list[dict[str, Any]], scores: Sequence[float]) -> int
     def key(idx: int) -> tuple[float, float, float, float, float, float]:
         item = details[idx]
         return (
-            float(item.get("primary_satisfied", 0)),
-            1.0 if int(item.get("secondary_regressions", 0)) == 0 else 0.0,
-            float(item.get("global_satisfied_fraction", 0.0)),
+            float(_event(item, "pfr")["numerator"]),
+            1.0 if int(_event(item, "srr")["numerator"]) == 0 else 0.0,
+            _event_rate(item, "local_satisfaction"),
             -float(_total_ops(item)),
-            -float(item.get("srr", 0.0)),
+            -_event_rate(item, "srr"),
             float(scores[idx]) if idx < len(scores) else 0.0,
         )
 
@@ -252,13 +268,12 @@ def _non_vacuous_oracle_index(
     details: list[dict[str, Any]],
     scores: Sequence[float],
     *,
-    pre_gfr: float,
     max_disruption: int,
 ) -> int | None:
     valid = [
         idx
         for idx, item in enumerate(details)
-        if _non_vacuous_safe_flag(item, pre_gfr=pre_gfr, max_disruption=max_disruption)
+        if _non_vacuous_safe_flag(item, max_disruption=max_disruption)
     ]
     if not valid:
         return None
@@ -266,9 +281,9 @@ def _non_vacuous_oracle_index(
     def key(idx: int) -> tuple[float, float, float, float]:
         item = details[idx]
         return (
-            float(item.get("global_satisfied_fraction", 0.0)),
+            _event_rate(item, "local_satisfaction"),
             -float(_total_ops(item)),
-            -float(item.get("srr", 0.0)),
+            -_event_rate(item, "srr"),
             float(scores[idx]) if idx < len(scores) else 0.0,
         )
 
@@ -313,25 +328,9 @@ class Aggregate:
         self.selected_safe = 0
         self.non_vacuous_safe_available = 0
         self.selected_non_vacuous_safe = 0
-        self.oracle_primary = 0
-        self.selected_primary = 0
-        self.oracle_gfr_sum = 0.0
-        self.selected_gfr_sum = 0.0
-        self.oracle_regressions = 0
-        self.oracle_regressions_denom = 0
-        self.selected_regressions = 0
-        self.selected_regressions_denom = 0
-        self.oracle_improvements = 0
-        self.oracle_improvements_denom = 0
-        self.selected_improvements = 0
-        self.selected_improvements_denom = 0
-        self.oracle_disruption_sum = 0
-        self.selected_disruption_sum = 0
         self.candidate_count_sum = 0
-        self.oracle_focus_deleted = 0
-        self.selected_focus_deleted = 0
-        self.oracle_vacuous_satisfaction_improvement = 0
-        self.selected_vacuous_satisfaction_improvement = 0
+        self.oracle_metrics = PaperMetricsAccumulator()
+        self.selected_metrics = PaperMetricsAccumulator()
 
     def add(
         self,
@@ -350,31 +349,11 @@ class Aggregate:
         self.selected_safe += int(selected_safe)
         self.non_vacuous_safe_available += int(oracle_non_vacuous_safe)
         self.selected_non_vacuous_safe += int(selected_non_vacuous_safe)
-        self.oracle_primary += int(oracle.get("primary_satisfied", 0))
-        self.selected_primary += int(selected.get("primary_satisfied", 0))
-        self.oracle_gfr_sum += float(oracle.get("global_satisfied_fraction", 0.0))
-        self.selected_gfr_sum += float(selected.get("global_satisfied_fraction", 0.0))
-        self.oracle_regressions += int(oracle.get("secondary_regressions", 0))
-        self.oracle_regressions_denom += int(oracle.get("secondary_regressions_denom", 0))
-        self.selected_regressions += int(selected.get("secondary_regressions", 0))
-        self.selected_regressions_denom += int(selected.get("secondary_regressions_denom", 0))
-        self.oracle_improvements += int(oracle.get("secondary_improvements", 0))
-        self.oracle_improvements_denom += int(oracle.get("secondary_improvements_denom", 0))
-        self.selected_improvements += int(selected.get("secondary_improvements", 0))
-        self.selected_improvements_denom += int(selected.get("secondary_improvements_denom", 0))
-        self.oracle_disruption_sum += _total_ops(oracle)
-        self.selected_disruption_sum += _total_ops(selected)
         self.candidate_count_sum += int(candidate_count)
-        self.oracle_focus_deleted += int(oracle.get("focus_deleted", 0))
-        self.selected_focus_deleted += int(selected.get("focus_deleted", 0))
-        self.oracle_vacuous_satisfaction_improvement += int(
-            oracle.get("vacuous_satisfaction_improvement", 0)
-        )
-        self.selected_vacuous_satisfaction_improvement += int(
-            selected.get("vacuous_satisfaction_improvement", 0)
-        )
+        self.oracle_metrics.update(oracle["events"])
+        self.selected_metrics.update(selected["events"])
 
-    def to_dict(self) -> dict[str, float | int]:
+    def to_dict(self) -> dict[str, object]:
         support = self.support
         return {
             "support": support,
@@ -386,55 +365,18 @@ class Aggregate:
             if support
             else 0.0,
             "selected_non_vacuous_safe_rate": self.selected_non_vacuous_safe / support if support else 0.0,
-            "oracle_primary_fix_rate": self.oracle_primary / support if support else 0.0,
-            "selected_primary_fix_rate": self.selected_primary / support if support else 0.0,
-            "oracle_gfr": self.oracle_gfr_sum / support if support else 0.0,
-            "selected_gfr": self.selected_gfr_sum / support if support else 0.0,
-            "oracle_srr": self.oracle_regressions / self.oracle_regressions_denom
-            if self.oracle_regressions_denom
-            else 0.0,
-            "selected_srr": self.selected_regressions / self.selected_regressions_denom
-            if self.selected_regressions_denom
-            else 0.0,
-            "oracle_sir": self.oracle_improvements / self.oracle_improvements_denom
-            if self.oracle_improvements_denom
-            else 0.0,
-            "selected_sir": self.selected_improvements / self.selected_improvements_denom
-            if self.selected_improvements_denom
-            else 0.0,
-            "oracle_mean_disruption": self.oracle_disruption_sum / support if support else 0.0,
-            "selected_mean_disruption": self.selected_disruption_sum / support if support else 0.0,
-            "oracle_focus_deleted_rate": self.oracle_focus_deleted / support if support else 0.0,
-            "selected_focus_deleted_rate": self.selected_focus_deleted / support if support else 0.0,
-            "oracle_vacuous_satisfaction_improvement_rate": self.oracle_vacuous_satisfaction_improvement
-            / support
-            if support
-            else 0.0,
-            "selected_vacuous_satisfaction_improvement_rate": self.selected_vacuous_satisfaction_improvement
-            / support
-            if support
-            else 0.0,
+            "oracle_paper_metrics": self.oracle_metrics.as_dict(),
+            "selected_paper_metrics": self.selected_metrics.as_dict(),
         }
 
 
 def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer = csv.DictWriter(fh, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
-
-
-def _metric_value(metrics: dict[str, Any], key: str) -> float | int:
-    if key == "disruption":
-        return _total_ops(metrics)
-    value = metrics.get(key, 0)
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, (int, float)):
-        return value
-    return 0
 
 
 @torch.no_grad()
@@ -463,6 +405,8 @@ def run_analysis(args: argparse.Namespace) -> None:
     )
     if global_support is None:
         raise RuntimeError("Candidate-oracle analysis requires symbolic global support.")
+    if global_support.dataset_path is None:
+        raise RuntimeError("Candidate-oracle analysis requires a concrete interim dataset artifact.")
 
     if args.device == "auto":
         device = EVAL.get_device()
@@ -482,6 +426,15 @@ def run_analysis(args: argparse.Namespace) -> None:
     placeholder_ids = set(repair_support.heuristics.placeholder_ids.values())
     rows = global_support.rows
     contexts = repair_support.contexts
+    prediction_path = run_directory / "evaluations" / "predictions.parquet"
+    graph_paths = [item.path for item in discover_graph_artifacts(_test_graph_path(model_cfg))]
+    selected_predictions, selected_manifest = load_and_validate_predictions(
+        prediction_path,
+        rows=rows,
+        dataset_path=global_support.dataset_path,
+        graph_paths=graph_paths,
+        dataset_variant=dataset_variant_name(model_cfg.dataset_variant, model_cfg.min_occurrence),
+    )
 
     overall = Aggregate()
     by_density: dict[str, Aggregate] = defaultdict(Aggregate)
@@ -496,7 +449,11 @@ def run_analysis(args: argparse.Namespace) -> None:
     for batch in tqdm(loader, desc="Candidate oracle"):
         graphs = batch.to_data_list() if hasattr(batch, "to_data_list") else [batch]
         batch = batch.to(device)
-        out = model(batch)
+        # Candidate analysis needs proposal logits and graph embeddings only.
+        # The evaluation-safe path deliberately skips post-gold factor logits,
+        # whose test gold IDs may be absent from the compact train/val target
+        # vocabulary.
+        out = model.forward_for_evaluation(batch)
         if isinstance(out, dict):
             logits_batch = out.get("edit_logits")
             graph_emb_batch = out.get("graph_emb")
@@ -505,6 +462,12 @@ def run_analysis(args: argparse.Namespace) -> None:
         else:
             logits_batch = out
             graph_emb_batch = None
+        logits_batch_cpu = logits_batch.detach().cpu()
+        batch_add_topk, batch_del_topk = batch_topk_candidate_triples(
+            logits_batch.detach(),
+            topk_triples=candidate_cfg.topk_candidates,
+            topk_per_slot=candidate_cfg.topk_per_slot,
+        )
 
         for local_idx, graph in enumerate(graphs):
             if args.limit is not None and processed >= args.limit:
@@ -514,7 +477,10 @@ def run_analysis(args: argparse.Namespace) -> None:
                 raise RuntimeError(f"Context index {context_index} out of bounds.")
             context = contexts[context_index]
             row = rows[context_index]
-            logits = logits_batch[local_idx].detach()
+            # Move the whole proposal row once before candidate expansion.  Candidate
+            # construction and oracle tie-breaking are CPU work; keeping logits on
+            # CUDA here would force several tiny device synchronizations per row.
+            logits = logits_batch_cpu[local_idx]
             candidates, _gold_index = build_candidates(
                 graph=graph,
                 context=context,
@@ -523,6 +489,8 @@ def run_analysis(args: argparse.Namespace) -> None:
                 cfg=candidate_cfg,
                 placeholder_ids=placeholder_ids,
                 num_target_ids=model.num_target_ids,
+                precomputed_add_topk=batch_add_topk[local_idx],
+                precomputed_del_topk=batch_del_topk[local_idx],
             )
             if not candidates:
                 processed += 1
@@ -531,33 +499,53 @@ def run_analysis(args: argparse.Namespace) -> None:
             candidate_tensor = torch.tensor(candidates, dtype=torch.long, device=logits.device)
             candidate_scores_tensor = score_candidates_from_logits(logits, candidate_tensor)
             candidate_scores = [float(v) for v in candidate_scores_tensor.detach().cpu().tolist()]
-            selected_slots, selected_candidate_index = _selected_from_candidates(
-                model=model,
-                graph_emb=graph_emb_batch[local_idx] if graph_emb_batch is not None else None,
-                logits=logits,
-                candidates=candidates,
-                candidate_scores=candidate_scores_tensor,
-                training_cfg=training_cfg,
+            # Selected-candidate diagnostics must describe the exact paper prediction,
+            # including deterministic resolution of near-tied CUDA scores.  Replaying
+            # the validated schema-v2 artifact avoids treating an independent rerun as
+            # evaluation truth while the candidate set below remains freshly rebuilt.
+            selected_slots = [int(value) for value in selected_predictions[context_index].tolist()]
+            selected_tuple = tuple(selected_slots)
+            selected_candidate_index = (
+                candidates.index(selected_tuple) if selected_tuple in candidates else None
             )
 
-            primary_index = _primary_factor_index(graph, row)
-            candidate_details = global_support.evaluator.evaluate_candidates(
+            constraint_type, density_bucket, constraint_id = _row_context(row)
+            raw_candidate_details = global_support.evaluator.evaluate_candidates(
                 row,
                 candidates=candidates,
-                primary_factor_index=primary_index,
+                primary_factor_index=None,
             )
-            selected_detail = global_support.evaluator.evaluate_candidates(
+            candidate_details = [
+                evaluate_paper_metric_instance(
+                    row=row,
+                    evaluator=global_support.evaluator,
+                    candidate_slots=candidate,
+                    constraint_type=constraint_type,
+                    row_index=context_index,
+                    none_class=NONE_CLASS_INDEX,
+                    details=raw_detail,
+                )
+                for candidate, raw_detail in zip(candidates, raw_candidate_details)
+            ]
+            raw_selected_detail = global_support.evaluator.evaluate_candidates(
                 row,
                 candidates=[selected_slots],
-                primary_factor_index=primary_index,
+                primary_factor_index=None,
             )[0]
+            selected_detail = evaluate_paper_metric_instance(
+                row=row,
+                evaluator=global_support.evaluator,
+                candidate_slots=selected_slots,
+                constraint_type=constraint_type,
+                row_index=context_index,
+                none_class=NONE_CLASS_INDEX,
+                details=raw_selected_detail,
+            )
             oracle_candidate_index = _oracle_index(candidate_details, candidate_scores)
             oracle_detail = candidate_details[oracle_candidate_index]
-            pre_gfr = _pre_gfr(oracle_detail)
             non_vacuous_oracle_candidate_index = _non_vacuous_oracle_index(
                 candidate_details,
                 candidate_scores,
-                pre_gfr=pre_gfr,
                 max_disruption=args.max_safe_disruption,
             )
             non_vacuous_oracle_detail = (
@@ -567,22 +555,18 @@ def run_analysis(args: argparse.Namespace) -> None:
             )
             oracle_safe = _safe_flag(
                 oracle_detail,
-                pre_gfr=pre_gfr,
                 max_disruption=args.max_safe_disruption,
             )
             selected_safe = _safe_flag(
                 selected_detail,
-                pre_gfr=pre_gfr,
                 max_disruption=args.max_safe_disruption,
             )
             oracle_non_vacuous_safe = non_vacuous_oracle_detail is not None
             selected_non_vacuous_safe = _non_vacuous_safe_flag(
                 selected_detail,
-                pre_gfr=pre_gfr,
                 max_disruption=args.max_safe_disruption,
             )
 
-            constraint_type, density_bucket, constraint_id = _row_context(row)
             constraint_counter[constraint_type] += 1
             overall.add(
                 candidate_count=len(candidates),
@@ -617,9 +601,10 @@ def run_analysis(args: argparse.Namespace) -> None:
                 and not selected_safe
                 or oracle_non_vacuous_safe
                 and not selected_non_vacuous_safe
-                or float(oracle_detail.get("global_satisfied_fraction", 0.0))
-                > float(selected_detail.get("global_satisfied_fraction", 0.0))
-                or int(oracle_detail.get("primary_satisfied", 0)) > int(selected_detail.get("primary_satisfied", 0))
+                or _event_rate(oracle_detail, "local_satisfaction")
+                > _event_rate(selected_detail, "local_satisfaction")
+                or int(_event(oracle_detail, "pfr")["numerator"])
+                > int(_event(selected_detail, "pfr")["numerator"])
             )
             if selected_worse and len(examples) < args.examples_limit:
                 examples.append(
@@ -643,40 +628,16 @@ def run_analysis(args: argparse.Namespace) -> None:
                         )
                         if non_vacuous_oracle_candidate_index is not None
                         else "",
-                        "selected_primary_satisfied": selected_detail.get("primary_satisfied", 0),
-                        "oracle_primary_satisfied": oracle_detail.get("primary_satisfied", 0),
-                        "non_vacuous_oracle_primary_satisfied": (
-                            non_vacuous_oracle_detail or {}
-                        ).get("primary_satisfied", ""),
-                        "selected_gfr": selected_detail.get("global_satisfied_fraction", 0.0),
-                        "oracle_gfr": oracle_detail.get("global_satisfied_fraction", 0.0),
-                        "non_vacuous_oracle_gfr": (non_vacuous_oracle_detail or {}).get(
-                            "global_satisfied_fraction", ""
-                        ),
-                        "selected_srr": selected_detail.get("srr", 0.0),
-                        "oracle_srr": oracle_detail.get("srr", 0.0),
-                        "non_vacuous_oracle_srr": (non_vacuous_oracle_detail or {}).get("srr", ""),
-                        "selected_regressions": selected_detail.get("secondary_regressions", 0),
-                        "oracle_regressions": oracle_detail.get("secondary_regressions", 0),
-                        "non_vacuous_oracle_regressions": (non_vacuous_oracle_detail or {}).get(
-                            "secondary_regressions", ""
-                        ),
-                        "selected_disruption": _total_ops(selected_detail),
-                        "oracle_disruption": _total_ops(oracle_detail),
-                        "non_vacuous_oracle_disruption": _total_ops(non_vacuous_oracle_detail)
-                        if non_vacuous_oracle_detail is not None
-                        else "",
                         "selected_safe": int(selected_safe),
                         "oracle_safe": int(oracle_safe),
                         "selected_non_vacuous_safe": int(selected_non_vacuous_safe),
                         "oracle_non_vacuous_safe": int(oracle_non_vacuous_safe),
-                        "selected_focus_deleted": selected_detail.get("focus_deleted", 0),
-                        "oracle_focus_deleted": oracle_detail.get("focus_deleted", 0),
-                        "selected_vacuous_satisfaction_improvement": selected_detail.get(
-                            "vacuous_satisfaction_improvement", 0
-                        ),
-                        "oracle_vacuous_satisfaction_improvement": oracle_detail.get(
-                            "vacuous_satisfaction_improvement", 0
+                        "selected_events": json.dumps(selected_detail["events"], sort_keys=True),
+                        "oracle_events": json.dumps(oracle_detail["events"], sort_keys=True),
+                        "non_vacuous_oracle_events": (
+                            json.dumps(non_vacuous_oracle_detail["events"], sort_keys=True)
+                            if non_vacuous_oracle_detail is not None
+                            else ""
                         ),
                     }
                 )
@@ -686,14 +647,32 @@ def run_analysis(args: argparse.Namespace) -> None:
             break
 
     summary = {
+        "schema_version": EVALUATION_SCHEMA_VERSION,
         "run_directory": str(run_directory),
-        "dataset_variant": model_cfg.dataset_variant,
+        "config": {
+            "path": str(config_copy_path(run_directory)),
+            "sha256": sha256_file(config_copy_path(run_directory)),
+        },
+        "checkpoint": {
+            "path": str(get_checkpoint_path(run_directory)),
+            "sha256": sha256_file(get_checkpoint_path(run_directory)),
+        },
+        "dataset": {
+            "variant": dataset_variant_name(model_cfg.dataset_variant, model_cfg.min_occurrence),
+            "path": str(global_support.dataset_path),
+            "sha256": sha256_file(global_support.dataset_path),
+        },
         "min_occurrence": model_cfg.min_occurrence,
         "encoding": model_cfg.encoding,
         "constraint_representation": model_cfg.constraint_representation,
         "selection_mode": "chooser"
         if training_cfg.chooser.enabled
         else ("direct_safety" if training_cfg.direct_safety.enabled else "slot_argmax"),
+        "selected_prediction_source": {
+            "mode": "validated_schema_v2_replay",
+            "path": str(prediction_path.resolve()),
+            "sha256": selected_manifest["predictions"]["sha256"],
+        },
         "candidate_config": {
             "topk_candidates": candidate_cfg.topk_candidates,
             "topk_per_slot": candidate_cfg.topk_per_slot,
@@ -706,8 +685,7 @@ def run_analysis(args: argparse.Namespace) -> None:
         "constraint_type_support": dict(sorted(constraint_counter.items())),
         "overall": overall.to_dict(),
     }
-    with (output_dir / "oracle_summary.json").open("w", encoding="utf-8") as fh:
-        json.dump(summary, fh, indent=2)
+    atomic_write_json(output_dir / "oracle_summary.json", summary)
 
     slice_fields = ["slice", *overall.to_dict().keys()]
     density_rows = [{"slice": key, **agg.to_dict()} for key, agg in sorted(by_density.items())]
@@ -726,29 +704,13 @@ def run_analysis(args: argparse.Namespace) -> None:
         "selected_slots",
         "oracle_slots",
         "non_vacuous_oracle_slots",
-        "selected_primary_satisfied",
-        "oracle_primary_satisfied",
-        "non_vacuous_oracle_primary_satisfied",
-        "selected_gfr",
-        "oracle_gfr",
-        "non_vacuous_oracle_gfr",
-        "selected_srr",
-        "oracle_srr",
-        "non_vacuous_oracle_srr",
-        "selected_regressions",
-        "oracle_regressions",
-        "non_vacuous_oracle_regressions",
-        "selected_disruption",
-        "oracle_disruption",
-        "non_vacuous_oracle_disruption",
         "selected_safe",
         "oracle_safe",
         "selected_non_vacuous_safe",
         "oracle_non_vacuous_safe",
-        "selected_focus_deleted",
-        "oracle_focus_deleted",
-        "selected_vacuous_satisfaction_improvement",
-        "oracle_vacuous_satisfaction_improvement",
+        "selected_events",
+        "oracle_events",
+        "non_vacuous_oracle_events",
     ]
     _write_csv(output_dir / "oracle_examples.csv", examples, example_fields)
     logging.info("Wrote candidate-oracle outputs to %s", output_dir)

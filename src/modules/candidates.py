@@ -146,6 +146,44 @@ def _topk_triples_from_logits(
     return [(s, p, o) for _, s, p, o in combos[:topk_triples]]
 
 
+def batch_topk_candidate_triples(
+    proposal_logits: torch.Tensor,
+    *,
+    topk_triples: int,
+    topk_per_slot: int,
+) -> tuple[list[list[tuple[int, int, int]]], list[list[tuple[int, int, int]]]]:
+    """Precompute add/delete top-k triples for a batch with one vocabulary scan."""
+    if proposal_logits.dim() != 3 or proposal_logits.size(1) != NUM_SLOTS:
+        raise ValueError(
+            f"proposal_logits must be shaped (batch, {NUM_SLOTS}, vocab), "
+            f"got {tuple(proposal_logits.shape)}"
+        )
+    k = max(1, min(topk_per_slot, proposal_logits.size(-1)))
+    slot_values, slot_ids = torch.topk(proposal_logits, k=k, dim=-1)
+    slot_values = slot_values.detach().cpu()
+    slot_ids = slot_ids.detach().cpu()
+
+    def triples_for(slot_offset: int) -> list[list[tuple[int, int, int]]]:
+        scores = (
+            slot_values[:, slot_offset, :, None, None]
+            + slot_values[:, slot_offset + 1, None, :, None]
+            + slot_values[:, slot_offset + 2, None, None, :]
+        ).reshape(proposal_logits.size(0), -1)
+        keep = min(topk_triples, scores.size(1))
+        # Stable descending order matches the legacy Python sort's i/j/k tie order.
+        flat_indices = torch.argsort(scores, dim=1, descending=True, stable=True)[:, :keep]
+        first_index = flat_indices // (k * k)
+        second_index = (flat_indices // k) % k
+        third_index = flat_indices % k
+        first = slot_ids[:, slot_offset].gather(1, first_index)
+        second = slot_ids[:, slot_offset + 1].gather(1, second_index)
+        third = slot_ids[:, slot_offset + 2].gather(1, third_index)
+        rows = torch.stack((first, second, third), dim=-1).tolist()
+        return [[tuple(int(value) for value in triple) for triple in row] for row in rows]
+
+    return triples_for(0), triples_for(3)
+
+
 def build_candidates(
     *,
     graph: Data | None = None,
@@ -167,11 +205,15 @@ def build_candidates(
     | None = None,
     precomputed_add_topk: Sequence[tuple[int, int, int]] | None = None,
     precomputed_del_topk: Sequence[tuple[int, int, int]] | None = None,
-) -> tuple[list[tuple[int, int, int, int, int, int]], int]:
+) -> tuple[list[tuple[int, int, int, int, int, int]], int | None]:
     candidates: list[tuple[int, int, int, int, int, int]] = []
-    gold = _coerce_gold_candidate(graph=graph, gold_slots=gold_slots)
+    gold = (
+        _coerce_gold_candidate(graph=graph, gold_slots=gold_slots)
+        if cfg.include_gold
+        else None
+    )
 
-    if cfg.include_gold:
+    if gold is not None:
         candidates.append(gold)
 
     candidate_map = heuristics.candidates_for(context)
@@ -235,13 +277,14 @@ def build_candidates(
         if len(deduped) >= cfg.max_candidates_total:
             break
 
+    if gold is None:
+        return deduped, None
+
     if any(v < 0 or v >= num_target_ids for v in gold):
         raise ValueError("Gold candidate contains out-of-range ids for target vocabulary.")
     if gold not in seen:
         deduped.insert(0, gold)
-    gold_index = deduped.index(gold)
-
-    return deduped, gold_index
+    return deduped, deduped.index(gold)
 
 
 def score_candidates_from_logits(
@@ -264,3 +307,44 @@ def score_candidates_from_logits(
         raise ValueError("candidate_slots contains out-of-range ids for proposal logits.")
     gathered = proposal_logits.gather(1, candidate_slots.transpose(0, 1)).transpose(0, 1)
     return gathered.sum(dim=-1)
+
+
+def score_candidates_from_logits_packed(
+    proposal_logits: torch.Tensor,
+    candidate_slots: torch.Tensor,
+    candidate_graph_index: torch.Tensor,
+) -> torch.Tensor:
+    """Score packed candidate rows against their corresponding batched logits."""
+    if proposal_logits.dim() != 3 or proposal_logits.size(1) != NUM_SLOTS:
+        raise ValueError(
+            f"proposal_logits must be shaped (batch, {NUM_SLOTS}, vocab), "
+            f"got {tuple(proposal_logits.shape)}"
+        )
+    if candidate_slots.dim() != 2 or candidate_slots.size(-1) != NUM_SLOTS:
+        raise ValueError(
+            f"candidate_slots must be shaped (num_candidates, {NUM_SLOTS}), "
+            f"got {tuple(candidate_slots.shape)}"
+        )
+    candidate_slots = candidate_slots.to(device=proposal_logits.device, dtype=torch.long)
+    candidate_graph_index = candidate_graph_index.to(
+        device=proposal_logits.device, dtype=torch.long
+    ).view(-1)
+    if candidate_graph_index.numel() != candidate_slots.size(0):
+        raise ValueError("candidate_graph_index length must match candidate_slots rows.")
+    if candidate_graph_index.numel() == 0:
+        return proposal_logits.new_empty((0,))
+    if (
+        int(candidate_graph_index.min().item()) < 0
+        or int(candidate_graph_index.max().item()) >= proposal_logits.size(0)
+    ):
+        raise ValueError("candidate_graph_index contains out-of-range graph ids.")
+    if int(candidate_slots.min().item()) < 0 or int(candidate_slots.max().item()) >= proposal_logits.size(-1):
+        raise ValueError("candidate_slots contain out-of-range vocabulary ids.")
+
+    slot_index = torch.arange(NUM_SLOTS, device=proposal_logits.device).view(1, -1)
+    selected = proposal_logits[
+        candidate_graph_index.view(-1, 1),
+        slot_index,
+        candidate_slots,
+    ]
+    return selected.sum(dim=-1)
