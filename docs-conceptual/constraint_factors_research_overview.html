@@ -508,6 +508,11 @@
         </nav>
       </header>
 
+      <div class="callout warn">
+        <strong>Legacy overview.</strong>
+        The numerical tables and learned-G0 narrative on this page freeze the prior schema-v1 analysis for provenance; they are not corrected paper evidence. The corrected protocol excludes retained G0 because its reranker checkpoint is missing and 909 saved selections cannot be reconstructed from label-blind candidate sets. See <code>08_corrected_evaluation_protocol.md</code> and <code>latex_paper/main_compact.tex</code> for current claims.
+      </div>
+
       <section id="thesis">
         <h2>1. Central Thesis</h2>
         <div class="thesis">
@@ -515,7 +520,7 @@
           In neural Wikidata repair, better imitation of historical curator edits is not equivalent to safer symbolic repair.
           Executable constraint factors make this gap visible: they substantially improve edit-slot prediction, but they do not by themselves
           reduce secondary symbolic regressions. Conversely, optimizing local post-edit constraint satisfaction can collapse into a trivial
-          delete-focus policy. The central contribution is a fidelity-safety evaluation framework rather than a claim of solved safe-repair architecture.
+          delete-focus policy in the prior schema-v1 analysis. The corrected evidence establishes the metric failure mode with a deterministic delete-focus counterexample; the learned endpoint awaits retraining. The central contribution is a fidelity-safety evaluation framework rather than a claim of solved safe-repair architecture.
         </div>
         <p>
           The project is an empirical and methodological contribution to knowledge graph repair: it introduces a constraint-aware
@@ -559,8 +564,8 @@
           Experiments on a stratified Wikidata repair benchmark show that executable factors substantially improve historical edit-slot prediction,
           raising Micro-F1 from <code>0.5434</code> to <code>0.6785</code> over a passive constraint-context baseline. However, this representation gain does
           not automatically translate into safer repairs: the factorized imitation model performs worse than the passive baseline on aggregate local
-          satisfaction and secondary-regression metrics. A global-only reranking endpoint achieves the best local satisfaction and matches a
-          delete-focus heuristic on aggregate evaluation metrics, revealing a satisfaction-by-deletion degeneracy. Diagnostic pressure-masking experiments show that factor pressure is
+          satisfaction and secondary-regression metrics. The prior schema-v1 global-only reranking endpoint matched a
+          delete-focus heuristic, but that learned result is excluded from the corrected suite because its checkpoint is missing and its retained predictions fail label-blind candidate validation. The corrected deterministic delete-focus result still reveals a satisfaction-by-deletion metric degeneracy. Diagnostic pressure-masking experiments show that factor pressure is
           causally important for prediction, but mostly supports historical imitation and primary repair behavior rather than secondary no-regression.
           These findings motivate evaluating KG repair along separate axes of historical fidelity, primary repair intent, secondary no-regression, and
           non-vacuous evidence preservation.
@@ -636,9 +641,8 @@
             secondary improvement, secondary regression, and disruption.
           </div>
           <div class="claim">
-            <strong>Global local satisfaction is an unsafe optimization target by itself.</strong>
-            The global-only endpoint matches a delete-focus heuristic on aggregate evaluation metrics, showing that local symbolic satisfaction can be maximized by removing the
-            violating statement rather than repairing it in a semantically useful way.
+            <strong>Local satisfaction is an insufficient repair criterion by itself.</strong>
+            A corrected deterministic delete-focus counterexample obtains high satisfaction scores by removing the violating statement. The learned global-only endpoint requires retraining before its prior collapse claim can be restored.
           </div>
           <div class="claim">
             <strong>Factor diagnostics reveal where the safety mechanism fails.</strong>
@@ -855,8 +859,8 @@
         </p>
         <div class="callout warn">
           <strong>Metric caveat.</strong>
-          Local satisfaction is not repair quality. The <code>G0</code>/<code>H1</code> result shows that this metric can reward deleting the violating
-          statement. It is one diagnostic axis, not the primary optimization target.
+          Local satisfaction is not repair quality. Corrected <code>H1</code> shows that this metric can reward deleting the violating
+          statement. The prior learned-<code>G0</code> comparison is excluded pending retraining. Local satisfaction is one diagnostic axis, not the primary optimization target.
         </div>
         <table class="tight-table">
           <thead>
@@ -1036,9 +1040,9 @@
             </p>
           </div>
           <div class="card">
-            <h3><span class="status mixed">Finding 4</span>: satisfaction can be degenerate</h3>
+            <h3><span class="status mixed">Finding 4</span>: satisfaction metrics can be degenerate</h3>
             <p>
-              <code>G0</code> matches <code>H1</code> on aggregate evaluation metrics. This is one of the report's most important empirical observations.
+              Corrected <code>H1</code> attains high satisfaction while deleting every base statement and receiving no EPPF credit. The prior learned-<code>G0</code> match is not a corrected result and awaits retraining.
             </p>
           </div>
         </div>

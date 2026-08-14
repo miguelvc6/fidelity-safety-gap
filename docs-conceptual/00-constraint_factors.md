@@ -376,10 +376,11 @@ Current role:
 
 Current role:
 
-- diagnostic endpoint, not a practical repair system;
-- achieves the best local satisfaction metrics;
-- matches `H1` on aggregate evaluation metrics and is dominated by delete-focus
-  behavior, exposing satisfaction-by-deletion.
+- intended diagnostic endpoint, not a practical repair system;
+- excluded from the corrected comparison because the retained run has no
+  reranker checkpoint; and
+- requires retraining because 909 saved selections are absent from the
+  reconstructed label-blind candidate sets.
 
 ### Heuristic baselines
 
@@ -406,6 +407,14 @@ factorized reasoning.
 
 The evaluation applies each predicted edit to the pre-repair local graph and
 then rechecks symbolic constraints.
+
+The canonical definitions are now specified in
+[the corrected evaluation protocol](08_corrected_evaluation_protocol.md). In
+particular, pre/post states are reconstructed from interim rows, all aggregates
+carry explicit numerators and denominators, PFR replaces the historical
+action-derived primary diagnostic, and EPPF/base-deletion metrics make
+non-vacuity explicit. The GFR wording below is retained only to interpret prior
+outputs; schema-v2 reports `local_satisfaction` instead.
 
 ### Historical fidelity
 
@@ -481,7 +490,13 @@ edits that improve metrics by deleting the focus evidence.
 
 ---
 
-## 9) Current Empirical Pattern
+## 9) Prior schema-v1 empirical pattern
+
+The values in this section predate corrected state reconstruction. They are
+retained for provenance and must not be copied into the corrected main table.
+Compact A1 is now canonical; Original A1 is compression-equivalence evidence
+only. Original B0 is the current corrected passive comparison; the proposed
+parameter-matched B0 is deferred and excluded from the current paper suite.
 
 The current paper-facing result table should be narrated as evidence for a
 fidelity-safety gap, not as a single leaderboard.
@@ -505,8 +520,10 @@ fidelity-safety gap, not as a single leaderboard.
    showing that imitation is not safety.
 3. `M1D` is the strongest practical factorized compromise, but the aggregate
    evidence is not strong enough to claim broad safety dominance.
-4. `G0` and `H1` expose a satisfaction-by-deletion endpoint: local satisfaction
-   can be maximized by removing the focus evidence.
+4. The historical schema-v1 `G0`/`H1` match motivated the
+   satisfaction-by-deletion analysis, but the learned `G0` claim is not part of
+   the corrected evidence. Corrected `H1` remains a deterministic counterexample:
+   local satisfaction can be high after removing the focus evidence.
 
 ---
 
@@ -570,14 +587,18 @@ Evidence:
 
 ### RQ4: What happens when local satisfaction is optimized directly?
 
-Expected answer from current results: it can become degenerate.
+Expected answer from corrected results: the metrics admit a degenerate endpoint,
+but the current repository cannot establish that a learned objective converges
+to it.
 
 Evidence:
 
-- `G0` has the best local satisfaction;
-- `G0` matches `H1` on aggregate metrics and is dominated by delete-focus
-  behavior;
-- high local satisfaction is therefore not equivalent to meaningful repair.
+- corrected `H1` deletes every base statement, has EPPF zero, and nevertheless
+  receives high Primary Fix Rate and Local Satisfaction;
+- the retained `G0` checkpoint is missing and its predictions fail label-blind
+  candidate-membership validation; and
+- high local satisfaction is therefore not equivalent to meaningful repair,
+  while a learned-collapse claim remains deferred until `G0` is retrained.
 
 ---
 
