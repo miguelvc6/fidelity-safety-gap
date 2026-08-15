@@ -61,7 +61,18 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Launch the selected suite in a persistent background process and return its PID.",
     )
+    parser.add_argument(
+        "--g0-first",
+        action="store_true",
+        help="Run G0/G0-BP before M1D/M1D-BP without changing the registered default order.",
+    )
     return parser.parse_args()
+
+
+def _ordered_runs(*, g0_first: bool) -> tuple[StudyRun, ...]:
+    if not g0_first:
+        return RUNS
+    return tuple(run for kind in ("reranker", "proposal") for run in RUNS if run.kind == kind)
 
 
 def _write_status(payload: dict) -> None:
@@ -125,6 +136,8 @@ def _detach(args: argparse.Namespace) -> None:
         command.append("--force-train")
     if args.only is not None:
         command.extend(("--only", args.only))
+    if args.g0_first:
+        command.append("--g0-first")
     launcher_log_path = LOG_ROOT / "launcher.log"
     launcher_log = launcher_log_path.open("a", encoding="utf-8")
     process = subprocess.Popen(
@@ -250,7 +263,11 @@ def main() -> None:
     if args.detach:
         _detach(args)
         return
-    selected = [run for run in RUNS if args.only is None or run.name == args.only]
+    selected = [
+        run
+        for run in _ordered_runs(g0_first=args.g0_first)
+        if args.only is None or run.name == args.only
+    ]
     for run in selected:
         run_directory = ROOT / "models" / run.directory
         config = run_directory / "config.json"

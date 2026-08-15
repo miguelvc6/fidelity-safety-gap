@@ -76,6 +76,18 @@ def test_metric_gate_rejects_legacy_and_inconsistent_fields() -> None:
 def test_study_runner_has_an_exact_isolated_order() -> None:
     runner = _load_runner()
     assert [run.name for run in runner.RUNS] == ["M1D", "M1D-BP", "G0", "G0-BP"]
+    assert [run.name for run in runner._ordered_runs(g0_first=False)] == [
+        "M1D",
+        "M1D-BP",
+        "G0",
+        "G0-BP",
+    ]
+    assert [run.name for run in runner._ordered_runs(g0_first=True)] == [
+        "G0",
+        "G0-BP",
+        "M1D",
+        "M1D-BP",
+    ]
     assert len({run.directory for run in runner.RUNS}) == 4
     assert all(directory.endswith("_v2__full_strat1m_minocc100__node_id") for directory in (
         run.directory for run in runner.RUNS

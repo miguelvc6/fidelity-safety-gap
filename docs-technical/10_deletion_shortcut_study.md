@@ -32,6 +32,8 @@ uv run python scripts/run_deletion_shortcut_study.py
 
 Add `--detach` for a persistent background process. It never discovers or runs other model directories. It skips training only when the corresponding versioned best checkpoint already exists, writes one log per step under `logs/deletion_shortcut_v2/`, and atomically updates `status.json`. `--only M1D`, `--only M1D-BP`, `--only G0`, and `--only G0-BP` select one experiment; `--force-train` is required to overwrite a versioned checkpoint.
 
+Add `--g0-first` to run `G0`, `G0-BP`, `M1D`, and `M1D-BP` in that order. The flag is propagated through `--detach`; omitting it retains the registered M1D-first order.
+
 The gate rejects non-finite histories, total loss at or above 100, valid M1D logit magnitude at or above 10,000, incomplete schema-v2 metrics, legacy metric fields, checksum or row-count failures, replay disagreement, or incorrect A1 provenance. It promotes a base-preserving variant as mitigation only when both deletion rates fall and EPPF rises relative to its matched control.
 
 The existing factorized graphs and labeled Parquet files remain unchanged. Corrected symbolic states are reconstructed only for training-objective events and evaluation metrics.
