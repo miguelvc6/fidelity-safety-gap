@@ -591,6 +591,15 @@ def _candidate_slots_to_actions(candidate: Sequence[int]) -> dict[str, list[int]
     return {"add": add, "del": delete}
 
 
+def _proposal_outputs_for_prediction(proposal_model: nn.Module, batch: Data) -> dict:
+    """Run the proposal without any training-only dependence on gold edit targets."""
+
+    forward_for_evaluation = getattr(proposal_model, "forward_for_evaluation", None)
+    if not callable(forward_for_evaluation):
+        raise TypeError("Proposal model does not implement forward_for_evaluation().")
+    return forward_for_evaluation(batch)
+
+
 @torch.no_grad()
 def _predict_reranker_edits(
     *,
@@ -619,7 +628,7 @@ def _predict_reranker_edits(
 
     for batch in progress_bar(loader, desc="predict"):
         batch = batch.to(device)
-        proposal_outputs = proposal_model(batch)
+        proposal_outputs = _proposal_outputs_for_prediction(proposal_model, batch)
         proposal_logits = proposal_outputs["edit_logits"].detach()
         proposal_logits_cpu = proposal_logits.cpu()
         batch_add_topk, batch_del_topk = batch_topk_candidate_triples(

@@ -14,6 +14,8 @@ Both M1D variants strictly load the existing A1 model state, validate the comple
 
 Both G0 variants use the frozen A1 proposal and fresh reranker parameters. They retain learning rate `1e-4` and label-blind test candidate generation. The base-preserving variant alone adds the unit focus-deletion penalty.
 
+Reranker prediction calls the proposal model through its evaluation-only forward interface. This excludes the training-only post-gold factor branch, so test-only edit IDs cannot influence candidate generation or require membership in the proposal's compact training vocabulary.
+
 All runs use seed 42, a ten-epoch maximum, validation-only checkpoint selection, and the existing 25,000-row validation prefix. Best and last checkpoints are written atomically. Checkpoints and histories record the effective config, seed, A1 source checksum, graph paths, best epoch, and stability telemetry.
 
 ## Evaluation and gate

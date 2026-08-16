@@ -101,6 +101,23 @@ def test_global_fix_base_preservation_penalty_is_opt_in() -> None:
     assert reranker.RerankerTrainingConfig().focus_deletion_weight == 0.0
 
 
+def test_reranker_prediction_uses_gold_free_proposal_forward() -> None:
+    reranker = _load_reranker_script()
+
+    class LabelSensitiveProposal(torch.nn.Module):
+        def forward(self, _batch):
+            raise ValueError(
+                "Gold edit targets absent from compact target vocabulary: [83676]"
+            )
+
+        def forward_for_evaluation(self, _batch):
+            return {"edit_logits": torch.zeros((1, 6, 3))}
+
+    outputs = reranker._proposal_outputs_for_prediction(LabelSensitiveProposal(), object())
+
+    assert outputs["edit_logits"].shape == (1, 6, 3)
+
+
 def test_atomic_torch_save_replaces_complete_checkpoint(tmp_path: Path) -> None:
     destination = get_last_checkpoint_path(tmp_path)
     atomic_torch_save({"epoch": 1}, destination)
