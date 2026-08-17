@@ -1,0 +1,138 @@
+{
+  "best_epoch": 3,
+  "completed_epochs": 5,
+  "train_loss": [
+    -0.796774984757866,
+    -0.7978452194649637,
+    -0.7978339254913147,
+    -0.7978345372517143,
+    -0.7978330928800209
+  ],
+  "train_metrics": [
+    {
+      "candidate_count": 42.59909028244009,
+      "deletes_focus_action_chosen": 0.9743009275111808,
+      "focus_deleted_chosen": 0.9742949464621348,
+      "global_chosen": 0.7973019187410688,
+      "global_oracle": 0.8046895194865651,
+      "primary_chosen": 0.24786065351932401,
+      "primary_oracle": 0.25205336890063834,
+      "regressions_chosen": 0.1685848389378255
+    },
+    {
+      "candidate_count": 42.59909028244009,
+      "deletes_focus_action_chosen": 0.9736041352973105,
+      "focus_deleted_chosen": 0.9736011447727875,
+      "global_chosen": 0.7979458056380538,
+      "global_oracle": 0.8046895194865651,
+      "primary_chosen": 0.2482464311827973,
+      "primary_oracle": 0.25205336890063834,
+      "regressions_chosen": 0.16622531508914007
+    },
+    {
+      "candidate_count": 42.59909028244009,
+      "deletes_focus_action_chosen": 0.9743622332639034,
+      "focus_deleted_chosen": 0.9743607380016418,
+      "global_chosen": 0.7979392142419431,
+      "global_oracle": 0.8046895194865651,
+      "primary_chosen": 0.24826287906767408,
+      "primary_oracle": 0.25205336890063834,
+      "regressions_chosen": 0.1669340694011026
+    },
+    {
+      "candidate_count": 42.59909177770235,
+      "deletes_focus_action_chosen": 0.9743577474771188,
+      "focus_deleted_chosen": 0.9743562522148572,
+      "global_chosen": 0.7979354550655564,
+      "global_oracle": 0.8046895194865651,
+      "primary_chosen": 0.24827334590350475,
+      "primary_oracle": 0.25205336890063834,
+      "regressions_chosen": 0.16686678259933402
+    },
+    {
+      "candidate_count": 42.59909028244009,
+      "deletes_focus_action_chosen": 0.974341299592242,
+      "focus_deleted_chosen": 0.9743383090677189,
+      "global_chosen": 0.7979330849189241,
+      "global_oracle": 0.8046895194865651,
+      "primary_chosen": 0.24827932695255084,
+      "primary_oracle": 0.25205336890063834,
+      "regressions_chosen": 0.16686678259933402
+    }
+  ],
+  "training_provenance": {
+    "config": {
+      "path": "/home/mvazquez/fidelity-safety-gap/models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/config.json",
+      "sha256": "fc6becd8a50c0a3e55b70120f14b123cf4f549d4d7a33fe7a3fb9aac848dcc52",
+      "size_bytes": 2001
+    },
+    "proposal_checkpoint": {
+      "path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/checkpoint.pth",
+      "sha256": "099a5cb14bf2a33157ac8b4d3bbc6cd1f6a891dda85e28c3a94fe5fb4d3a67d8",
+      "size_bytes": 201222581
+    },
+    "schema_version": 2,
+    "seed": 42,
+    "train_graph": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/train_graph-node_id.pkl",
+    "validation_graph": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/val_graph-node_id.pkl"
+  },
+  "val_loss": [
+    -0.7954701577001215,
+    -0.7954945524635217,
+    -0.7954987644234581,
+    -0.7954929740837468,
+    -0.7954896494860539
+  ],
+  "val_metrics": [
+    {
+      "candidate_count": 42.59844,
+      "deletes_focus_action_chosen": 0.97104,
+      "focus_deleted_chosen": 0.97104,
+      "global_chosen": 0.7955738203228755,
+      "global_oracle": 0.8024032487173662,
+      "primary_chosen": 0.25376,
+      "primary_oracle": 0.25864,
+      "regressions_chosen": 0.17176
+    },
+    {
+      "candidate_count": 42.59844,
+      "deletes_focus_action_chosen": 0.97384,
+      "focus_deleted_chosen": 0.97384,
+      "global_chosen": 0.7955909214797819,
+      "global_oracle": 0.8024032487173662,
+      "primary_chosen": 0.25392,
+      "primary_oracle": 0.25864,
+      "regressions_chosen": 0.17356
+    },
+    {
+      "candidate_count": 42.59844,
+      "deletes_focus_action_chosen": 0.97396,
+      "focus_deleted_chosen": 0.97396,
+      "global_chosen": 0.7955961420541253,
+      "global_oracle": 0.8024032487173662,
+      "primary_chosen": 0.25392,
+      "primary_oracle": 0.25864,
+      "regressions_chosen": 0.17356
+    },
+    {
+      "candidate_count": 42.59844,
+      "deletes_focus_action_chosen": 0.97396,
+      "focus_deleted_chosen": 0.97396,
+      "global_chosen": 0.7955961420541253,
+      "global_oracle": 0.8024032487173662,
+      "primary_chosen": 0.25392,
+      "primary_oracle": 0.25864,
+      "regressions_chosen": 0.17356
+    },
+    {
+      "candidate_count": 42.59844,
+      "deletes_focus_action_chosen": 0.97388,
+      "focus_deleted_chosen": 0.97388,
+      "global_chosen": 0.7955909807638027,
+      "global_oracle": 0.8024032487173662,
+      "primary_chosen": 0.25392,
+      "primary_oracle": 0.25864,
+      "regressions_chosen": 0.17356
+    }
+  ]
+}
