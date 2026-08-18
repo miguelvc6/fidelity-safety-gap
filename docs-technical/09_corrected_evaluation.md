@@ -231,7 +231,7 @@ complete, enforce the paper gate with:
 
 ```bash
 uv run python scripts/check_corrected_paper_readiness.py \
-  --paper latex_paper/main_compact.tex \
+  --paper latex_paper/main.tex \
   --verify-graph-checksums
 ```
 

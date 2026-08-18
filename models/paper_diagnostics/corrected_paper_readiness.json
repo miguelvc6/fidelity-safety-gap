@@ -26,7 +26,7 @@
     }
   },
   "paper": {
-    "path": "/home/mvazquez/fidelity-safety-gap/latex_paper/main_compact.tex",
+    "path": "/home/mvazquez/fidelity-safety-gap/latex_paper/main.tex",
     "sha256": "a4137c897d9f964c89f32da3981a56c3e37057a770378b72cc568807447780d9",
     "validated_tables": [
       "tab:main-results",

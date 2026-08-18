@@ -6,7 +6,7 @@ The pre-study repository state is tagged `pre-m1d-g0-stability-v2`. Historical M
 
 The implementation is opt-in. Legacy direct-safety behavior remains `loss_weight=1`, `score_temperature=1`, and `focus_deletion_weight=0`; last-checkpoint persistence and stability thresholds are disabled by default. The config generator's `--study deletion-shortcut-v2` mode emits only the four study configs and does not overwrite existing configs.
 
-To restore the pre-study state, revert commits after the tag and restore `latex_paper/main_compact.pre-m1d-g0-stability-v2.tex` if the paper has been updated. The four additive model directories can be moved aside without touching any historical artifact.
+To restore the pre-study state, revert commits after the tag and restore the tagged paper version as `latex_paper/main.tex` if the paper has been updated. The four additive model directories can be moved aside without touching any historical artifact.
 
 ## Registered training configuration
 
