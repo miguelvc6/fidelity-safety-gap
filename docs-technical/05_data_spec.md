@@ -101,6 +101,18 @@ Default bins are `1-32`, `33-64`, `65-83`, `84-107`, `108`,
 from each non-empty stratum with seed `42`, keeping at least one row per
 non-empty stratum.
 
+### Paper benchmark provenance and statistics sidecar
+
+`models/paper_diagnostics/benchmark_provenance_and_statistics.json` records
+the source-row audit and the descriptive statistics reported for the paper
+benchmark. It includes the source and sampled split sizes, correction-operation
+patterns, duplicate-row audit, test-set distributions for reconstructed A-box
+statements and attached/executable constraints, and node/edge distributions
+from the stored factorized graph. Input paths and checksums identify the
+sampling metadata, labeled test Parquet, graph manifest, and constraint
+definitions used for the summary. This sidecar is diagnostic only and is not
+an input to graph construction, training, or evaluation.
+
 ## 5) Wikidata Text Cache (`04_wikidata_retriever.py`)
 **Location:** `data/interim/wikidata_text.parquet`
 

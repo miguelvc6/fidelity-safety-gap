@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-08-19",
+  "dataset": {
+    "variant": "full_strat1m_minocc100",
+    "source": {
+      "title": "Wikidata Constraint Violations - July 2018 - extended",
+      "doi": "10.6084/m9.figshare.13338743",
+      "version": 2,
+      "history_dump_date": "2018-07-01",
+      "license": "CC0"
+    },
+    "full_variant_rows": 1910794,
+    "full_variant_split_rows": {
+      "train": 1337555,
+      "validation": 286619,
+      "test": 286620
+    },
+    "sample_fraction": 0.5,
+    "sampling_seed": 42,
+    "sampled_split_rows": {
+      "train": 668779,
+      "validation": 143310,
+      "test": 143316
+    },
+    "minimum_occurrence": 100
+  },
+  "source_row_audit": {
+    "raw_rows": 1910794,
+    "rows_with_matching_constraint_definition": 1910794,
+    "exact_duplicate_rows": 142,
+    "unique_revision_identifiers": 1006374,
+    "revision_identifiers_with_multiple_correction_rows": 100197,
+    "operation_count": {
+      "one": 1784896,
+      "two": 125898
+    },
+    "operation_pattern": {
+      "addition": 951751,
+      "deletion": 833145,
+      "addition_then_deletion": 67676,
+      "deletion_then_addition": 58222
+    },
+    "rows_with_two_additions_or_two_deletions": 0,
+    "deduplication_applied_by_dataframe_builder": false
+  },
+  "test_split_statistics": {
+    "rows": 143316,
+    "local_a_box_statements": {
+      "mean": 26.545835775489127,
+      "median": 17,
+      "p95": 74,
+      "maximum": 558
+    },
+    "locally_attached_constraints": {
+      "mean": 101.04691730162718,
+      "median": 83,
+      "p95": 266,
+      "maximum": 1092
+    },
+    "executable_factors": {
+      "mean": 60.602584498590524,
+      "median": 51,
+      "p95": 168,
+      "maximum": 662
+    },
+    "factorized_graph_nodes": {
+      "mean": 1054.9288844232326,
+      "median": 765,
+      "p95": 4337,
+      "maximum": 8398
+    },
+    "factorized_graph_directed_edges": {
+      "mean": 1811.8559267632365,
+      "median": 1444,
+      "p95": 5010,
+      "maximum": 66894
+    }
+  },
+  "definitions": {
+    "local_a_box_statements": "Distinct triples in the corrected reconstructed pre-edit evidence state.",
+    "locally_attached_constraints": "Length of local_constraint_ids in the interim row.",
+    "executable_factors": "Length of factor_constraint_ids in the labeled interim row.",
+    "factorized_graph_nodes": "PyG Data.num_nodes in the stored factorized node-ID graph.",
+    "factorized_graph_directed_edges": "Number of columns in PyG Data.edge_index in the stored factorized node-ID graph."
+  },
+  "input_identity": {
+    "sampling_metadata": {
+      "path": "data/interim/full_strat1m_minocc100/sampling_metadata.json",
+      "sha256": "fdb9ba86caeb4821b2ff8db521d361fe3034b4fdcf7e75f1cea690534d4d7d78"
+    },
+    "labeled_test_parquet": {
+      "path": "data/interim/full_strat1m_minocc100_labeled/df_test.parquet",
+      "sha256": "16ba5c1b79808ed6a6e2085fc3b4de711e3a2b023d4df17e11e542cb1b4f8776"
+    },
+    "factorized_test_graph_manifest": {
+      "path": "data/processed/full_strat1m_minocc100/test_graph-node_id.pkl.manifest.json",
+      "sha256": "645e395f23b22d61dcbcd6d41e7fddc3dab637ea96a7a812eb481bd3c7232286",
+      "artifact_prefix_16mb_sha256": "4f30800aacbc593356917add63a498721dda80ee73d5c6d4e4ea1b98cb6d1ac5"
+    },
+    "constraint_definitions": {
+      "path": "data/raw/full/constraints.tsv",
+      "sha256": "7a4749edadfef0566b30986a9b6bdf213c7b4f2769413d903aeadcafd890fe57"
+    }
+  }
+}

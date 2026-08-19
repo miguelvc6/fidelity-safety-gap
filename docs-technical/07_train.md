@@ -25,7 +25,7 @@
    - `ConstraintMetricsAccumulator` aggregates loss/accuracy per constraint type so reports can highlight which shapes dominate or lag.
    - If chooser training is enabled, candidate sets are built per graph and scored by the chooser head. Training uses an optimized path:
      - candidate scoring is done in a packed/batched call (`score_candidates_packed`) rather than one scorer call per graph,
-     - `fix1`-style chooser losses use `evaluate_candidates_loss_terms()` to compute only the required terms (no full diagnostic payload),
+     - `fix1`-style chooser losses use `evaluate_candidate_metrics()` so the primary and secondary terms follow the same candidate evaluator as the other decision-level systems,
      - top-k candidate extraction can be restricted to valid entity/predicate class IDs per slot.
    - `torch.optim.Adam` drives the updates, `ReduceLROnPlateau` reduces LR when validation loss stalls, gradient clipping is optional, and early stopping is triggered after `training_config.early_stopping_rounds` epochs without improvement.
    - The trainer records stability diagnostics every epoch: learning rate, unclipped gradient norm mean/max, parameter norm/max absolute parameter value, edit-logit max magnitude, factor-logit max magnitude, and chooser-score max magnitude.
