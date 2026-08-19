@@ -34,7 +34,11 @@ from modules.model_store import (
     get_last_checkpoint_path,
     history_path,
 )
-from modules.evaluation_artifacts import atomic_write_json, sha256_file
+from modules.evaluation_artifacts import (
+    atomic_write_json,
+    repository_relative_path,
+    sha256_file,
+)
 from modules.models import BaseGraphModel, build_model
 from modules.repair_eval import ConstraintRepairHeuristics, ViolationContext, load_violation_contexts
 from modules.reranker_eval import CandidateConstraintEvaluator
@@ -111,7 +115,7 @@ def _max_abs_value(tensor: torch.Tensor | None) -> float:
 def _file_identity(path: Path) -> dict[str, object]:
     resolved = path.resolve()
     return {
-        "path": str(resolved),
+        "path": repository_relative_path(resolved),
         "size_bytes": resolved.stat().st_size,
         "sha256": sha256_file(resolved),
     }
@@ -3572,8 +3576,8 @@ def main():
         "seed": training_cfg.seed,
         "config": config_identity,
         "initialization_checkpoint": initialization_identity,
-        "train_graph": str(train_data_path.resolve()),
-        "validation_graph": str(val_data_path.resolve()),
+        "train_graph": repository_relative_path(train_data_path),
+        "validation_graph": repository_relative_path(val_data_path),
     }
     history["training_provenance"] = training_provenance
 

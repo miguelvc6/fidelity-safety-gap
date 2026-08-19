@@ -15,6 +15,7 @@ import torch
 
 
 EVALUATION_SCHEMA_VERSION = 2
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PREDICTION_COLUMNS = (
     "pred_add_subject",
     "pred_add_predicate",
@@ -165,11 +166,21 @@ def atomic_write_parquet(path: Path, frame: pd.DataFrame) -> None:
             temporary.unlink()
 
 
+def repository_relative_path(path: Path) -> str:
+    """Return a portable repository-relative path when possible."""
+
+    resolved = Path(path).resolve()
+    try:
+        return resolved.relative_to(REPOSITORY_ROOT).as_posix()
+    except ValueError:
+        return str(resolved)
+
+
 def _file_identity(path: Path | None) -> dict[str, Any] | None:
     if path is None or not path.exists():
         return None
     return {
-        "path": str(path.resolve()),
+        "path": repository_relative_path(path),
         "size_bytes": path.stat().st_size,
         "sha256": sha256_file(path),
     }

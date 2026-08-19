@@ -272,7 +272,7 @@ def test_h2_ablation_config_generation_is_opt_in() -> None:
             module.main()
             default_dirs = sorted(path.name for path in models.iterdir() if path.is_dir())
             assert not any(name.startswith("h2_") for name in default_dirs)
-            assert len(default_dirs) == 6
+            assert len(default_dirs) == 5
 
             sys.argv = [
                 "make_experiment_configs.py",

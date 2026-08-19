@@ -6,28 +6,17 @@
       "CFM",
       "CDM"
     ],
-    "excluded_systems": [
-      "G0"
-    ],
     "learned_systems": [
       "B0",
       "A1",
       "M1C",
-      "M1D"
+      "M1D",
+      "G0"
     ]
   },
-  "excluded_runs": {
-    "G0": {
-      "membership_rate": 0.9936573725194675,
-      "predictions_sha256": "34ddc9ff52415b8347d9220e6425bc73d9d50114b5c5b29a04d9814137b26931",
-      "reason": "missing reranker checkpoint and incomplete gold-excluded candidate membership",
-      "row_count": 143316,
-      "status": "excluded"
-    }
-  },
   "paper": {
-    "path": "/home/mvazquez/fidelity-safety-gap/latex_paper/main.tex",
-    "sha256": "a4137c897d9f964c89f32da3981a56c3e37057a770378b72cc568807447780d9",
+    "path": "latex_paper/main.tex",
+    "sha256": "bd77bf1a32b8403d6e854697a6da738d770b81140d6e7ad733c7a824afc0c399",
     "validated_tables": [
       "tab:main-results",
       "tab:symbolic-results",
@@ -72,7 +61,7 @@
       "graph_checksums_verified": true,
       "mean_additions": 0.5747299673448882,
       "mean_deletions": 0.46044405369951713,
-      "model_path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/evaluations/model.json",
+      "model_path": "models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/evaluations/model.json",
       "paper_metrics": {
         "base_deletion_rate": {
           "denominator": 143316,
@@ -125,7 +114,7 @@
           "value": 0.27016522928354125
         }
       },
-      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+      "predictions_path": "models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
       "predictions_sha256": "b9c0588e6e06b2f34774f45ba06a5455c98491fe74c2fecc2cba200d5a246750",
       "row_count": 143316,
       "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
@@ -133,7 +122,7 @@
         "best_epoch": 10,
         "best_validation_loss": 0.28684,
         "epochs_run": 10,
-        "history_path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/training_history.json",
+        "history_path": "models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/training_history.json",
         "history_sha256": "6c5c9a65437a87a255111f9346b8d17f7d1d878d6e1ec2eaa5f1a11d4fbff057"
       }
     },
@@ -148,7 +137,7 @@
       "graph_checksums_verified": false,
       "mean_additions": 0.10467079739875519,
       "mean_deletions": 0.0,
-      "model_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-AddMirrorBaseline.json",
+      "model_path": "models/baselines/full_strat1m/parquet/baseline-AddMirrorBaseline.json",
       "paper_metrics": {
         "base_deletion_rate": {
           "denominator": 143316,
@@ -201,7 +190,7 @@
           "value": 0.0
         }
       },
-      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-AddMirrorBaseline/predictions.parquet",
+      "predictions_path": "models/baselines/full_strat1m/parquet/baseline-AddMirrorBaseline/predictions.parquet",
       "predictions_sha256": "e58065cdc85cc7887829d8145ff15301b1e93fa39026b968df01c84314c251d1",
       "row_count": 143316,
       "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
@@ -218,7 +207,7 @@
       "graph_checksums_verified": true,
       "mean_additions": 0.515860057495325,
       "mean_deletions": 0.482053643696447,
-      "model_path": "/home/mvazquez/fidelity-safety-gap/models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/evaluations/model.json",
+      "model_path": "models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/evaluations/model.json",
       "paper_metrics": {
         "base_deletion_rate": {
           "denominator": 143316,
@@ -271,7 +260,7 @@
           "value": 0.34188087861787936
         }
       },
-      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+      "predictions_path": "models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
       "predictions_sha256": "98861939b42496a0f9d0bbb7e6a0157c7a5ae039e13b2e1f8adc0a7e8e8ecbdc",
       "row_count": 143316,
       "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
@@ -279,7 +268,7 @@
         "best_epoch": 10,
         "best_validation_loss": 0.43182,
         "epochs_run": 10,
-        "history_path": "/home/mvazquez/fidelity-safety-gap/models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/training_history.json",
+        "history_path": "models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/training_history.json",
         "history_sha256": "4b7055eab56221afa4718c769558fe0b9c0f20c9d8cdca785558a56c2739b6fd"
       }
     },
@@ -294,7 +283,7 @@
       "graph_checksums_verified": false,
       "mean_additions": 0.5602863602110023,
       "mean_deletions": 0.48014178458790363,
-      "model_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-ConstraintDefinitionMajorityBaseline.json",
+      "model_path": "models/baselines/full_strat1m/parquet/baseline-ConstraintDefinitionMajorityBaseline.json",
       "paper_metrics": {
         "base_deletion_rate": {
           "denominator": 143316,
@@ -347,7 +336,7 @@
           "value": 0.3228739289402439
         }
       },
-      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-ConstraintDefinitionMajorityBaseline/predictions.parquet",
+      "predictions_path": "models/baselines/full_strat1m/parquet/baseline-ConstraintDefinitionMajorityBaseline/predictions.parquet",
       "predictions_sha256": "8ab1e13efcd4f157721b271cfc3678b5263f853a543855e2767a25defe414134",
       "row_count": 143316,
       "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
@@ -364,7 +353,7 @@
       "graph_checksums_verified": false,
       "mean_additions": 0.5305269474448073,
       "mean_deletions": 0.476646013006224,
-      "model_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-ConstraintFamilyMajorityBaseline.json",
+      "model_path": "models/baselines/full_strat1m/parquet/baseline-ConstraintFamilyMajorityBaseline.json",
       "paper_metrics": {
         "base_deletion_rate": {
           "denominator": 143316,
@@ -417,7 +406,7 @@
           "value": 0.28905355996539117
         }
       },
-      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-ConstraintFamilyMajorityBaseline/predictions.parquet",
+      "predictions_path": "models/baselines/full_strat1m/parquet/baseline-ConstraintFamilyMajorityBaseline/predictions.parquet",
       "predictions_sha256": "6ed893cc25df4099aa63e022049c974dcae0c94852e11ba873fe391525f90ef3",
       "row_count": 143316,
       "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
@@ -434,7 +423,7 @@
       "graph_checksums_verified": false,
       "mean_additions": 0.0,
       "mean_deletions": 1.0,
-      "model_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-DeleteFocusBaseline.json",
+      "model_path": "models/baselines/full_strat1m/parquet/baseline-DeleteFocusBaseline.json",
       "paper_metrics": {
         "base_deletion_rate": {
           "denominator": 143316,
@@ -487,11 +476,87 @@
           "value": 0.5781908509866309
         }
       },
-      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/baselines/full_strat1m/parquet/baseline-DeleteFocusBaseline/predictions.parquet",
+      "predictions_path": "models/baselines/full_strat1m/parquet/baseline-DeleteFocusBaseline/predictions.parquet",
       "predictions_sha256": "dbd1a79ce6b3d936c081f6da3a745428c4b1d30a50a4ecc4c4d6178187fab9dc",
       "row_count": 143316,
       "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
       "training": null
+    },
+    "G0": {
+      "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
+      "dataset_variant": "full_strat1m_minocc100",
+      "fidelity": {
+        "f1": 0.2638805405660951,
+        "precision": 0.272628317843088,
+        "recall": 0.25567668730123416
+      },
+      "graph_checksums_verified": true,
+      "mean_additions": 0.0,
+      "mean_deletions": 1.0,
+      "model_path": "models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/evaluations/model.json",
+      "paper_metrics": {
+        "base_deletion_rate": {
+          "denominator": 143316,
+          "numerator": 139600,
+          "value": 0.9740712830388791
+        },
+        "deletes_base_action_rate": {
+          "denominator": 143316,
+          "numerator": 139600,
+          "value": 0.9740712830388791
+        },
+        "delta_local_satisfaction": {
+          "denominator": 4689235,
+          "numerator": 184839,
+          "value": 0.03941773018413451
+        },
+        "disruption": {
+          "denominator": 143316,
+          "numerator": 143316,
+          "value": 1.0
+        },
+        "eppf": {
+          "denominator": 54234,
+          "numerator": 3275,
+          "value": 0.06038647342995169
+        },
+        "local_satisfaction": {
+          "denominator": 5931955,
+          "numerator": 4758090,
+          "value": 0.802111614130586
+        },
+        "pfr": {
+          "denominator": 54234,
+          "numerator": 49893,
+          "value": 0.919957959951322
+        },
+        "sir": {
+          "denominator": 1304470,
+          "numerator": 159332,
+          "value": 0.12214309259699342
+        },
+        "srr": {
+          "denominator": 3281230,
+          "numerator": 24386,
+          "value": 0.007431969109145046
+        },
+        "vacuous_improvement": {
+          "denominator": 143316,
+          "numerator": 81107,
+          "value": 0.5659312288927963
+        }
+      },
+      "predictions_path": "models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+      "predictions_sha256": "731d2c7bdd4f900ae89ab03f810aa4060095ad66c7b54f62ba5acf1504c23d15",
+      "row_count": 143316,
+      "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
+      "training": {
+        "best_epoch": 3,
+        "best_validation_loss": -0.7954987644234581,
+        "epochs_run": 5,
+        "history_path": "models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/training_history.json",
+        "history_sha256": "f34bce1fef2e9c2eb482271ec835c81946fef5025d6d4aa50ca0595fab0160e1"
+      }
     },
     "M1C": {
       "dataset_sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
@@ -504,7 +569,7 @@
       "graph_checksums_verified": true,
       "mean_additions": 0.5675779396578191,
       "mean_deletions": 0.4324220603421809,
-      "model_path": "/home/mvazquez/fidelity-safety-gap/models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/evaluations/model.json",
+      "model_path": "models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/evaluations/model.json",
       "paper_metrics": {
         "base_deletion_rate": {
           "denominator": 143316,
@@ -557,7 +622,7 @@
           "value": 0.23640068101258757
         }
       },
-      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+      "predictions_path": "models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
       "predictions_sha256": "ab0665f53fd43a67535b99a4494047f727d12d3ce87427169b16e0656570d3e0",
       "row_count": 143316,
       "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
@@ -565,7 +630,7 @@
         "best_epoch": 9,
         "best_validation_loss": 0.49348,
         "epochs_run": 10,
-        "history_path": "/home/mvazquez/fidelity-safety-gap/models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/training_history.json",
+        "history_path": "models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/training_history.json",
         "history_sha256": "3df989bf1375d159a66e6ac727c23b87edcc4817e5a852578896cbb074ff86cf"
       }
     },
@@ -580,7 +645,7 @@
       "graph_checksums_verified": true,
       "mean_additions": 0.5325853359010857,
       "mean_deletions": 0.4617279298891959,
-      "model_path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/evaluations/model.json",
+      "model_path": "models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/evaluations/model.json",
       "paper_metrics": {
         "base_deletion_rate": {
           "denominator": 143316,
@@ -633,7 +698,7 @@
           "value": 0.3576013843534567
         }
       },
-      "predictions_path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+      "predictions_path": "models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
       "predictions_sha256": "b0c7eb39ab7866ff536d07c48c4b8fa1ceae1148d9730aee8f364db929096094",
       "row_count": 143316,
       "row_identity_sha256": "a94efe4c6b87c18fdeec2d16117d3e5de51b6a6ba75c1ce69a85839d889b07c2",
@@ -641,7 +706,7 @@
         "best_epoch": 1,
         "best_validation_loss": 1.48208,
         "epochs_run": 3,
-        "history_path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/training_history.json",
+        "history_path": "models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/training_history.json",
         "history_sha256": "a48858abce8202690c93042d0b0066dcdbed4fd9f4a8ac38ecbe9b4af440090c"
       }
     }

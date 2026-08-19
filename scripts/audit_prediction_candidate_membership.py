@@ -30,7 +30,11 @@ from modules.data_encoders import (  # noqa: E402
     dataset_variant_name,
     graph_dataset_filename,
 )
-from modules.evaluation_artifacts import atomic_write_json, sha256_file  # noqa: E402
+from modules.evaluation_artifacts import (  # noqa: E402
+    atomic_write_json,
+    repository_relative_path,
+    sha256_file,
+)
 from modules.repair_eval import (  # noqa: E402
     ConstraintRepairHeuristics,
     load_violation_contexts,
@@ -207,20 +211,23 @@ def main() -> None:
     report = {
         "schema_version": 1,
         "status": "ok" if membership_count == len(predictions) else "failed",
-        "run_directory": str(run_directory),
-        "config": {"path": str(config_path), "sha256": sha256_file(config_path)},
+        "run_directory": repository_relative_path(run_directory),
+        "config": {
+            "path": repository_relative_path(config_path),
+            "sha256": sha256_file(config_path),
+        },
         "predictions": {
-            "path": str(predictions_path),
+            "path": repository_relative_path(predictions_path),
             "sha256": sha256_file(predictions_path),
         },
         "proposal": {
-            "run_directory": str(proposal_run_directory),
+            "run_directory": repository_relative_path(proposal_run_directory),
             "config": {
-                "path": str(proposal_config_path),
+                "path": repository_relative_path(proposal_config_path),
                 "sha256": sha256_file(proposal_config_path),
             },
             "checkpoint": {
-                "path": str(proposal_run_directory / "checkpoint.pth"),
+                "path": repository_relative_path(proposal_run_directory / "checkpoint.pth"),
                 "sha256": sha256_file(proposal_run_directory / "checkpoint.pth"),
             },
         },
@@ -238,8 +245,8 @@ def main() -> None:
         else 0.0,
         "missing_examples": missing_examples,
         "inference": (
-            "A retained prediction absent from the reconstructed gold-excluded candidate set "
-            "cannot be certified without the missing reranker checkpoint."
+            "A prediction absent from the reconstructed gold-excluded candidate set "
+            "cannot be certified as an output of that candidate protocol."
         ),
     }
     atomic_write_json(args.output.resolve(), report)

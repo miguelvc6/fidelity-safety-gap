@@ -34,6 +34,7 @@ from modules.evaluation_artifacts import (
     EVALUATION_SCHEMA_VERSION,
     atomic_write_json,
     load_and_validate_predictions,
+    repository_relative_path,
 )
 from modules.model_store import config_copy_path
 from modules.repair_eval import PaperMetricsAccumulator, evaluate_paper_metric_instance
@@ -332,9 +333,9 @@ def run_analysis(args: argparse.Namespace) -> None:
 
     summary = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
-        "g0_run_directory": str(run_directory),
+        "g0_run_directory": repository_relative_path(run_directory),
         "predictions": {
-            "path": str(predictions_path),
+            "path": repository_relative_path(predictions_path),
             "sha256": predictions_manifest["predictions"]["sha256"],
             "row_count": predictions_manifest["row_count"],
         },

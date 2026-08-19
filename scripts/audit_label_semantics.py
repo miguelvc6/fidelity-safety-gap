@@ -23,7 +23,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from modules.evaluation_artifacts import atomic_write_json
+from modules.evaluation_artifacts import atomic_write_json, repository_relative_path
 
 
 def _load_eval_module():
@@ -84,7 +84,7 @@ def run_audit(args: argparse.Namespace) -> dict[str, object]:
     report: dict[str, object] = {
         "schema_version": 1,
         "mode": "read_only",
-        "labeled_directory": str(labeled_dir.resolve()),
+        "labeled_directory": repository_relative_path(labeled_dir),
         "splits": {},
     }
     for split in args.splits:
@@ -117,7 +117,7 @@ def run_audit(args: argparse.Namespace) -> dict[str, object]:
                 for bucket in (overall, by_family[family]):
                     bucket[f"{stored_name}_drift"] += drift
         report["splits"][split] = {
-            "path": str(path.resolve()),
+            "path": repository_relative_path(path),
             "overall": overall,
             "by_constraint_family": dict(sorted(by_family.items())),
         }

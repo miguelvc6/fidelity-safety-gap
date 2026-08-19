@@ -82,11 +82,10 @@ NONE_CLASS_INDEX = 0  # Bass-style datasets reserve class 0 for "no triple"
 ACTIONS = ("add", "del")
 PAPER_SUITE_TAGS: set[str] = {
     "b0_eswc_reproduction",
-    "b0_parameter_matched",
     "a1_factorized_imitation_compact_grouped",
     "m1c_safe_factor_chooser_compact_grouped",
     "m1d_safe_factor_direct_compact_grouped",
-    "g0_globalfix_reference",
+    "g0_globalfix_reference_v2",
 }
 
 

@@ -1,17 +1,17 @@
 {
   "checkpoint": {
-    "path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/checkpoint.pth",
+    "path": "models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/checkpoint.pth",
     "sha256": "9a9f9c3b5c89341c54b5fecabd5e8f993ecb419b8b0e0fc63c8a56f42f1b38cf",
     "size_bytes": 201222581
   },
   "config": {
-    "path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/config.json",
+    "path": "models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/config.json",
     "sha256": "1a233461ee109df62b4aa4a2adb5094277f81634f47397746a7ede909df1c09a",
     "size_bytes": 64406
   },
   "dataset": {
     "artifact": {
-      "path": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100/df_test.parquet",
+      "path": "data/interim/full_strat1m_minocc100/df_test.parquet",
       "sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
       "size_bytes": 28038233
     },
@@ -22,14 +22,14 @@
   "graph": {
     "artifacts": [
       {
-        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph-node_id-shard000.pt",
+        "path": "data/processed/full_strat1m_minocc100/test_graph-node_id-shard000.pt",
         "sha256": "3d0e35c22007a6c1244826bf530c5198076c32de38a5b653f7ed593ca4711810",
         "size_bytes": 11826829369
       }
     ]
   },
   "predictions": {
-    "path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+    "path": "models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
     "sha256": "b0c7eb39ab7866ff536d07c48c4b8fa1ceae1148d9730aee8f364db929096094",
     "size_bytes": 3848663
   },

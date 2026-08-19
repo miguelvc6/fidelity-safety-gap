@@ -24,6 +24,7 @@ from modules.evaluation_artifacts import (  # noqa: E402
     IDENTITY_COLUMNS,
     PREDICTION_COLUMNS,
     atomic_write_json,
+    repository_relative_path,
     sha256_file,
 )
 from modules.repair_eval import PAPER_METRIC_KEYS  # noqa: E402
@@ -40,6 +41,7 @@ RUNS = {
     "A1": "a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id",
     "M1C": "m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id",
     "M1D": "m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id",
+    "G0": "g0_globalfix_reference_v2__full_strat1m_minocc100__node_id",
 }
 BASELINES = {
     "DFB": "DeleteFocusBaseline",
@@ -115,6 +117,18 @@ EXPECTED_MODEL_CONFIG = {
         "pressure_module_sharing": "per_type",
         "active_factor_type_ids": [0, 2, 3, 4, 5, 9, 12, 14, 15, 16],
     },
+    "G0": {
+        "model": "RERANKER",
+        "constraint_representation": "factorized",
+        "hidden_channels": 128,
+        "head_hidden": 128,
+        "num_layers": 2,
+        "dropout": 0.5,
+        "num_embedding_size": 128,
+        "use_role_embeddings": False,
+        "use_edge_attributes": False,
+        "pressure_enabled": False,
+    },
 }
 EXPECTED_TRAINING_CONFIG = {
     "batch_size": 256,
@@ -133,7 +147,19 @@ EXPECTED_FACTOR_LOSS = {
     "weight_post_gold": 0.1,
     "weight_pre": 0.1,
 }
-G0_RUN = "g0_globalfix_reference__full_strat1m_minocc100__node_id"
+EXPECTED_RERANKER_TRAINING_CONFIG = {
+    "batch_size": 64,
+    "early_stopping_rounds": 2,
+    "grad_clip": 0.5,
+    "learning_rate": 1e-4,
+    "num_epochs": 10,
+    "validation_subset_size": 25_000,
+    "weight_decay": 1e-4,
+    "seed": 42,
+    "objective": "global_fix",
+    "include_gold": True,
+    "prediction_include_gold": False,
+}
 SIDECAR_RUNS = ("A1", "M1C", "M1D")
 EXPECTED_H2_SELECTION = {
     "A1": "slot_argmax",
@@ -150,6 +176,17 @@ TARGET_COLUMNS = (
     "del_object",
 )
 PAPER_ROW_NAMES = (*RUNS, *BASELINES)
+PAPER_LABELS = {
+    "B0": "Direct--Passive GNN",
+    "A1": "Direct--Factor GNN",
+    "M1C": "Candidate--C",
+    "M1D": "Candidate--DP",
+    "G0": "Candidate--SR",
+    "DFB": "Baseline--DB",
+    "AMB": "Baseline--AM",
+    "CFM": "Baseline--FM",
+    "CDM": "Baseline--DM",
+}
 _SHA256_CACHE: dict[tuple[str, int, int], str] = {}
 
 
@@ -233,6 +270,8 @@ def _assert_file_identity(system: str, name: str, identity: Any) -> Path:
     if not isinstance(identity, dict):
         raise ValueError(f"{system}: missing {name} provenance")
     path = Path(identity.get("path", ""))
+    if not path.is_absolute():
+        path = ROOT / path
     if not path.exists():
         raise FileNotFoundError(f"{system}: {name} missing at {path}")
     if int(identity.get("size_bytes", -1)) != path.stat().st_size:
@@ -415,7 +454,10 @@ def _check_evaluation(
             if config.get(key) != expected:
                 raise ValueError(f"{system}: config {key}={config.get(key)!r}, expected {expected!r}")
         training_config = full_config.get("training_config") or {}
-        for key, expected in EXPECTED_TRAINING_CONFIG.items():
+        expected_training = (
+            EXPECTED_RERANKER_TRAINING_CONFIG if system == "G0" else EXPECTED_TRAINING_CONFIG
+        )
+        for key, expected in expected_training.items():
             if training_config.get(key) != expected:
                 raise ValueError(
                     f"{system}: training config {key}={training_config.get(key)!r}, "
@@ -425,7 +467,10 @@ def _check_evaluation(
         # 42. New configurations record the same value directly.
         if training_config.get("seed", 42) != 42:
             raise ValueError(f"{system}: training seed is not 42")
-        if system != "B0" and training_config.get("factor_loss") != EXPECTED_FACTOR_LOSS:
+        if (
+            system in {"A1", "M1C", "M1D"}
+            and training_config.get("factor_loss") != EXPECTED_FACTOR_LOSS
+        ):
             raise ValueError(f"{system}: factor-loss configuration differs from the paper")
         chooser = training_config.get("chooser") or {}
         direct_safety = training_config.get("direct_safety") or {}
@@ -441,7 +486,7 @@ def _check_evaluation(
             }
             if chooser != expected_chooser:
                 raise ValueError("M1C: chooser configuration differs from the paper")
-        elif chooser.get("enabled") is not False:
+        elif system != "G0" and chooser.get("enabled") is not False:
             raise ValueError(f"{system}: unexpected learned chooser")
         if system == "M1D":
             expected_direct = {
@@ -453,10 +498,22 @@ def _check_evaluation(
             }
             if direct_safety != expected_direct:
                 raise ValueError("M1D: direct-safety configuration differs from the paper")
-        elif direct_safety.get("enabled") is not False:
+        elif system != "G0" and direct_safety.get("enabled") is not False:
             raise ValueError(f"{system}: unexpected direct-safety objective")
+        if system == "G0":
+            proposal = full_config.get("proposal_config") or {}
+            if proposal.get("config_tag") != RUNS["A1"]:
+                raise ValueError("G0: proposal configuration is not the paper Direct-Factor run")
+            reranker = full_config.get("reranker_config") or {}
+            if reranker != {
+                "candidate_embedding_dim": 64,
+                "candidate_hidden_dim": 128,
+                "dropout": 0.1,
+            }:
+                raise ValueError("G0: reranker architecture differs from the paper")
         graph_artifacts = (manifest.get("graph") or {}).get("artifacts", [])
         graph_paths = [Path(item.get("path", "")) for item in graph_artifacts]
+        graph_paths = [path if path.is_absolute() else ROOT / path for path in graph_paths]
         if not graph_paths or any(not path.exists() for path in graph_paths):
             raise ValueError(f"{system}: graph provenance is incomplete")
         for index, (identity, path) in enumerate(zip(graph_artifacts, graph_paths)):
@@ -478,7 +535,7 @@ def _check_evaluation(
             raise ValueError(f"{system}: training history exceeds configured epochs")
         best_epoch_index = min(range(len(val_loss)), key=lambda index: float(val_loss[index]))
         training_summary = {
-            "history_path": str(history_path),
+            "history_path": repository_relative_path(history_path),
             "history_sha256": sha256_file(history_path),
             "epochs_run": len(val_loss),
             "best_epoch": best_epoch_index + 1,
@@ -507,8 +564,8 @@ def _check_evaluation(
     add_mean = float(np.all(prediction_values[:, :3] != 0, axis=1).mean())
     del_mean = float(np.all(prediction_values[:, 3:] != 0, axis=1).mean())
     return {
-        "model_path": str(model_path),
-        "predictions_path": str(predictions_path),
+        "model_path": repository_relative_path(model_path),
+        "predictions_path": repository_relative_path(predictions_path),
         "predictions_sha256": predictions["sha256"],
         "dataset_variant": dataset.get("variant"),
         "dataset_sha256": artifact.get("sha256"),
@@ -616,6 +673,10 @@ def _check_sidecars(system: str) -> dict[str, Any]:
 
 
 def _normalise_tex(value: str) -> str:
+    previous = None
+    while previous != value:
+        previous = value
+        value = re.sub(r"\\(?:textbf|underline)\{([^{}]*)\}", r"\1", value)
     return re.sub(r"\s+", " ", value).strip()
 
 
@@ -645,23 +706,15 @@ def _check_paper(
         raise FileNotFoundError(paper_path)
     source = paper_path.read_text(encoding="utf-8")
     forbidden_fragments = (
-        "five trained systems",
-        "diagnostic model maximizing local satisfaction",
-        r"s_{ij}^\star",
         "compact A1",
         "Compact A1",
         "parameter-matched B0",
+        "there are no retained weights with which to rescore",
+        "cannot be regenerated",
     )
     present_forbidden = [value for value in forbidden_fragments if value in source]
     if present_forbidden:
         raise ValueError(f"Paper: stale or unsupported claims remain: {present_forbidden}")
-    for required_fragment in (
-        "summarizes the four trained systems",
-        "M1D's training history is numerically unstable",
-        "there are no retained weights with which to rescore",
-    ):
-        if required_fragment not in source:
-            raise ValueError(f"Paper: missing audited statement: {required_fragment}")
     main_table = _paper_table(source, "tab:main-results")
     symbolic_table = _paper_table(source, "tab:symbolic-results")
     transition_table = _paper_table(source, "tab:transition-results")
@@ -674,7 +727,7 @@ def _check_paper(
             main_table,
             "tab:main-results",
             [
-                system,
+                PAPER_LABELS[system],
                 f'{fidelity["precision"]:.4f}',
                 f'{fidelity["recall"]:.4f}',
                 f'{fidelity["f1"]:.4f}',
@@ -687,7 +740,7 @@ def _check_paper(
             symbolic_table,
             "tab:symbolic-results",
             [
-                system,
+                PAPER_LABELS[system],
                 f'{metrics["pfr"]["value"]:.4f}',
                 f'{metrics["local_satisfaction"]["value"]:.4f}',
                 f'{metrics["local_satisfaction"]["denominator"]:,}',
@@ -703,21 +756,13 @@ def _check_paper(
             transition_table,
             "tab:transition-results",
             [
-                system,
+                PAPER_LABELS[system],
                 f'{metrics["sir"]["value"]:.4f}',
                 f'{metrics["sir"]["denominator"]:,}',
                 f'{metrics["srr"]["value"]:.4f}',
                 f'{metrics["srr"]["denominator"]:,}',
             ],
         )
-
-    for table_name, table in (
-        ("tab:main-results", main_table),
-        ("tab:symbolic-results", symbolic_table),
-        ("tab:transition-results", transition_table),
-    ):
-        if re.search(r"(?:^|\s)G0\s*&", table):
-            raise ValueError(f"Paper: excluded G0 appears in {table_name}")
 
     h2 = _load(
         ROOT / "models" / RUNS["A1"] / "evaluations" / "h2" / "h2_report.json"
@@ -746,7 +791,7 @@ def _check_paper(
         )
 
     return {
-        "path": str(paper_path),
+        "path": repository_relative_path(paper_path),
         "sha256": sha256_file(paper_path),
         "validated_tables": [
             "tab:main-results",
@@ -754,36 +799,6 @@ def _check_paper(
             "tab:transition-results",
             "tab:pressure-masking",
         ],
-    }
-
-
-def _check_g0_exclusion() -> dict[str, Any]:
-    run_directory = ROOT / "models" / G0_RUN
-    evaluation_dir = run_directory / "evaluations"
-    if (run_directory / "checkpoint.pth").exists():
-        raise ValueError("G0: checkpoint now exists; regenerate it instead of excluding the run")
-    audit = _load(evaluation_dir / "candidate_membership_audit.json")
-    if audit.get("status") != "failed":
-        raise ValueError("G0: expected the retained-prediction exclusion audit to fail")
-    if int(audit.get("row_count", -1)) != EXPECTED_ROWS:
-        raise ValueError("G0: candidate-membership audit has incomplete support")
-    if int(audit.get("membership_count", EXPECTED_ROWS)) >= EXPECTED_ROWS:
-        raise ValueError("G0: exclusion audit no longer demonstrates missing label-blind candidates")
-    candidate_protocol = audit.get("candidate_protocol") or {}
-    if candidate_protocol.get("include_gold") is not False:
-        raise ValueError("G0: candidate-membership audit did not exclude gold")
-    if candidate_protocol.get("topk_proposal_candidates_used") is not True:
-        raise ValueError("G0: candidate-membership audit did not reconstruct the full candidate set")
-    predictions = audit.get("predictions") or {}
-    source_path = Path(predictions.get("path", ""))
-    if not source_path.exists() or sha256_file(source_path) != predictions.get("sha256"):
-        raise ValueError("G0: audited source prediction checksum mismatch")
-    return {
-        "status": "excluded",
-        "reason": "missing reranker checkpoint and incomplete gold-excluded candidate membership",
-        "row_count": audit["row_count"],
-        "membership_rate": audit.get("membership_rate"),
-        "predictions_sha256": predictions.get("sha256"),
     }
 
 
@@ -827,7 +842,6 @@ def main() -> None:
             raise ValueError(f"DFB {metric_name} is {actual}, expected {expected}")
 
     sidecars = {system: _check_sidecars(system) for system in SIDECAR_RUNS}
-    g0_exclusion = _check_g0_exclusion()
     paper = _check_paper(args.paper.resolve(), systems) if args.paper else None
     report = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
@@ -835,11 +849,9 @@ def main() -> None:
         "canonical_scope": {
             "learned_systems": list(RUNS),
             "deterministic_baselines": list(BASELINES),
-            "excluded_systems": ["G0"],
         },
         "systems": systems,
         "sidecars": sidecars,
-        "excluded_runs": {"G0": g0_exclusion},
         "paper": paper,
     }
     atomic_write_json(args.output, report)

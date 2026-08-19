@@ -277,7 +277,8 @@ class GlobalToLocalNodeMap:
     ) -> int:
         """Encode a global node ID to a local node ID."""
         if global_node_id in self.global_to_local:
-            # TODO: this is a workaround, because in some cases the `<something>_text` feature is not available for literal nodes, which could lead to different attributes for the same global node.
+            # Literal text is not always available, so all occurrences of a
+            # literal global ID use the stable literal sentinel attribute.
             existing_attr = self.local_attributes[self.global_to_local[global_node_id]]
             if self._is_literal_attribute(node_attributes) or self._is_literal_attribute(existing_attr):
                 node_attributes = self.LITERAL_ID
@@ -291,10 +292,6 @@ class GlobalToLocalNodeMap:
                 node_attributes = existing_attr
 
             if not force_create:
-                # TODO: this logs thousands of lines in some cases. We should find a better way to handle this.
-                # logging.info(
-                #     f"Global node ID {global_node_id} already exists and `force_create` is false. Reusing local ID {self.global_to_local[global_node_id]}."
-                # )
                 return self.global_to_local[global_node_id]
         return self.store_with_new_id(global_node_id, node_attributes, name)
 

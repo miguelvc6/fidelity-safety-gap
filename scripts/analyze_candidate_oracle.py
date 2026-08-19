@@ -44,6 +44,7 @@ from modules.evaluation_artifacts import (
     EVALUATION_SCHEMA_VERSION,
     atomic_write_json,
     load_and_validate_predictions,
+    repository_relative_path,
     sha256_file,
 )
 from modules.model_store import config_copy_path, get_checkpoint_path
@@ -648,18 +649,18 @@ def run_analysis(args: argparse.Namespace) -> None:
 
     summary = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
-        "run_directory": str(run_directory),
+        "run_directory": repository_relative_path(run_directory),
         "config": {
-            "path": str(config_copy_path(run_directory)),
+            "path": repository_relative_path(config_copy_path(run_directory)),
             "sha256": sha256_file(config_copy_path(run_directory)),
         },
         "checkpoint": {
-            "path": str(get_checkpoint_path(run_directory)),
+            "path": repository_relative_path(get_checkpoint_path(run_directory)),
             "sha256": sha256_file(get_checkpoint_path(run_directory)),
         },
         "dataset": {
             "variant": dataset_variant_name(model_cfg.dataset_variant, model_cfg.min_occurrence),
-            "path": str(global_support.dataset_path),
+            "path": repository_relative_path(global_support.dataset_path),
             "sha256": sha256_file(global_support.dataset_path),
         },
         "min_occurrence": model_cfg.min_occurrence,
@@ -670,7 +671,7 @@ def run_analysis(args: argparse.Namespace) -> None:
         else ("direct_safety" if training_cfg.direct_safety.enabled else "slot_argmax"),
         "selected_prediction_source": {
             "mode": "validated_schema_v2_replay",
-            "path": str(prediction_path.resolve()),
+            "path": repository_relative_path(prediction_path),
             "sha256": selected_manifest["predictions"]["sha256"],
         },
         "candidate_config": {

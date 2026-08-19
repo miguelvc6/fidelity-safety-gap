@@ -1,17 +1,17 @@
 {
   "checkpoint": {
-    "path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/checkpoint.pth",
+    "path": "models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/checkpoint.pth",
     "sha256": "099a5cb14bf2a33157ac8b4d3bbc6cd1f6a891dda85e28c3a94fe5fb4d3a67d8",
     "size_bytes": 201222581
   },
   "config": {
-    "path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/config.json",
+    "path": "models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/config.json",
     "sha256": "4bbd90e7812c8ca72389a23aa8e1c3eb55abf9b91c652eea8eda6a56ae4855ef",
     "size_bytes": 64391
   },
   "dataset": {
     "artifact": {
-      "path": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100/df_test.parquet",
+      "path": "data/interim/full_strat1m_minocc100/df_test.parquet",
       "sha256": "9c630cc7d335a4c1a8c26a1d97115c8a9a253737834fc0ef2800ba6d66eb35d3",
       "size_bytes": 28038233
     },
@@ -22,14 +22,14 @@
   "graph": {
     "artifacts": [
       {
-        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/test_graph-node_id-shard000.pt",
+        "path": "data/processed/full_strat1m_minocc100/test_graph-node_id-shard000.pt",
         "sha256": "3d0e35c22007a6c1244826bf530c5198076c32de38a5b653f7ed593ca4711810",
         "size_bytes": 11826829369
       }
     ]
   },
   "predictions": {
-    "path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+    "path": "models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
     "sha256": "b9c0588e6e06b2f34774f45ba06a5455c98491fe74c2fecc2cba200d5a246750",
     "size_bytes": 3906518
   },

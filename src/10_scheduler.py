@@ -18,6 +18,16 @@ HISTORY_PATH = LOG_DIR / "scheduler_history.jsonl"
 MODELS_ROOT = Path("models")
 CONFIG_FILENAME = "config.json"
 CHECKPOINT_FILENAME = "checkpoint.pth"
+PAPER_RUN_DIRECTORIES = (
+    "b0_eswc_reproduction__full_strat1m_minocc100__node_id",
+    "a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id",
+    "m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id",
+    "m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id",
+    "g0_globalfix_reference_v2__full_strat1m_minocc100__node_id",
+)
+PAPER_RETAINED_CHECKPOINT = (
+    "a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id"
+)
 
 
 class ExperimentError(Exception):
@@ -203,17 +213,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--paper-suite",
         action="store_true",
-        help="Enable strict global metrics and per-constraint CSV for paper experiments.",
+        help="Run only the five learned paper systems with strict paper evaluation.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print selected run directories and their next command without writing logs or running them.",
     )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    configure_logging(verbose=args.verbose)
-    logger = logging.getLogger("scheduler")
-
-    model_dirs = discover_model_directories(MODELS_ROOT)
     def _order_key(model_dir: Path) -> tuple[int, str]:
         config_path = model_dir / CONFIG_FILENAME
         if not config_path.exists():
@@ -226,8 +237,58 @@ def main() -> int:
         priority = 1 if kind == "reranker" else 0
         return (priority, model_dir.name)
 
-    model_dirs = sorted(model_dirs, key=_order_key)
+    if args.paper_suite:
+        model_dirs = [MODELS_ROOT / name for name in PAPER_RUN_DIRECTORIES]
+        missing = [
+            path / CONFIG_FILENAME
+            for path in model_dirs
+            if not (path / CONFIG_FILENAME).exists()
+        ]
+        if missing:
+            print("Missing paper configuration(s):", file=sys.stderr)
+            for path in missing:
+                print(f"  {path}", file=sys.stderr)
+            return 2
+    else:
+        model_dirs = sorted(discover_model_directories(MODELS_ROOT), key=_order_key)
+    if args.only:
+        model_dirs = [path for path in model_dirs if args.only in path.name]
+
+    if args.dry_run:
+        for model_dir in model_dirs:
+            config_path = model_dir / CONFIG_FILENAME
+            cfg = load_config(config_path)
+            kind = _infer_experiment_kind(cfg)
+            checkpoint_path = model_dir / CHECKPOINT_FILENAME
+            if checkpoint_path.exists():
+                command = [
+                    sys.executable,
+                    "src/09_eval.py",
+                    "--run-directory",
+                    str(model_dir),
+                ]
+                action = "evaluate"
+            elif args.paper_suite and model_dir.name == PAPER_RETAINED_CHECKPOINT:
+                command = ["restore", str(checkpoint_path)]
+                action = "restore"
+            else:
+                command = _build_train_command(kind, config_path)
+                action = "train"
+            print(f"{model_dir.name}\t{action}\t{' '.join(command)}")
+        return 0
+
+    configure_logging(verbose=args.verbose)
+    logger = logging.getLogger("scheduler")
     logger.info("Discovered %s model directories", len(model_dirs))
+
+    if args.paper_suite:
+        retained_checkpoint = MODELS_ROOT / PAPER_RETAINED_CHECKPOINT / CHECKPOINT_FILENAME
+        if not retained_checkpoint.exists():
+            logger.error(
+                "Paper suite requires the retained Direct-Factor checkpoint at %s",
+                retained_checkpoint,
+            )
+            return 2
     planned: list[str] = []
     for model_dir in model_dirs:
         config_path = model_dir / CONFIG_FILENAME
@@ -248,10 +309,6 @@ def main() -> int:
         checkpoint_path = model_dir / CHECKPOINT_FILENAME
 
         logger.info("[%s/%s] Processing %s", index, len(model_dirs), model_dir.name)
-
-        if args.only and args.only not in model_dir.name:
-            logger.info("Skipping %s (filter --only=%s)", model_dir.name, args.only)
-            continue
 
         if checkpoint_path.exists():
             logger.info("Checkpoint already exists at %s; skipping", checkpoint_path)
@@ -297,7 +354,8 @@ def main() -> int:
                             resolved_run_dir,
                             run_name,
                             logger,
-                            extra_flags=eval_flags + ["--reranker-predictions", str(reranker_predictions)],
+                            extra_flags=eval_flags
+                            + ["--legacy-predictions-json", str(reranker_predictions)],
                         )
                         record["evaluation"] = evaluation
                         if evaluation.get("return_code") not in (0, None) and not args.keep_going:
@@ -476,7 +534,7 @@ def main() -> int:
                         "src/09_eval.py",
                         "--run-directory",
                         str(resolved_run_dir),
-                        "--reranker-predictions",
+                        "--legacy-predictions-json",
                         str(reranker_predictions),
                     ] + eval_flags
                     logger.info("Eval command: %s", " ".join(eval_command))
@@ -484,7 +542,8 @@ def main() -> int:
                         resolved_run_dir,
                         run_name,
                         logger,
-                        extra_flags=eval_flags + ["--reranker-predictions", str(reranker_predictions)],
+                        extra_flags=eval_flags
+                        + ["--legacy-predictions-json", str(reranker_predictions)],
                     )
                     record["evaluation"] = evaluation
                     if evaluation.get("return_code") not in (0, None) and not args.keep_going:

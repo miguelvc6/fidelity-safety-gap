@@ -24,7 +24,12 @@ def _load_generator():
     return module
 
 
-def _run_generator(tmp_path: Path, *, test_types=(0, 2)) -> Path:
+def _run_generator(
+    tmp_path: Path,
+    *,
+    test_types=(0, 2),
+    include_experimental: bool = False,
+) -> Path:
     processed = tmp_path / "processed" / "toy_minocc100"
     processed.mkdir(parents=True)
     graph = Data(factor_types=torch.tensor([0, 2], dtype=torch.long))
@@ -49,6 +54,8 @@ def _run_generator(tmp_path: Path, *, test_types=(0, 2)) -> Path:
         "--models-root",
         str(models),
     ]
+    if include_experimental:
+        sys.argv.append("--include-experimental")
     try:
         generator.main()
     finally:
@@ -89,22 +96,20 @@ def _config(models: Path, name: str) -> dict:
     return json.loads((models / f"{name}__toy_minocc100__node_id" / "config.json").read_text())
 
 
-def test_corrected_bundle_defines_both_b0s_and_compact_factor_runs(tmp_path) -> None:
+def test_canonical_bundle_defines_the_five_paper_systems(tmp_path) -> None:
     models = _run_generator(tmp_path)
     original = _config(models, "b0_eswc_reproduction")
-    matched = _config(models, "b0_parameter_matched")
     a1 = _config(models, "a1_factorized_imitation_compact_grouped")
     m1c = _config(models, "m1c_safe_factor_chooser_compact_grouped")
     m1d = _config(models, "m1d_safe_factor_direct_compact_grouped")
-    g0 = _config(models, "g0_globalfix_reference")
+    g0 = _config(models, "g0_globalfix_reference_v2")
 
-    assert (original["model_config"]["hidden_channels"], original["model_config"]["num_layers"]) == (128, 2)
+    assert (
+        original["model_config"]["hidden_channels"],
+        original["model_config"]["num_layers"],
+    ) == (128, 2)
     assert original["model_config"]["dropout"] == 0.5
-    assert (matched["model_config"]["hidden_channels"], matched["model_config"]["num_layers"]) == (304, 4)
-    assert matched["model_config"]["dropout"] == 0.17
-    assert matched["expected_trainable_parameters"] == 50_110_102
     assert a1["expected_trainable_parameters"] == 50_072_465
-    assert abs(50_110_102 - 50_072_465) / 50_072_465 <= 0.001
 
     for payload in (a1, m1c, m1d):
         cfg = payload["model_config"]
@@ -118,6 +123,24 @@ def test_corrected_bundle_defines_both_b0s_and_compact_factor_runs(tmp_path) -> 
     assert g0["proposal_config"]["config_tag"].startswith(
         "a1_factorized_imitation_compact_grouped__"
     )
+    assert not (models / "b0_parameter_matched__toy_minocc100__node_id").exists()
+
+
+def test_parameter_matched_b0_is_opt_in_and_within_tolerance(tmp_path) -> None:
+    models = _run_generator(tmp_path, include_experimental=True)
+    matched = _config(models, "b0_parameter_matched")
+    a1 = _config(models, "a1_factorized_imitation_compact_grouped")
+
+    assert (
+        matched["model_config"]["hidden_channels"],
+        matched["model_config"]["num_layers"],
+    ) == (304, 4)
+    assert matched["model_config"]["dropout"] == 0.17
+    assert matched["expected_trainable_parameters"] == 50_110_102
+    relative_difference = abs(
+        matched["expected_trainable_parameters"] - a1["expected_trainable_parameters"]
+    ) / a1["expected_trainable_parameters"]
+    assert relative_difference <= 0.001
 
 
 def test_bundle_rejects_factor_type_seen_only_in_test(tmp_path) -> None:

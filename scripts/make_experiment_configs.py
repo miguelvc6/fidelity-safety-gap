@@ -4,10 +4,10 @@ Generate the paper-facing experiment bundle under ``models/<exp_name>/config.jso
 
 Default output:
 - ``b0_eswc_reproduction``
-- ``a1_factorized_imitation``
-- ``m1c_safe_factor_chooser``
-- ``m1d_safe_factor_direct``
-- ``g0_globalfix_reference``
+- ``a1_factorized_imitation_compact_grouped``
+- ``m1c_safe_factor_chooser_compact_grouped``
+- ``m1d_safe_factor_direct_compact_grouped``
+- ``g0_globalfix_reference_v2``
 
 Optional appendix / ablation configs are only emitted with ``--include-experimental``
 or ``--include-h2-ablations``.
@@ -432,7 +432,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.study != "canonical" and (args.include_experimental or args.include_h2_ablations):
         parser.error("--study deletion-shortcut-v2 cannot be combined with other config bundles")
-    assert_parameter_match()
+    if args.include_experimental:
+        assert_parameter_match()
 
     pairs = list(_iter_variant_encodings(args.processed_root))
     if args.variant is not None:
@@ -445,11 +446,10 @@ def main() -> None:
         raise SystemExit(
             "No graph artifacts found under "
             f"{args.processed_root}.\n"
-            "Build the paper graph artifacts first, for example:\n"
-            "  PYTHONPATH=src .venv/bin/python src/02b_stratified_benchmark_sampler.py --source-dataset full --output-dataset full_strat1m --min-occurrence 100\n"
-            "  PYTHONPATH=src .venv/bin/python src/05_constraint_labeler.py --dataset full_strat1m --min-occurrence 100 --constraint-scope local --registry-dataset full --factor-family-policy supported_only\n"
-            "  PYTHONPATH=src .venv/bin/python src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-scope local --constraint-representation factorized --registry-dataset full\n"
-            "  PYTHONPATH=src .venv/bin/python src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-representation eswc_passive --registry-dataset full"
+            "Restore the paper graph artifacts, or build graphs for a new labeled dataset "
+            "as described in docs-technical/00_training_and_evaluation_execution_plan.md. "
+            "Do not relabel the released paper benchmark: its training labels are part of "
+            "the recorded experimental provenance."
         )
 
     canonical_proposals: list[ProposalExperiment] = [
@@ -466,20 +466,6 @@ def main() -> None:
             head_hidden=128,
             dropout=0.5,
             expected_trainable_parameters=ORIGINAL_B0_TRAINABLE_PARAMETERS,
-        ),
-        ProposalExperiment(
-            name="b0_parameter_matched",
-            model_name="GIN",
-            constraint_representation="eswc_passive",
-            pressure_enabled=False,
-            pressure_type_conditioning="none",
-            validate_factor_labels=False,
-            locked_backbone=False,
-            num_layers=4,
-            hidden_channels=304,
-            head_hidden=304,
-            dropout=0.17,
-            expected_trainable_parameters=MATCHED_B0_TRAINABLE_PARAMETERS,
         ),
         ProposalExperiment(
             name="a1_factorized_imitation_compact_grouped",
@@ -520,10 +506,12 @@ def main() -> None:
     ]
     canonical_rerankers: list[RerankerExperiment] = [
         RerankerExperiment(
-            name="g0_globalfix_reference",
+            name="g0_globalfix_reference_v2",
             objective="global_fix",
             proposal_name="a1_factorized_imitation_compact_grouped",
             constraint_scope="local",
+            seed=42,
+            save_last_checkpoint=True,
         )
     ]
     deletion_study_proposals: list[ProposalExperiment] = [
@@ -618,6 +606,20 @@ def main() -> None:
     ]
 
     experimental_proposals: list[ProposalExperiment] = [
+        ProposalExperiment(
+            name="b0_parameter_matched",
+            model_name="GIN",
+            constraint_representation="eswc_passive",
+            pressure_enabled=False,
+            pressure_type_conditioning="none",
+            validate_factor_labels=False,
+            locked_backbone=False,
+            num_layers=4,
+            hidden_channels=304,
+            head_hidden=304,
+            dropout=0.17,
+            expected_trainable_parameters=MATCHED_B0_TRAINABLE_PARAMETERS,
+        ),
         ProposalExperiment(
             name="x1_policy_choice_appendix",
             model_name="GIN_PRESSURE",

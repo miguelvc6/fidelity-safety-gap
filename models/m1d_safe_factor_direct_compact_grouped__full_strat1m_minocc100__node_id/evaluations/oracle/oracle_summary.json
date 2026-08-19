@@ -8,11 +8,11 @@
     "topk_per_slot": 5
   },
   "checkpoint": {
-    "path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/checkpoint.pth",
+    "path": "models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/checkpoint.pth",
     "sha256": "9a9f9c3b5c89341c54b5fecabd5e8f993ecb419b8b0e0fc63c8a56f42f1b38cf"
   },
   "config": {
-    "path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/config.json",
+    "path": "models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/config.json",
     "sha256": "1a233461ee109df62b4aa4a2adb5094277f81634f47397746a7ede909df1c09a"
   },
   "constraint_representation": "factorized",
@@ -148,11 +148,11 @@
     "selected_safe_rate": 0.28365290686315553,
     "support": 143316
   },
-  "run_directory": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id",
+  "run_directory": "models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id",
   "schema_version": 2,
   "selected_prediction_source": {
     "mode": "validated_schema_v2_replay",
-    "path": "/home/mvazquez/fidelity-safety-gap/models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
+    "path": "models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/evaluations/predictions.parquet",
     "sha256": "b0c7eb39ab7866ff536d07c48c4b8fa1ceae1148d9730aee8f364db929096094"
   },
   "selection_mode": "direct_safety"

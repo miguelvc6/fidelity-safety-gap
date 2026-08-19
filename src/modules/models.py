@@ -1071,7 +1071,8 @@ class BaseGraphModel(nn.Module, ABC):
         if self.use_edge_attributes:
             edge_index = data.edge_index_non_flattened
             edge_attr = data.edge_attr_non_flattened
-            # TODO: consider removing isolated nodes (requires remapping of the edge_attributes, because they currently refer to the local---in graph---node ids)
+            # Preserve local node indices because edge attributes refer to those
+            # indices; isolated nodes are therefore retained in this representation.
         else:
             edge_index = data.edge_index
             edge_attr = None
@@ -1115,8 +1116,8 @@ class BaseGraphModel(nn.Module, ABC):
                 assert edge_mlp is not None
                 edge_features = edge_mlp(x[edge_attr])
                 if self.use_edge_subtraction:
-                    # TODO: Verify that this is correct, and helps the model.
-                    #  An alternative implementation could learn a seperate MLP for inverse edges.
+                    # The optional inverse-message variant encodes reverse edges by
+                    # negating their predicate features. Paper configurations disable it.
                     inverse_edge_indices = edge_index.flip(0)
                     inverse_edge_features = -edge_features
                     edge_index_forward = torch.cat([edge_index, inverse_edge_indices], dim=1)
@@ -1152,7 +1153,8 @@ class BaseGraphModel(nn.Module, ABC):
 
         # Entity logits exclude predicate IDs
         # Here we expand to prediction size (filling excluded with negative values)
-        # TODO: this materializes large tensors (size=num_target_ids), though most entries never appear. Reducing the size requires adapting the training script (and evaluation), by remapping the targets.
+        # Materialize the fixed global target vocabulary expected by the training
+        # and evaluation interfaces, filling excluded IDs with negative values.
         y_add_s = self._expand_entity_logits(self.subject_add_head(subject_features))
         y_del_s = self._expand_entity_logits(self.subject_del_head(subject_features))
 

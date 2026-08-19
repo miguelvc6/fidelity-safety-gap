@@ -52,7 +52,9 @@ def test_fidelity_counts_require_complete_exact_operations() -> None:
 
 def test_table_row_guard_accepts_whitespace_but_rejects_metric_drift() -> None:
     module = _load_readiness_module()
-    table = module._normalise_tex(r"A1  & 0.6890 & 0.6689 & 0.6788 \\")
+    table = module._normalise_tex(
+        r"A1  & \textbf{0.6890} & \underline{0.6689} & 0.6788 \\"
+    )
 
     module._require_table_row(
         table,

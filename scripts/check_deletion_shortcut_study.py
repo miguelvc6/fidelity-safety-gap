@@ -21,6 +21,7 @@ if str(SRC) not in sys.path:
 from modules.evaluation_artifacts import (  # noqa: E402
     EVALUATION_SCHEMA_VERSION,
     atomic_write_json,
+    repository_relative_path,
     sha256_file,
 )
 
@@ -69,7 +70,7 @@ def _load(path: Path) -> Any:
 def _identity(path: Path) -> dict[str, Any]:
     resolved = path.resolve()
     return {
-        "path": str(resolved),
+        "path": repository_relative_path(resolved),
         "size_bytes": resolved.stat().st_size,
         "sha256": sha256_file(resolved),
     }
@@ -253,7 +254,7 @@ def main() -> None:
         run = ROOT / "models" / directory
         config = _load(run / "config.json")
         result = {
-            "run_directory": str(run.resolve()),
+            "run_directory": repository_relative_path(run),
             "config": _identity(run / "config.json"),
             "checkpoint": _check_checkpoint(system, run, config),
             "history": _check_history(system, run / "training_history.json"),

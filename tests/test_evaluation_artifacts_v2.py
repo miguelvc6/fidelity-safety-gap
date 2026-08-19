@@ -8,9 +8,11 @@ import torch
 
 from modules.evaluation_artifacts import (
     EVALUATION_SCHEMA_VERSION,
+    REPOSITORY_ROOT,
     backup_schema_v1_once,
     build_predictions_frame,
     load_and_validate_predictions,
+    repository_relative_path,
     write_prediction_artifacts,
 )
 from modules.repair_eval import PAPER_METRIC_KEYS
@@ -193,3 +195,9 @@ def test_manifest_records_legacy_prediction_source_checksum(tmp_path) -> None:
 
     assert manifest["source_predictions"]["path"] == str(source.resolve())
     assert manifest["source_predictions"]["sha256"]
+
+
+def test_repository_paths_are_recorded_portably() -> None:
+    assert repository_relative_path(REPOSITORY_ROOT / "models" / "run" / "config.json") == (
+        "models/run/config.json"
+    )

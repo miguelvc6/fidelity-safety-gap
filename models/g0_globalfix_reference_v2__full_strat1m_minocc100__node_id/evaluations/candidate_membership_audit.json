@@ -5,11 +5,11 @@
     "topk_proposal_candidates_used": true
   },
   "config": {
-    "path": "/home/mvazquez/fidelity-safety-gap/models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/config.json",
+    "path": "models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/config.json",
     "sha256": "fc6becd8a50c0a3e55b70120f14b123cf4f549d4d7a33fe7a3fb9aac848dcc52"
   },
   "dataset_variant": "full_strat1m_minocc100",
-  "inference": "A retained prediction absent from the reconstructed gold-excluded candidate set cannot be certified without the missing reranker checkpoint.",
+  "inference": "A prediction absent from the reconstructed gold-excluded candidate set cannot be certified as an output of that candidate protocol.",
   "mean_candidate_count": 42.42229758017248,
   "membership_count": 143313,
   "membership_rate": 0.9999790672360378,
@@ -55,22 +55,22 @@
     }
   ],
   "predictions": {
-    "path": "/home/mvazquez/fidelity-safety-gap/models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/reranker_predictions.json",
+    "path": "models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/reranker_predictions.json",
     "sha256": "e3985cfc4093932e82817282dda65a5b77946fc4422717743996c28260fa31af"
   },
   "proposal": {
     "checkpoint": {
-      "path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/checkpoint.pth",
+      "path": "models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/checkpoint.pth",
       "sha256": "099a5cb14bf2a33157ac8b4d3bbc6cd1f6a891dda85e28c3a94fe5fb4d3a67d8"
     },
     "config": {
-      "path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/config.json",
+      "path": "models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/config.json",
       "sha256": "4bbd90e7812c8ca72389a23aa8e1c3eb55abf9b91c652eea8eda6a56ae4855ef"
     },
-    "run_directory": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id"
+    "run_directory": "models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id"
   },
   "row_count": 143316,
-  "run_directory": "/home/mvazquez/fidelity-safety-gap/models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id",
+  "run_directory": "models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id",
   "schema_version": 1,
   "status": "failed"
 }

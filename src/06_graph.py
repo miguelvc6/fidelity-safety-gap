@@ -197,9 +197,8 @@ def create_graph(
     global_int_encoder:
         An instance of `GlobalIntEncoder` used to encode URIs to global integer IDs.
     encode_predicates_as_nodes:
-        If *True* (recommended) the predicate URI is represented as a proper
-        node, leading to a uniform first-order graph. TODO: Setting this to
-        *False* is currently not supported and will raise an AssertionError.
+        Must be *True*: the predicate URI is represented as a proper node,
+        leading to a uniform first-order graph. Other encodings are unsupported.
     used_attribute:
         Controls the node feature:
         - "node_id"    → one-hot integer label
@@ -526,9 +525,8 @@ def create_graph(
     # add subject neighbours
     add_edge(graph, "subject", "subject_predicates", "subject_objects")
     add_edge(graph, "object", "object_predicates", "object_objects")
-    # FIXME: not sure which direction the edges should go
-    # add_edge(graph, "subject_objects", "subject_predicates", "subject")
-    # add_edge(graph, "object_objects", "object_predicates", "object")
+    # Neighbour statements use the same observed
+    # subject -> predicate occurrence -> object direction as the focus statement.
 
     # pick the "other_entity"
     if graph["other_subject"] == graph["subject"]:

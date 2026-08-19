@@ -62,19 +62,19 @@
   ],
   "training_provenance": {
     "config": {
-      "path": "/home/mvazquez/fidelity-safety-gap/models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/config.json",
+      "path": "models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/config.json",
       "sha256": "fc6becd8a50c0a3e55b70120f14b123cf4f549d4d7a33fe7a3fb9aac848dcc52",
       "size_bytes": 2001
     },
     "proposal_checkpoint": {
-      "path": "/home/mvazquez/fidelity-safety-gap/models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/checkpoint.pth",
+      "path": "models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/checkpoint.pth",
       "sha256": "099a5cb14bf2a33157ac8b4d3bbc6cd1f6a891dda85e28c3a94fe5fb4d3a67d8",
       "size_bytes": 201222581
     },
     "schema_version": 2,
     "seed": 42,
-    "train_graph": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/train_graph-node_id.pkl",
-    "validation_graph": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/val_graph-node_id.pkl"
+    "train_graph": "data/processed/full_strat1m_minocc100/train_graph-node_id.pkl",
+    "validation_graph": "data/processed/full_strat1m_minocc100/val_graph-node_id.pkl"
   },
   "val_loss": [
     -0.7954701577001215,

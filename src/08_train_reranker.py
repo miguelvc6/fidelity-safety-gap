@@ -34,7 +34,11 @@ from modules.model_store import (
     history_path,
     resolve_run_dir,
 )
-from modules.evaluation_artifacts import atomic_write_json, sha256_file
+from modules.evaluation_artifacts import (
+    atomic_write_json,
+    repository_relative_path,
+    sha256_file,
+)
 from modules.models import build_model
 from modules.repair_eval import ConstraintRepairHeuristics, ViolationContext, load_violation_contexts
 from modules.candidates import CandidateConfig, batch_topk_candidate_triples, build_candidates
@@ -82,7 +86,7 @@ logger = logging.getLogger(__name__)
 def _file_identity(path: Path) -> dict[str, object]:
     resolved = path.resolve()
     return {
-        "path": str(resolved),
+        "path": repository_relative_path(resolved),
         "size_bytes": resolved.stat().st_size,
         "sha256": sha256_file(resolved),
     }
@@ -1027,8 +1031,8 @@ def main() -> None:
         "seed": training_cfg.seed,
         "config": _file_identity(args.experiment_config),
         "proposal_checkpoint": _file_identity(proposal_checkpoint_path),
-        "train_graph": str(train_path.resolve()),
-        "validation_graph": str(val_path.resolve()),
+        "train_graph": repository_relative_path(train_path),
+        "validation_graph": repository_relative_path(val_path),
     }
     if args.predict_only:
         checkpoint_path = get_checkpoint_path(run_dir)

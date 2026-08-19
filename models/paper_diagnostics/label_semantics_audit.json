@@ -1,5 +1,5 @@
 {
-  "labeled_directory": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100_labeled",
+  "labeled_directory": "data/interim/full_strat1m_minocc100_labeled",
   "mode": "read_only",
   "schema_version": 1,
   "splits": {
@@ -96,7 +96,7 @@
         "length_mismatches": 0,
         "rows": 143316
       },
-      "path": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100_labeled/df_test.parquet"
+      "path": "data/interim/full_strat1m_minocc100_labeled/df_test.parquet"
     },
     "train": {
       "by_constraint_family": {
@@ -191,7 +191,7 @@
         "length_mismatches": 0,
         "rows": 668779
       },
-      "path": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100_labeled/df_train.parquet"
+      "path": "data/interim/full_strat1m_minocc100_labeled/df_train.parquet"
     },
     "val": {
       "by_constraint_family": {
@@ -286,7 +286,7 @@
         "length_mismatches": 0,
         "rows": 143310
       },
-      "path": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100_labeled/df_val.parquet"
+      "path": "data/interim/full_strat1m_minocc100_labeled/df_val.parquet"
     }
   }
 }

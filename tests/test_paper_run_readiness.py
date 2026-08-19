@@ -202,10 +202,9 @@ def test_make_experiment_configs_empty_processed_root_message() -> None:
             sys.argv = argv_backup
 
     assert "No graph artifacts found under" in message
-    assert "src/02b_stratified_benchmark_sampler.py --source-dataset full --output-dataset full_strat1m --min-occurrence 100" in message
-    assert "src/05_constraint_labeler.py --dataset full_strat1m --min-occurrence 100 --constraint-scope local --registry-dataset full --factor-family-policy supported_only" in message
-    assert "src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-scope local --constraint-representation factorized --registry-dataset full" in message
-    assert "src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-representation eswc_passive --registry-dataset full" in message
+    assert "Restore the paper graph artifacts" in message
+    assert "Do not relabel the released paper benchmark" in message
+    assert "00_training_and_evaluation_execution_plan.md" in message
 
 
 if __name__ == "__main__":
