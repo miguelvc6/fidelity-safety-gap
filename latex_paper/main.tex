@@ -1,0 +1,976 @@
+\RequirePackage{amssymb}
+\documentclass[a4paper,UKenglish,cleveref,autoref,thm-restate]{tgdk-v2021}
+
+% Pre-submission draft: suppresses provisional DOI, volume, and issue metadata.
+\hideTGDK
+
+\bibliographystyle{plainurl}
+
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{todonotes}
+\usetikzlibrary{arrows.meta,positioning,fit,calc,shapes.geometric}
+
+\title{The Fidelity--Safety Gap in Neural Wikidata Constraint Repair}
+\titlerunning{The Fidelity--Safety Gap in Neural Wikidata Constraint Repair}
+
+\author{Miguel V\'azquez}{Vienna University of Economics and Business (WU Wien), Vienna, Austria}{miguel.vazquez@wu.ac.at}{https://orcid.org/0009-0002-9067-959X}{}
+\author{Axel Polleres}{Vienna University of Economics and Business (WU Wien), Vienna, Austria}{axel.polleres@wu.ac.at}{https://orcid.org/0000-0001-5670-1146}{}
+
+\authorrunning{M. V\'azquez and A. Polleres}
+\Copyright{Miguel V\'azquez and Axel Polleres}
+
+\ccsdesc{Information systems~Data cleaning}
+\ccsdesc{Information systems~Resource Description Framework (RDF)}
+\ccsdesc{Computing methodologies~Neural networks}
+\ccsdesc{Theory of computation~Logic and verification}
+
+\keywords{Wikidata, Knowledge Graph Repair, Property Constraints, Graph Neural Networks, Neuro-Symbolic Learning, Data Quality, Repair Evaluation}
+
+\relatedversion{This article builds on ``Structure is the Signal'' (ESWC 2026), introducing executable constraint factors and a multi-criteria evaluation of repair fidelity and symbolic safety.}
+\supplement{Detailed result tables are provided in the supplementary material; implementations, experiment specifications, and machine-readable results are available in the project repository.}
+\funding{This research was funded in whole or in part by the Austrian Science Fund (FWF)\\ 10.55776/COE12.}
+
+% EditorialOffice macros (do not touch as author)
+\Volume{1}
+\Issue{1}
+\Article{42}
+\DateSubmission{Date of submission}
+\DateAcceptance{Date of acceptance}
+\DatePublished{Date of publishing}
+\SectionAreaEditor{TGDK section area editor}
+
+\newcommand{\kg}{KG}
+\newcommand{\kgs}{KGs}
+\newcommand{\locsat}{\mathrm{LocalSat}}
+\newcommand{\sir}{\mathrm{SIR}}
+\newcommand{\srr}{\mathrm{SRR}}
+\newcommand{\eppf}{\mathrm{EPPF}}
+\newcommand{\Gpre}{G_i^{\mathrm{pre}}}
+\newcommand{\Ghist}{G_i^{\mathrm{hist}}}
+\newcommand{\Gpred}{G_i^{\mathrm{pred}}}
+\newcommand{\histrepair}{\Delta^{\mathrm{hist}}}
+\newcommand{\predrepair}{\Delta^{\mathrm{pred}}}
+\newcommand{\witnessctx}{\mathcal{W}}
+\newcommand{\maskedpredrepair}[2]{\Delta^{\mathrm{pred}}_{#1,#2}}
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Collaborative knowledge graphs such as Wikidata use property constraints to flag statements for curation. Detecting a violation, however, does not determine its repair: multiple edits may satisfy the same constraint while differing in curator agreement, collateral effects, disruption, and retention of the base statement. Historical repairs provide supervision, but imitating them need not yield constraint-satisfying repairs. We study this gap between validation and learned repair imitation.
+
+We represent each repair case as a violation-centred graph and augment a graph neural network (GNN) with explicit nodes for local constraints. These \emph{executable constraint factors} combine symbolic validators with neural satisfaction modules and message channels that enable inference-time interventions.
+
+Using a corpus of 955,405 Wikidata repair instances, we evaluate all reported systems on a held-out test split of 143,316 instances. The Direct--Factor GNN reaches 0.6788 Micro-F1 for strict agreement with historical statement edits, compared with 0.5471 for the Direct--Passive GNN. Masking constraint messages lowers Micro-F1 by 0.3985 and changes 58.6\% of predictions, mostly through constraints other than the originally flagged one.
+
+Separately, symbolic post-edit evaluation shows that Candidate--DP, which applies direct candidate-level penalties, raises the resolved share among primary constraints that local validators find violated before repair from 62.78\% to 77.07\%, while reducing new violations in previously satisfied neighbouring constraints from 0.48\% to 0.39\%. These gains come at a substantial cost: historical-agreement Micro-F1 falls from 0.6788 to 0.4370, and the share of initially checkable, violated primary constraints that are fixed without deleting the base statement falls from 10.53\% to 3.50\%. More starkly, Candidate--SR, a diagnostic reranker trained to maximise local constraint satisfaction, predicts a deletion in every test instance and removes the base statement in 97.41\% of them. Its historical-fidelity Micro-F1 is only 0.2639. This learned satisfaction-by-deletion shortcut shows that constraint satisfaction can reward removing evidence rather than useful correction.
+
+Executable constraints improve inspectability but do not guarantee useful repairs: historical fidelity, post-edit constraint satisfaction, collateral effects, disruption, and base-statement preservation must remain distinct evaluation criteria.
+\end{abstract}
+
+
+\section{Introduction}
+\label{sec:introduction}
+
+Collaborative knowledge graphs (KGs) such as Wikidata evolve through community edits and accumulate inconsistencies \cite{hogan2021knowledge,vrandecic2014wikidata,erxleben2014introducing,piscopo2018who,polleres2023evolution,schmelzeisen2021wikidated,shenoy2022quality}. Wikidata property constraints describe expected property use, but flag violations for review instead of rejecting edits \cite{wikidataPropertyConstraintsPortal,wikibaseQualityConstraints,wikibaseConstraintsDocs}. Validation therefore identifies a non-conforming pattern without selecting its repair.
+
+A violation may be addressed by adding missing evidence, replacing a value, removing conflicting context, or deleting the statement associated with the violation (the base statement) \cite{bertossi2022database,ahmetaj2022repairing,ferranti2025repairs}. Historical edits offer supervision for this choice \cite{pellissier2019learning,pellissier2021neural,vazquez2026structure}, yet agreement with curators neither guarantees post-edit constraint satisfaction nor prevents collateral violations. Conversely, satisfaction alone cannot determine usefulness: deleting the statement that witnesses a violation may satisfy its checker, whether or not that deletion is justified.
+
+Recent work shows that local graph structure is a strong signal for predicting historical Wikidata repairs with multi-relational graph neural networks \cite{vazquez2026structure}. We investigate whether the applicable rules can also be made explicit within that representation. For each repair case, we construct a violation-centred graph and represent every supported locally applicable property constraint as a node connected to the statements and entities within its scope. Each such node is associated with a symbolic validator, neural heads that estimate pre- and post-edit constraint satisfaction, and explicit message channels through which learned constraint information can influence repair prediction. We call these nodes \emph{executable constraint factors}. They are executable because their associated validators can be evaluated on concrete graph states; this designation does not assume that the corresponding neural modules implement sound symbolic reasoning.
+
+This representation has two roles. First, it gives the repair model explicit access to the supported constraints that apply to the local graph. Second, it makes the influence of those constraints inspectable. We compare the outputs of the satisfaction heads with the symbolic satisfaction labels used for supervision and selectively mask constraint messages at inference time to test whether predictions depend on those channels. These analyses can show that the model uses the factor pathway and that its heads align with those labels, but they cannot establish that it has learned the intended constraint semantics or that the resulting repairs are useful.
+
+We therefore evaluate repair quality along several separate dimensions rather than reducing it to a single score. These dimensions include exact agreement with historical curator edits, repair of the originally violated constraint, post-edit satisfaction of local constraints, improvements and regressions in other constraints, edit disruption, and preservation of the base statement that triggered the violation. Using a corpus of 955,405 repair instances, we evaluate all reported systems on a held-out test split of 143,316 instances. The Direct--Factor GNN reaches 0.6788 Micro-F1, compared with 0.5471 for the Direct--Passive GNN. Masking factor pressure messages lowers its F1 by 0.3985 and changes 58.6\% of predictions, mostly through non-primary factors.
+
+Candidate--DP (Direct Penalty) resolves 77.07\% of primary constraints that local validators find violated before repair, compared with 62.78\% for the Direct--Factor GNN, and slightly reduces secondary regressions. However, Micro-F1 drops by 0.2418, while the rate of base-statement-preserving primary fixes falls from 10.53\% to 3.50\%. Candidate--SR (Satisfaction Reranker), trained only to maximise local satisfaction, predicts a deletion in every test case and removes the base statement 97.41\% of the time, approaching an always-delete strategy. This \emph{satisfaction-by-deletion} result does not make deletion universally undesirable; it shows why satisfaction must be assessed with fidelity, collateral effects, disruption, and base-statement preservation.
+
+\paragraph*{Research questions.}
+We organise the study around five questions.
+\begin{enumerate}
+    \item \textbf{Predictive fidelity.} How accurately does the factor-based system reproduce historical repairs relative to the available neural and heuristic systems?
+    \item \textbf{Mechanistic inspectability.} Do executable constraint factors encode signals aligned with their symbolic satisfaction labels, and do their message channels materially influence repair predictions?
+    \item \textbf{Metric agreement.} Does greater historical fidelity correspond to better post-edit constraint behaviour, or do these evaluation dimensions diverge?
+    \item \textbf{Decision-level control.} Can changes to the training objective or candidate-selection strategy improve secondary-constraint behaviour without substantially sacrificing historical fidelity?
+    \item \textbf{Metric vulnerability.} Can local satisfaction assign high scores to repairs that delete the statement witnessing the violation rather than preserving its evidence?
+\end{enumerate}
+
+\paragraph*{Contributions.}
+This paper makes four contributions. First, it introduces executable constraint factors, a representation that gives supported locally applicable Wikidata constraints typed scopes, symbolic validators, neural satisfaction heads, and explicit message channels within a violation-centred repair graph. Second, it develops an evaluation framework that separates historical fidelity, post-edit rule behaviour, secondary improvements and regressions, disruption, and base-statement preservation. Third, it provides mechanistic evidence that the factor pathway encodes signals aligned with its symbolic satisfaction labels and materially influences repair prediction. Fourth, it characterises satisfaction-by-deletion with a deterministic counterexample, showing why rule satisfaction alone is insufficient as either a repair objective or an evaluation criterion.
+
+\Cref{tab:prior-work-map} distinguishes the foundations retained from the related conference paper from the additions evaluated here. All numerical results in this article come from the present experiments rather than being carried over from the conference paper.
+
+\begin{table}[t]
+\caption{Relationship to the ESWC 2026 conference paper \cite{vazquez2026structure}.}
+\label{tab:prior-work-map}
+\centering
+\scriptsize
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.13\textwidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Aspect} & \textbf{Retained foundation} & \textbf{Addition in this article} \\
+\midrule
+Benchmark and task & Historical Wikidata correction corpus, local direct-statement repair task, and six-slot add/delete action. & A 50\% stratified benchmark with locally attached primary and secondary constraints. \\
+Graph and model & Violation-centred local context, GINE encoding, graph pooling, and six-slot decoder. & Factor nodes with typed scopes, symbolic validators, satisfaction heads, and pressure channels. The Direct--Passive GNN reuses the passive design but is retrained for this study. \\
+Learning & Historical slot-wise supervision. & Factor supervision, candidate-level safety objectives, and a satisfaction-only reranker. \\
+Evaluation & Exact historical-edit matching and primary-constraint repair checks. & Reconstructed post-edit states; local, secondary-transition, disruption, and base-statement-preservation metrics; factor probes, pressure masking, and candidate-oracle analysis. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+
+
+\section{Related Work}
+\label{sec:related-work}
+
+\subsection{Wikidata, constraints, and validation}
+
+Wikidata is a collaborative, evolving knowledge base featuring a data model built on typed statements, qualifiers, references, and community-driven curation \cite{vrandecic2014wikidata,erxleben2014introducing,piscopo2018who,polleres2023evolution}. Crucially, its property constraints function as guiding principles that flag violations rather than rigid database constraints that block edits \cite{wikidataPropertyConstraintsPortal,wikibaseQualityConstraints,wikibaseConstraintsDocs}.
+
+This distinction fundamentally shapes repair learning. When the materialised local graph contains the evidence required by a symbolic validator, the validator can determine whether its local condition is satisfied. Historical edit logs, however, record curator choices that need not coincide with locally satisfying or evidence-preserving repairs. Learning directly from past edits therefore optimises historical fidelity to observed curation, which may diverge from post-edit rule behaviour.
+
+For standard RDF graphs, languages like SHACL and ShEx provide structural validation frameworks \cite{w3cSHACL2017,shex2019spec}. However, Wikidata's Wikibase data model and property-constraint ecosystem require more specialised formalisations. Recent work has formalised Wikidata property constraints using SHACL and SPARQL \cite{ferranti2024formalizing}, MARS-style logical frameworks \cite{martin2020mars,marx2017logic}, and dedicated Wikibase-oriented shape languages such as WShEx \cite{labra2022wshex}.
+
+\subsection{Symbolic constraint violation repair}
+
+Symbolic repair studies how violations can be explained and corrected under formal semantics. Database repair and consistent query answering provide a long-running foundation for minimality and repair semantics \cite{bertossi2022database}. SHACL work studies explanations and preferred minimal repairs, including answer-set-programming approaches \cite{ahmetaj2021explanations,ahmetaj2022repairing,ahmetaj2025logic}, while axiom weakening seeks to preserve content \cite{troquard2018weakening}. These symbolic approaches define validity, minimality, and preservation criteria but do not select among soft-constraint repairs using incomplete local evidence and curator preferences. This motivates learning-based repair models that use symbolic validation as supervision, structure, and evaluation while assessing historical fidelity and post-edit behaviour within the available local evidence separately.
+
+Ferranti et al.~\cite{ferranti2025repairs} formalise Wikidata repair patterns, distinguishing A-box edits to statements and qualifiers from T-box changes to constraint definitions and class hierarchies. Their taxonomy characterises a broad symbolic repair space and the repair patterns observed in curator edits; we learn direct-statement A-box repairs and evaluate them with local validators.
+
+\subsection{Learning-based KG repair and correction}
+
+Historical edits have trained statistical and neural correction systems \cite{pellissier2019learning,pellissier2021neural}. Related KG quality work includes link prediction, anomaly detection, plausibility scoring, and refinement \cite{paulheim2017refinement,subagdja2024refining,zhang2022caged}, but repair requires a concrete edit whose post-edit effects can be checked. V\'azquez et al.~\cite{vazquez2026structure} encode local Wikidata repairs with multi-relational GNNs. We retain that prediction task while making applicable constraints explicit and separating historical fidelity from symbolic outcomes and base-statement preservation.
+
+\subsection{Neuro-symbolic constraints and factor graphs}
+
+A large neuro-symbolic literature integrates symbolic knowledge into neural learning through differentiable or logical losses \cite{xu2018semantic,fischer2019dl2,yang2022clste}, constrained structured prediction \cite{jiang2022coresp}, factor-graph neural message passing \cite{zhang2023fgnn,garciasatorras2021nebp}, and constrained decoding \cite{geng2023grammar}. Our work is closest in spirit to factor-mediated message passing: constraints are represented as local objects that communicate with variables. The difference is that our factors are grounded Wikidata constraint instances associated with symbolic validators that produce state-specific satisfaction labels, rather than generic learned compatibility functions. We do not assume that soft constraint integration guarantees a valid or useful output. Instead, we use symbolic validation after applying predicted edits to examine divergence among local satisfaction objectives, historical fidelity, post-edit rule behaviour, and base-statement preservation.
+
+
+\section{Background: Wikidata Constraints and Repairs}
+\label{sec:background}
+
+\subsection{Statements, constraints, violations, and repairs}
+\label{sec:wikidata-terminology}
+
+Wikidata represents knowledge as statements \(p(s,o)\), where \(s\) is an item, \(p\) is a property, and \(o\) is an item or literal \cite{wikidataDataModel,vrandecic2014wikidata}. We study additions and deletions of complete direct statements. A property constraint is metadata attached to a property. It states how that property is normally expected to be used. For example, \texttt{single} limits cardinality, \texttt{valueType} restricts value classes, \texttt{inverse} requires a corresponding statement, and \texttt{conflictWith} forbids a co-occurring pattern.
+
+We call the statement that triggers the violation the \emph{base statement}. Some violations also depend on local evidence: \texttt{conflictWith} may require an incompatible context statement, while \texttt{distinct} or \texttt{single} may require another statement sharing a value or property. An \texttt{inverse} or \texttt{itemRequires\allowbreak Statement} violation may instead involve missing expected evidence. We call the symbolic pattern of present or missing statements and constraint metadata the \emph{witness pattern}. A \emph{repair action} is an edit proposed to address it; success is determined by post-edit validation.
+
+For a constraint occurrence \(c\) and a bounded symbolic state \(G\), the local validation procedure returns \emph{satisfied}, \emph{violated}, or \emph{unknown}. It returns \emph{unknown} when no supported family-specific validator applies or when the required constraint parameters or local evidence are unavailable. We call \(c\) \emph{checkable} on \(G\) in the first two cases and \emph{uncheckable} in the third. Thus, uncheckability denotes insufficient support for a Boolean decision rather than a violation. Checkability is state-dependent and may change after an edit.
+
+%\subsection{A-box and T-box scope}
+%\label{sec:abox-tbox}
+
+Although Wikidata itself does not enforce a strict description-logic separation, the A-box/T-box abstraction is useful for repair analysis. Ferranti et al.~\cite{ferranti2025repairs} distinguish A-box repairs, which modify base statements, context statements, or qualifiers, from T-box repairs, which modify constraint definitions or hierarchy information. This distinction defines the scope of our work. We study direct-statement A-box repair proposals learned from historical edits.
+
+Concrete constraint definitions and locally materialised type- or subclass-style facts are used to instantiate constraints on the input subgraph and evaluate satisfaction, but the systems evaluated in this paper do not propose edits to constraint definitions or class hierarchies. Likewise, the full Wikidata repair space includes qualifiers, ranks, and references; these matter for complete Wikidata repair, but they are outside the six-slot direct-statement prediction task evaluated here.
+
+\section{Task and Problem Formulation}
+\label{sec:task}
+
+\subsection{Repair instances and actions}
+\label{sec:task:instance}
+A repair instance is a constraint violation paired with its local context and historical edit:
+\[
+i=(S_i,\witnessctx_i,\mathcal{A}_i,\mathcal{C}_i,\histrepair_i)
+\]
+It consists of the base statement \(S_i=(s_i,p_i,o_i)\), additional witness statements \(\witnessctx_i\), the one-hop outgoing A-box neighbourhood \(\mathcal{A}_i\), locally attached constraints \(\mathcal{C}_i\), and the historical repair \(\histrepair_i\). The attached set includes the primary constraint \(c_i^\star\), i.e. the constraint associated with the historical violation record, and constraints on predicates in the base, witness, and materialised entity neighbourhoods. A constraint definition contains its constrained property and parameters such as required properties, allowed classes or values, inverses, or conflicts. All claims are restricted to this bounded evidence: type validation uses locally present \texttt{P31} (\emph{instance of}) and \texttt{P279} (\emph{subclass of}) facts; no transitive class hierarchy is materialised. Only families with implemented validators, \(\mathcal{C}_i^{\mathrm{fac}}\subseteq\mathcal{C}_i\), execute as factors.
+
+\label{sec:task:action}
+An edit consists of at most one complete statement addition and deletion:
+\[
+\Delta=\bigl((s_i^+,p_i^+,o_i^+),(s_i^-,p_i^-,o_i^-)\bigr).
+\]
+Either operation may be absent; a replacement pairs a deletion with an addition. Both the historical edit \(\histrepair_i\) and the predicted edit \(\predrepair_i\) share this representation.
+
+\subsection{Graph materialisation and repair states}
+\label{subsec:graph-states}
+The stored factorised input graph for instance \(i\) contains local A-box entity and predicate-occurrence nodes \(\mathcal{V}_i\), factor nodes \(\mathcal{F}_i=\{f_c:c\in\mathcal{C}_i^{\mathrm{fac}}\}\), and branches encoding each factor's constraint parameters. For each locally materialised statement occurrence \(j\), with triple \((s_j,p_j,o_j)\), the stored graph contains the directed path \(s_j\rightarrow v_{p_j,j}\rightarrow o_j\), where \(v_{p_j,j}\) is a fresh predicate-occurrence node. Thus, repeated uses of the same property have distinct local predicate nodes. Each factor has bidirectional, role-typed scope edges to selected local subject, predicate, and object nodes; its definition branches remain directed.
+
+Figure~\ref{fig:subgraph-model} illustrates the factorised representation and two possible local edits.
+
+This stored neural input graph is distinct from the symbolic evidence state used for evaluation. From the same instance record, the evaluator reconstructs \(G_i^{\mathrm{pre}}\) as a bounded set of local A-box statements. The historical and predicted edits are applied to this symbolic state to obtain
+\[
+G_i^{\mathrm{hist}}=\mathrm{apply}(G_i^{\mathrm{pre}},\histrepair_i),
+\qquad
+G_i^{\mathrm{pred}}=\mathrm{apply}(G_i^{\mathrm{pre}},\predrepair_i).
+\]
+
+Because constraint symbolic evaluation is restricted to the reconstructed local graph, an operation is applied only when its subject is represented and its predicate occurs within the instance's local predicate closure. Otherwise, the available evidence is insufficient to evaluate its local consequences: the operation remains part of the predicted repair for historical-fidelity and disruption metrics, but it does not modify the symbolic state used to compute constraint-satisfaction metrics.
+
+\begin{figure}[h]
+\centering
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\small,
+  item/.style={draw,ellipse,align=center,minimum width=2.15cm,minimum height=.95cm,inner sep=2pt,fill=black!1},
+  focusitem/.style={item,line width=.8pt,minimum width=2.55cm,minimum height=1.15cm},
+  pred/.style={draw,rounded corners=2pt,align=center,text width=2.15cm,minimum height=.8cm,inner sep=3pt,fill=black!5},
+  factor/.style={draw,rounded corners=2pt,align=center,text width=4.05cm,inner sep=4pt},
+  mainfactor/.style={factor,draw=red!70!black,fill=red!5,line width=.8pt},
+  secfactor/.style={factor,draw=green!45!black,fill=green!6,line width=.8pt},
+  repair/.style={draw,rounded corners=2pt,align=left,text width=5.0cm,inner sep=4pt,fill=black!2},
+  stmt/.style={-{Latex[length=2.0mm]},line width=.62pt},
+  scopeMain/.style={{Latex[length=1.6mm]}-{Latex[length=1.6mm]},dashed,draw=red!70!black,line width=.55pt},
+  scopeSec/.style={{Latex[length=1.6mm]}-{Latex[length=1.6mm]},densely dashed,draw=green!45!black,line width=.55pt},
+  lab/.style={font=\scriptsize,fill=white,inner sep=1pt,align=center}
+]
+% A small violation-centred A-box neighbourhood.
+\node[focusitem] (x) at (0,0) {1949--50\\Cypriot Cup\\\scriptsize Q28021};
+\node[pred] (p3450) at (-3.3,1.5) {P3450\\\scriptsize sports season\\or competition};
+\node[item] (cup) at (-6.15,2.7) {Cypriot Cup\\\scriptsize Q245970};
+\draw[stmt] (x) -- node[lab,below left] {base} (p3450);
+\draw[stmt] (p3450) -- node[lab,above] {P3450} (cup);
+\node[pred] (p155) at (3.3,1.5) {P155\\\scriptsize follows};
+\node[item] (prev) at (6.15,2.7) {1948--49\\Cypriot Cup\\\scriptsize Q28674};
+\draw[stmt] (x) -- node[lab,below right] {context} (p155);
+\draw[stmt] (p155) -- node[lab,above] {P155} (prev);
+\node[pred] (p641) at (2.9,-1.75) {P641\\\scriptsize sport};
+\node[item] (football) at (6.05,-1.75) {association\\football\\\scriptsize Q2736};
+\draw[stmt] (x) -- node[lab,below] {support} (p641);
+\draw[stmt] (p641) -- node[lab,above] {P641} (football);
+\node[item,minimum width=2.35cm,minimum height=.95cm,fill=black!3] (neigh) at (-3.1,-1.85) {other local\\statements\\\scriptsize P31, P17, \ldots};
+\draw[stmt] (x) -- (neigh);
+% Constraint factors.
+\node[mainfactor] (fmain) at (0,4.3) {\textbf{$f_{\mathrm{main}}$}\\[-1pt]
+  \scriptsize family: \texttt{conflictWith}\\
+  \scriptsize constrained property: P3450\\
+  \scriptsize parameter: P2306 = P155\\
+  \scriptsize pre-repair state: \textbf{violated}};
+\draw[scopeMain] (fmain) -- node[lab,right] {subject} (x);
+\draw[scopeMain] (fmain) -- node[lab,left] {predicate} (p3450);
+\draw[scopeMain] (fmain) -- node[lab,right] {conflicting\\predicate} (p155);
+\node[secfactor] (fsec) at (2.4,-4.3) {\textbf{$f_{\mathrm{sec}}$}\\[-1pt]
+  \scriptsize family: \texttt{itemRequiresStatement}\\
+  \scriptsize constrained property: P3450\\
+  \scriptsize parameter: P2306 = P641\\
+  \scriptsize pre-repair state: \textbf{satisfied}};
+\draw[scopeSec] (fsec) -- node[lab,left] {subject} (x);
+\draw[scopeSec] (fsec) -- node[lab,right] {required\\predicate} (p641);
+\draw[scopeSec] (fsec) -- node[lab,right] {required\\object} (football);
+% Repair examples are shown only as edits, not as full post-edit graphs.
+\node[repair] (repairs) at (-4.6,-4.3) {\textbf{Examples of local A-box edits}\\[-1pt]
+  \scriptsize base-preserving: delete context\\[-2pt]
+  \scriptsize $\Delta_{\mathrm{ctx}}=-P155(x,\mathrm{prev})$\\[-1pt]
+  \scriptsize delete-focus: delete base\\[-2pt]
+  \scriptsize $\Delta_{\mathrm{base}}=-P3450(x,\mathrm{cup})$};
+\end{tikzpicture}
+}
+\caption{Example violation-centred subgraph with executable constraint factors. Circles denote item/value variables, rounded boxes denote predicate occurrences, and colored boxes denote property constraints; solid arrows are local A-box statement paths, while dashed arrows are bidirectional factor-scope links.}
+\label{fig:subgraph-model}
+\end{figure}
+
+\subsection{Local validator semantics}
+\label{subsec:validator-semantics}
+
+Table~\ref{tab:validator-semantics} specifies the exact bounded semantics used by the evaluator for every supported constraint family. These validators are role-anchored approximations of the corresponding Wikidata constraints: they operate on the reconstructed local state of one repair instance, rather than on the complete Wikidata graph.
+
+For a constraint occurrence \(c\), let \(p_c\) denote its constrained property, and let \(\mathcal{P}_i\) be the predicate closure represented for instance \(i\). For a reconstructed state \(G\), define
+\[
+p^G(s)=\{o\mid p(s,o)\in G\},
+\]
+the set of locally represented values of property \(p\) for entity \(s\). We call an entity--property pair \((s,p)\) \emph{locally decidable} in \(G\), written \(\operatorname{dec}_G(s,p)\), when \(s\) is represented, \(p\in\mathcal{P}_i\), and no operation that could not be applied to the local state targets that pair. On a locally decidable pair, the evaluator adopts a bounded closed-world interpretation: if \(p^G(s)=\varnothing\), the property is treated as locally absent. This is an assumption about the materialised instance, not about completeness of Wikidata.
+
+An operation whose subject is not represented or whose predicate lies outside \(\mathcal{P}_i\) is not applied to \(G\). A validator that subsequently requires the affected entity--property pair therefore returns \emph{unknown}. The type-related validators are deliberately more conservative: if their trigger remains present but no local typing statement is available, they also return \emph{unknown}, rather than treating the missing type evidence as a violation.
+
+After identifier resolution, the evaluator constructs the following definition-parameter sets:
+\begin{itemize}
+    \item \(\mathrm{Req}_c\), the required properties given by \texttt{P2306} (\emph{property});
+    \item \(\mathrm{Allow}_c\), the allowed items given by \texttt{P2305} (\emph{item of property constraint});
+    \item \(\mathrm{Class}_c\), the allowed classes given by \texttt{P2308} (\emph{class});
+    \item \(\mathrm{Rel}_c\), the typing relations given by \texttt{P2309} (\emph{relation}), defaulting to \texttt{P31} (\emph{instance of}) and \texttt{P279} (\emph{subclass of});
+    \item \(\mathrm{Inv}_c\), the inverse properties given by \texttt{P1696} (\emph{inverse property}), defaulting to \(p_c\).
+\end{itemize}
+
+For \texttt{conflictWith}, \(\mathrm{Conf}_c\) contains the resolved property-valued parameters, with the recorded witness predicate used as a fallback when this set is empty. Only successfully resolved identifiers enter these sets. Whenever a condition below requires a non-empty parameter set, an empty set makes the occurrence uncheckable.
+
+The \emph{anchor} column identifies the fixed repair-instance role from which each validator begins its local queries. Validators may inspect statements about the base subject \(s_i\), the base value \(o_i\), or the recorded witness subject. Supported primary and secondary constraint occurrences are evaluated against these shared anchors; they are not independently re-grounded over every potentially matching statement in the neighbourhood. Consequently, several validators intentionally inspect only the focal base value or the recorded witness.
+
+\begin{table}[H]
+\caption{Family-specific semantics of the bounded local validators. The satisfaction condition is evaluated only after the checkability condition holds.}
+\label{tab:validator-semantics}
+\centering
+\scriptsize
+\renewcommand{\arraystretch}{1.04}
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\textwidth}{@{}
+  >{\raggedright\arraybackslash\hsize=.65\hsize}X
+  >{\raggedright\arraybackslash\hsize=.90\hsize}X
+  >{\raggedright\arraybackslash\hsize=1.35\hsize}X
+  >{\raggedright\arraybackslash\hsize=1.20\hsize}X
+  >{\raggedright\arraybackslash\hsize=.90\hsize}X@{}}
+\toprule
+\textbf{Family} &
+\textbf{Anchor and parameters} &
+\textbf{Checkable when} &
+\textbf{Satisfied when} &
+\textbf{Bounded-evidence limitation} \\
+\midrule
+
+\texttt{conflict}\newline\texttt{With}
+& Subject \(s_i\); \(p_c,\mathrm{Conf}_c,\mathrm{Allow}_c\)
+& \(\mathrm{Conf}_c\neq\varnothing\),
+  \(\operatorname{dec}_G(s_i,p_c)\), and
+  \(\operatorname{dec}_G(s_i,p)\) for every
+  \(p\in\mathrm{Conf}_c\).
+& \(p_c^G(s_i)=\varnothing\), or, for every
+  \(p\in\mathrm{Conf}_c\), either
+  \(\mathrm{Allow}_c=\varnothing\) and \(p^G(s_i)=\varnothing\), or
+  \(\mathrm{Allow}_c\neq\varnothing\) and
+  \(p^G(s_i)\cap\mathrm{Allow}_c=\varnothing\).
+& -- \\
+
+\texttt{distinct}
+& Base \(S_i\); recorded witness \((s_w,p_w,o_w)\)
+& \(\operatorname{dec}_G(s_i,p_c)\); if \(S_i\in G\), the recorded witness is complete and \(p_w=p_c\).
+& It is not the case that
+  \(S_i\in G\), \(p_w=p_c\), \(o_w=o_i\), and \(s_w\neq s_i\).
+& Compares only locally represented statements. \\
+
+\texttt{inverse}
+& Base \(S_i\); \(p_c,\mathrm{Inv}_c\)
+& \(p_i=p_c\) and \(\operatorname{dec}_G(s_i,p_c)\); if \(S_i\in G\), then \(\mathrm{Inv}_c\neq\varnothing\) and \(\operatorname{dec}_G(o_i,p)\) for every \(p\in\mathrm{Inv}_c\).
+& \(S_i\notin G\), or
+  \(p(o_i,s_i)\in G\) for some \(p\in\mathrm{Inv}_c\).
+& Compares only locally represented statements. \\
+
+\texttt{symmetric}
+& Base \(S_i\); \(p_c\)
+& As for \texttt{inverse}, with the reverse property fixed to \(p_c\).
+& \(S_i\notin G\), or \(p_c(o_i,s_i)\in G\).
+& -- \\
+
+\texttt{item}\newline\texttt{Requires}\newline\texttt{Statement}
+& Subject \(s_i\); \(p_c,\mathrm{Req}_c,\mathrm{Allow}_c\)
+& \(\mathrm{Req}_c\neq\varnothing\) and
+  \(\operatorname{dec}_G(s_i,p_c)\); if
+  \(p_c^G(s_i)\neq\varnothing\), then
+  \(\operatorname{dec}_G(s_i,p)\) for every
+  \(p\in\mathrm{Req}_c\).
+& \(p_c^G(s_i)=\varnothing\), or, for every
+  \(p\in\mathrm{Req}_c\), either
+  \(\mathrm{Allow}_c=\varnothing\) and \(p^G(s_i)\neq\varnothing\), or
+  \(\mathrm{Allow}_c\neq\varnothing\) and
+  \(p^G(s_i)\cap\mathrm{Allow}_c\neq\varnothing\).
+& -- \\
+
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\ContinuedFloat
+\caption[]{Family-specific semantics of the bounded local validators (continued).}
+\centering
+\scriptsize
+\renewcommand{\arraystretch}{1.04}
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\textwidth}{@{}
+  >{\raggedright\arraybackslash\hsize=.65\hsize}X
+  >{\raggedright\arraybackslash\hsize=.90\hsize}X
+  >{\raggedright\arraybackslash\hsize=1.35\hsize}X
+  >{\raggedright\arraybackslash\hsize=1.20\hsize}X
+  >{\raggedright\arraybackslash\hsize=.90\hsize}X@{}}
+\toprule
+\textbf{Family} &
+\textbf{Anchor and parameters} &
+\textbf{Checkable when} &
+\textbf{Satisfied when} &
+\textbf{Bounded-evidence limitation} \\
+\midrule
+
+\texttt{value}\newline\texttt{Requires}\newline\texttt{Statement}
+& Base value \(o_i\); \(p_c,\mathrm{Req}_c,\mathrm{Allow}_c\)
+& \(p_i=p_c\) and \(\operatorname{dec}_G(s_i,p_c)\); if \(S_i\in G\), then
+  \(\mathrm{Req}_c\neq\varnothing\) and
+  \(\operatorname{dec}_G(o_i,p)\) for every
+  \(p\in\mathrm{Req}_c\).
+& \(S_i\notin G\), or, for every
+  \(p\in\mathrm{Req}_c\), either
+  \(\mathrm{Allow}_c=\varnothing\) and \(p^G(o_i)\neq\varnothing\), or
+  \(\mathrm{Allow}_c\neq\varnothing\) and
+& Only the base value \(p_i\) can be inspected \\
+
+\texttt{oneOf}
+& Subject \(s_i\); \(p_c,\mathrm{Allow}_c\)
+& \(\mathrm{Allow}_c\neq\varnothing\) and
+  \(\operatorname{dec}_G(s_i,p_c)\).
+& \(p_c^G(s_i)\subseteq\mathrm{Allow}_c\).
+& -- \\
+
+\texttt{single}
+& Subject \(s_i\); \(p_c\)
+& \(\operatorname{dec}_G(s_i,p_c)\).
+& \(\lvert p_c^G(s_i)\rvert\leq 1\).
+& -- \\
+
+\texttt{type}
+& Subject \(s_i\); \(p_c,\mathrm{Class}_c,\mathrm{Rel}_c\)
+& \(\mathrm{Class}_c\neq\varnothing\) and
+  \(\operatorname{dec}_G(s_i,p_c)\); if
+  \(p_c^G(s_i)\neq\varnothing\), then
+  \(\mathrm{Rel}_c\neq\varnothing\),
+  \(\operatorname{dec}_G(s_i,p)\) for every
+  \(p\in\mathrm{Rel}_c\), and
+  \(\bigcup_{p\in\mathrm{Rel}_c}p^G(s_i)\neq\varnothing\).
+& \(p_c^G(s_i)=\varnothing\), or
+  \(\left(\bigcup_{p\in\mathrm{Rel}_c}p^G(s_i)\right)
+  \cap\mathrm{Class}_c\neq\varnothing\).
+& Uses direct local class matches only; it does not follow a global transitive class hierarchy. \\
+
+\texttt{valueType}
+& Focal value \(o_i\); \(p_c,\mathrm{Class}_c,\mathrm{Rel}_c\)
+& \(o_i\) has a resolved identifier,
+  \(\mathrm{Class}_c\neq\varnothing\), and
+  \(\operatorname{dec}_G(s_i,p_c)\); if
+  \(p_c^G(s_i)\neq\varnothing\), then
+  \(\mathrm{Rel}_c\neq\varnothing\),
+  \(\operatorname{dec}_G(o_i,p)\) for every
+  \(p\in\mathrm{Rel}_c\), and
+  \(\bigcup_{p\in\mathrm{Rel}_c}p^G(o_i)\neq\varnothing\).
+& \(p_c^G(s_i)=\varnothing\), or
+  \(\left(\bigcup_{p\in\mathrm{Rel}_c}p^G(o_i)\right)
+  \cap\mathrm{Class}_c\neq\varnothing\).
+& No global transitive hierarchy is followed. \\
+
+\bottomrule
+\end{tabularx}
+\end{table}
+
+These rules also determine how deletion affects validation. The validators for
+\texttt{inverse}, \texttt{symmetric},
+\texttt{valueRequires}\allowbreak\texttt{Statement},
+\texttt{oneOf}, and \texttt{distinct} use the exact base statement as their trigger. Once \(S_i\notin G\), they are satisfied whenever the remaining checkability conditions hold.
+
+The other families evaluate property sets on fixed local anchors, so deleting \(S_i\) has no uniform effect. Depending on the role of \(p_i\) in a particular constraint occurrence, it may remove the constrained-property trigger, conflicting evidence, a required statement, a typing statement, or merely one tested value, as for \texttt{oneOf}. For \texttt{single}, reducing \(\lvert p_c^G(s_i)\rvert\) to at most one is sufficient. For \texttt{type} and \texttt{valueType}, removing the last locally represented typing statement while leaving the trigger active makes the occurrence unknown rather than violated. The \texttt{valueType} validator is additionally role-anchored: another \(p_c\)-value can keep the trigger active even though the class test remains attached to the recorded \(o_i\). An operation outside the represented subject or predicate scope leaves \(G\) unchanged, and any validator that requires the corresponding unresolved pair becomes uncheckable.
+
+\subsection{Evaluation views}
+\label{sec:task:definition}
+Given the stored representation of \((G_i^{\mathrm{pre}},\mathcal{C}_i)\), the system predicts \(\predrepair_i\). \emph{Historical fidelity} compares that action with \(\histrepair_i\); \emph{symbolic repair quality} rechecks \(\mathcal{C}_i\) on \(G_i^{\mathrm{pred}}\). They are deliberately separate because imitation may introduce new violations while satisfaction may increase through base statement deletion.
+
+
+\section{Executable Constraint Factors}
+\label{sec:executable-factors}
+
+The Direct--Factor GNN augments a relational graph encoder with one neural computational unit for each locally attached, validator-supported constraint occurrence. The central idea is to separate two kinds of computation. Ordinary graph message passing represents the statements and constraint definitions in the instance. A \emph{factor step} then reads the current representations of the nodes that play the predicate, subject, and object roles of a particular constraint, constructs a constraint-specific state, and sends a learned residual back to those nodes. Repeating this read--compute--write cycle allows constraint context to influence the eventual repair prediction.
+
+At a high level, a message-passing GNN associates every graph node with a learned numerical summary and every layer updates that summary from neighbouring nodes. No individual coordinate needs a predefined interpretation. GINE---a Graph Isomorphism Network that also uses edge features---is the structural update used here, so the relation connecting two nodes can affect the message \cite{xu2019gin,hu2020gine}. Our architecture inserts factor execution after each such update, as summarised in \cref{fig:factor-architecture}. The symbolic validators are not called during this neural forward pass; they provide supervision and are used separately for post-edit evaluation.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  font=\scriptsize,
+  stage/.style={draw,rounded corners=2pt,align=center,text width=29mm,minimum height=13mm,inner sep=3pt,fill=black!3},
+  aux/.style={draw,dashed,rounded corners=2pt,align=center,text width=34mm,minimum height=10mm,inner sep=3pt},
+  flow/.style={-{Latex[length=1.5mm]},thick},
+  auxflow/.style={-{Latex[length=1.5mm]},dashed}
+]
+\node[stage] (states) {current node states\\\(H^{(k)}\)};
+\node[stage,right=5mm of states] (gine) {\textbf{1. Structural update}\\GINE over statements and factor definitions};
+\node[stage,right=5mm of gine] (execute) {\textbf{2. Factor execution}\\role-wise scope summaries and family-specific state};
+\node[stage,right=5mm of execute] (pressure) {\textbf{3. Pressure}\\role-specific residuals produce \(H^{(k+1)}\)};
+\draw[flow] (states) -- (gine);
+\draw[flow] (gine) -- (execute);
+\draw[flow] (execute) -- (pressure);
+
+\node[aux,below=8mm of execute] (factorheads) {final factor state\\pre-repair and post-historical auxiliary heads};
+\node[stage,below=8mm of pressure,text width=34mm] (decoder) {after \(L\) blocks\\mean-pool all nodes and decode six repair slots};
+\draw[auxflow] (execute) -- (factorheads);
+\draw[flow] (pressure) -- (decoder);
+\end{tikzpicture}
+\caption{Data flow in the executable-factor architecture. Structural GINE edges and factor-scope links have different roles: GINE encodes statements and factor definitions, whereas the factor step reads and writes through typed predicate/subject/object scope links. The post-historical head is used only for auxiliary training and validation.}
+\label{fig:factor-architecture}
+\end{figure}
+
+\paragraph*{Running example.}
+For the \texttt{conflictWith} case in \cref{fig:subgraph-model}, GINE first contextualises the two local statements and the factor-definition branch. The factor then reads the predicate occurrences and the subject/object nodes connected to its typed scope, constructs a family-specific state, and returns learned pressure to those nodes. It is not given a hand-written choice between deleting the context statement and deleting the base statement; the graph-level decoder learns that choice from historical actions.
+
+\subsection{Step 1: structural encoding of the repair instance}
+\label{subsec:factor-graph}
+
+Let \(\mathcal{Z}_i\) denote the complete node set of the stored factorised input graph introduced in \cref{subsec:graph-states}. In addition to \(\mathcal{V}_i\) and \(\mathcal{F}_i\), it includes the predicate-occurrence and object nodes on the factor-definition branches. The stored graph retains the expanded statement paths introduced there. A constraint-parameter pair \((q,a)\) is represented analogously as \(f_c\rightarrow v_q^{\mathrm{par}}\rightarrow a\), with a fresh parameter-predicate occurrence node for each pair.
+
+The Direct--Factor GNN uses node-ID encoding. Each node receives a learned lookup vector for its identifier and a learned role-code embedding. The role code marks whether the node is the subject, predicate occurrence, or object of the base statement \(S_i\); nodes with none of these roles receive the neutral code. An initialisation MLP maps their concatenation to the model state:
+\[
+h_z^{(0)}
+=
+\mathrm{MLP}_{\mathrm{init}}
+\left(
+E_{\mathrm{node}}(\mathrm{id}(z))
+\mathbin\Vert
+E_{\mathrm{role}}(\rho_z)
+\right).
+\]
+Fresh occurrences of the same property occupy different graph-node positions but use the same property identifier at initialisation.
+
+For structural GINE message passing, each statement occurrence \(j\) contributes a directed \(s_j\rightarrow o_j\) edge whose edge attribute points to \(v_{p_j,j}\); a factor-definition pair similarly contributes \(f_c\rightarrow a\), with \(v_q^{\mathrm{par}}\) as its edge attribute. Let \(\operatorname{predocc}(u,z)\) denote the predicate-occurrence node associated with the structural edge \(u\rightarrow z\). At block \(k\), an edge MLP derives the edge feature from the current state of that predicate occurrence:
+\[
+e_{u\rightarrow z}^{(k)}
+=
+\mathrm{MLP}_{\mathrm{edge}}
+\left(h_{\operatorname{predocc}(u,z)}^{(k)}\right).
+\]
+GINE then produces the intermediate structural state
+\[
+\widetilde h_z^{(k+1)}
+=
+\mathrm{GINE}_{k}
+\left(
+h_z^{(k)},
+\left\{
+\left(h_u^{(k)},e_{u\rightarrow z}^{(k)}\right)
+:
+u\in\mathcal{N}_{\mathrm{str}}^{-}(z)
+\right\}
+\right),
+\]
+where \(\mathcal{N}_{\mathrm{str}}^{-}(z)\) contains the incoming statement and factor-definition neighbours of \(z\). A-box nodes within a factor scope subsequently receive constraint pressure; all other nodes retain \(h_z^{(k+1)}=\widetilde h_z^{(k+1)}\) as input for the next neural layer. The Direct--Factor GNN applies three such blocks, with each structural update followed by factor execution and pressure.
+
+\subsection{Step 2: constraint-factor read and write}
+\label{subsec:factor-execution}
+
+Each factor is a grounded occurrence with a concrete definition, a family \(t(c)\), such as \texttt{single} or \texttt{conflictWith}, and a typed local scope. For \(r\in\{\mathrm{pred},\mathrm{subj},\mathrm{obj}\}\), define
+\[
+\mathcal{R}_{c,r}
+=\{v\in\mathcal{Z}_i : f_c\text{ is linked to }v\text{ with role }r\},
+\qquad n_{c,r}=|\mathcal{R}_{c,r}|.
+\]
+A role may contain no node, one node, or several matching occurrences. After the structural update, the executor forms a separate mean for every role:
+\[
+\bar h_{c,r}^{(k+1)}=
+\frac{1}{\max(1,n_{c,r})}
+\sum_{v\in\mathcal{R}_{c,r}}\widetilde h_v^{(k+1)}.
+\]
+The summary is the zero vector when the role is empty. The executor input concatenates the structurally updated factor-node state, the three role summaries, and the logarithm of each role count:
+\[
+\phi_c^{(k+1)}
+=
+\left[
+\widetilde h_{f_c}^{(k+1)}
+\mathbin\Vert
+\bar h_{c,\mathrm{pred}}^{(k+1)}
+\mathbin\Vert
+\bar h_{c,\mathrm{subj}}^{(k+1)}
+\mathbin\Vert
+\bar h_{c,\mathrm{obj}}^{(k+1)}
+\mathbin\Vert
+\log(1+n_{c,\mathrm{pred}})
+\mathbin\Vert
+\log(1+n_{c,\mathrm{subj}})
+\mathbin\Vert
+\log(1+n_{c,\mathrm{obj}})
+\right].
+\]
+The count features distinguish an empty role from one matched by one or several local statements.
+
+All factors belonging to the same constraint family share a MLP \(F_{t(c)}\). Because constraint families express different satisfaction conditions, this parameterisation lets the factor readout specialise to each family's semantics while sharing statistical strength across all grounded occurrences of that family:
+\[
+\bigl(a_c^{(k+1)},\ell_{c,\mathrm{pre}}^{(k+1)}\bigr)
+=F_{t(c)}\!\left(\phi_c^{(k+1)}\right).
+\]
+The latent state \(a_c^{(k+1)}\) is the representation used for communication. The accompanying raw score (logit), whose sigmoid estimates satisfaction, is not used to gate pressure. After the final residual update, the same executor is applied once more to the completed node states to obtain a final factor readout \(a_c^{\mathrm{out}}\) and the pre-repair logit \(\ell_{c,\mathrm{pre}}\) used by the auxiliary loss described below.
+
+For every factor--node scope link, a family- and role-specific MLP \(G_{t(c),r}\) creates a pressure message from the factor state and the recipient's current state. Conditioning the pressure map on both family and role allows messages to reflect the constraint semantics and the recipient node's function within the factor scope, while sharing parameters across all links with the same family--role combination:
+\[
+m_{c\to v,r}^{(k+1)}
+=G_{t(c),r}\!\left(
+ a_c^{(k+1)}\mathbin\Vert\tilde h_v^{(k+1)}
+\right).
+\]
+Messages arriving at the same node are averaged and added as a residual,
+\[
+h_v^{(k+1)}
+=\tilde h_v^{(k+1)}
++\lambda\,
+\frac{
+\displaystyle\sum_{(c,r):v\in\mathcal{R}_{c,r}}
+ m_{c\to v,r}^{(k+1)}
+}{\max(1,d_v)},
+\qquad
+ d_v=\bigl|\{(c,r):v\in\mathcal{R}_{c,r}\}\bigr|.
+\]
+Nodes without an incoming factor-role link remain unchanged. Pressure is therefore a learned, constraint-conditioned residual. It is not a hard rule application: the satisfaction logit is neither thresholded nor used as a symbolic gate, and the neural factor state need not implement the associated validator exactly.
+
+\subsection{Step 3: repair prediction and training signals}
+\label{subsec:repair-decoding}
+
+After the final GNN block, the model mean-pools all node states to obtain a graph-level representation of the repair instance. A shared projection first transforms this vector into a common repair representation. Three role-specific branches then specialise that representation for predicting subjects, predicates, and objects. Each branch feeds two classification heads: one for the addition and one for the deletion. The six heads therefore predict the subject, predicate, and object of the addition and the subject, predicate, and object of the deletion. Subject and object heads range over entity IDs, whereas predicate heads range over property IDs; every vocabulary also contains \textsc{none}. The value with the highest score is selected independently for each slot, yielding the six-slot action representation defined in \cref{sec:task:action}.
+
+The main training signal is the mean cross-entropy against the historical six-slot action; this teaches the six slot classifiers which IDs to select. The Direct--Factor GNN additionally supervises two factor heads. The pre-repair head predicts constraint satisfaction from the final factor readout. The post-historical head also receives the mean learned embedding of the six historical slot IDs and predicts constraint satisfaction after that action. With binary cross-entropy averaged only over factors whose symbolic satisfaction label is defined for the corresponding state, the proposal loss is
+\[
+\mathcal{L}_{\mathrm{factor}}^{(i)}
+=\frac{1}{6}\sum_q
+\mathrm{CE}\!\left(\ell_{i,q},y_{i,q}^{\mathrm{hist}}\right)
++0.1\,\overline{\mathrm{BCE}}_{\mathrm{pre}}^{(i)}
++0.1\,\overline{\mathrm{BCE}}_{\mathrm{hist}}^{(i)},
+\]
+where an empty eligible factor set contributes zero. The post-historical branch is used only during training and validation, and historical repairs are not supplied at inference. Neither auxiliary logit is fed directly to the edit decoder. The auxiliary losses shape the shared factor executor, while the edit loss also trains the factor-pressure pathway. Reported constraint-satisfaction metrics do not use these logits; they independently revalidate the reconstructed pre- and post-edit states as defined in \cref{sec:evaluation}.
+
+\subsection{Why executable constraint factors?}
+\label{subsec:what-factors-measure}
+
+Representing a constraint definition only as ordinary graph structure leaves generic message passing to discover which local nodes fill semantically different roles and how their evidence should be combined for each constraint family. Executable factors encode this inductive bias directly: each grounded constraint reads its typed predicate, subject, and object scope using parameters shared by its family, then returns constraint-conditioned residuals to the nodes in that scope. This gives constraint context a direct pathway into the repair representation without prescribing a symbolic repair or invoking the validator during neural inference.
+
+The explicit interface also makes the constraint pathway easier to interrogate. Satisfaction probes test whether factor states encode their symbolic satisfaction labels, while pressure-masking interventions on the trained network test whether messages from primary and non-primary factors affect the predicted repair. These diagnostics distinguish label alignment from pathway use; neither establishes validator-equivalent reasoning or safe repair. Those outcomes require the post-edit symbolic evaluation defined in \cref{sec:evaluation}.
+
+\section{Evaluation Framework}
+\label{sec:evaluation}
+
+Historical fidelity compares \(\predrepair_i\) with \(\histrepair_i\): \textbf{precision, recall, and Micro-F1} pool matches between their additions and deletions. Constraint-satisfaction metrics instead compare the reconstructed states \(G_i^{\mathrm{pre}}\) and \(G_i^{\mathrm{pred}}\).
+
+\paragraph*{Constraint support.}
+The family-specific validators in \cref{tab:validator-semantics} produce the outcomes used here. Let \(\chi_c(G)\in\{0,1\}\) indicate whether \(c\) is checkable on \(G\). When it is checkable, let \(s_c(G)\in\{0,1\}\) indicate whether the constraint is satisfied. Define the post-edit and common supports as
+\[
+\mathcal{C}_i^{\mathrm{pred}}
+=\{c\in\mathcal{C}_i:\chi_c(\Gpred)=1\},\quad
+\mathcal{C}_i^{\leftrightarrow}=
+\{c\in\mathcal{C}_i:\chi_c(\Gpre)=1\land\chi_c(\Gpred)=1\}.
+\]
+We call \(\mathcal{C}_i^{\leftrightarrow}\) the \emph{common support}: it contains exactly those constraint occurrences that are checkable both before and after the predicted repair, so their satisfaction values can be compared.
+Every constraint-satisfaction metric reports its eligible denominator; an uncheckable constraint contributes neither a positive result nor an artificial zero.
+
+\paragraph*{Primary and local satisfaction.}
+Let the Primary-Fix eligibility set be the set of instances whose primary constraint is checkable and violated before repair.
+\[
+\mathcal{I}_{\mathrm{PF}}
+=
+\left\{
+i:
+\chi_{c_i^\star}(\Gpre)=1
+\land
+s_{c_i^\star}(\Gpre)=0
+\right\}.
+\]
+The \textbf{Primary Fix Rate (PFR)} measures the proportion of eligible instances whose primary constraint is fixed by the system's prediction.
+\[
+\mathrm{PFR}=
+\frac{\sum_{i\in\mathcal{I}_{\mathrm{PF}}}
+\mathbf{1}[\chi_{c_i^\star}(\Gpred)=1\land s_{c_i^\star}(\Gpred)=1]}
+{|\mathcal{I}_{\mathrm{PF}}|}.
+\]
+The denominator is fixed by the pre-edit state: an eligible primary that becomes uncheckable after the predicted edit counts as a failure rather than leaving the support. \textbf{Post-edit Local Satisfaction} \(\locsat^{\mathrm{pred}}\) pools satisfied constraints, while the \textbf{Change in Local Satisfaction} \(\Delta\locsat\) uses common support so altered coverage is not mistaken for improvement:
+\[
+\locsat^{\mathrm{pred}}=
+\frac{\sum_i\sum_{c\in\mathcal{C}_i^{\mathrm{pred}}}s_c(\Gpred)}
+{\sum_i|\mathcal{C}_i^{\mathrm{pred}}|},
+\qquad
+\Delta\locsat=
+\frac{\sum_i\sum_{c\in\mathcal{C}_i^{\leftrightarrow}}
+[s_c(\Gpred)-s_c(\Gpre)]}
+{\sum_i|\mathcal{C}_i^{\leftrightarrow}|}.
+\]
+
+\paragraph*{Secondary satisfaction.}
+For secondary satisfaction, exclude the primary constraint from the common support \(\mathcal{C}_i^{\mathrm{sec}} =\mathcal{C}_i^{\leftrightarrow}\setminus\{c_i^\star\}.\)
+The occurrence-pooled \textbf{Secondary Improvement Rate (SIR)} measures how often a secondary constraint violated before repair becomes satisfied; the \textbf{Secondary Regression Rate (SRR)} measures the converse transition from satisfied to violated:
+\[
+\begin{aligned}
+\sir
+&=\frac{\sum_i\sum_{c\in\mathcal{C}_i^{\mathrm{sec}}}
+\mathbf{1}[s_c(\Gpre)=0\land s_c(\Gpred)=1]}
+{\sum_i\sum_{c\in\mathcal{C}_i^{\mathrm{sec}}}\mathbf{1}[s_c(\Gpre)=0]},\\
+\srr
+&=\frac{\sum_i\sum_{c\in\mathcal{C}_i^{\mathrm{sec}}}
+\mathbf{1}[s_c(\Gpre)=1\land s_c(\Gpred)=0]}
+{\sum_i\sum_{c\in\mathcal{C}_i^{\mathrm{sec}}}\mathbf{1}[s_c(\Gpre)=1]}.
+\end{aligned}
+\]
+An instance contributes nothing to a rate when it has no secondary occurrence eligible for that rate's denominator. Higher SIR and lower SRR are preferred.
+
+\paragraph*{Disruption and base-statement preservation.}
+Constraint satisfaction alone does not reveal how a repair achieved its score: a targeted correction, a multi-operation rewrite, and removal of the statement witnessing the violation may all improve local validation outcomes. We therefore complement the satisfaction metrics with diagnostics of operation count and base-statement preservation.
+
+\textbf{Disruption} is the number of complete predicted operation groups. A partially populated slot group is not an operation and contributes zero. Because the task permits at most one addition and one deletion, per-instance disruption belongs to \(\{0,1,2\}\): the values denote no operation, one addition or deletion, and both operations, respectively. We report its mean together with the separate \textbf{mean addition and deletion counts}.
+
+The base statement \(S_i\) is guaranteed to belong to \(\Gpre\). Let \(\mathrm{BaseRemoved}_i=\mathbf{1}[S_i\notin\Gpred]\). \textbf{Base-deletion Rate} averages this indicator, measuring whether the base is absent from the final reconstructed state. \textbf{Deletes-base-action Rate} instead measures how often the resolved deletion equals \(S_i\). A delete-and-reinsert repair therefore counts as deleting the base action but not as removing the base from \(\Gpred\).
+
+The \textbf{Evidence-Preserving Primary Fix rate (EPPF)} credits an eligible instance only when the primary is fixed and the base remains present:
+\[
+\eppf
+=\frac{\sum_{i\in\mathcal{I}_{\mathrm{PF}}}
+\mathbf{1}[\chi_{c_i^\star}(\Gpred)=1
+\land s_{c_i^\star}(\Gpred)=1
+\land S_i\in\Gpred]}
+{|\mathcal{I}_{\mathrm{PF}}|}.
+\]
+\textbf{Vacuous Improvement} is the fraction of all test instances for which \(\mathrm{BaseRemoved}_i=1\) and
+\(\sum_{c\in\mathcal{C}_i^{\leftrightarrow}}[s_c(\Gpred)-s_c(\Gpre)]>0\). An empty common support has sum zero and therefore does not count. Here, \emph{base-statement preservation} means retention of \(S_i\), not preservation of qualifiers, references, or other context. These diagnostics distinguish deletion-based improvements but do not declare every deletion incorrect.
+
+\section{Experimental Setup}
+\label{sec:experiments}
+
+\subsection{Benchmark and constraint coverage}
+\label{sec:benchmark}
+The benchmark derives from the cleaned and annotated Wikidata constraint-correction corpus of Pellissier Tanon and colleagues \cite{pellissier2019learning,pellissier2021neural,pellissier2020wikidataCorrections}, extracted from the 1 July 2018 Wikidata full-history dump. Each source row identifies one extracted correction: its constraint definition, the revision that resolved the violation, one or two violation statements, one or two edit operations, and local entity descriptions. We treat each retained correction row as one repair instance of the form defined in \cref{sec:task:instance}. The preprocessing does not reconstruct or decompose complete revisions, and several rows may refer to the same revision. All 1,910,794 source rows used here have a matching constraint definition; no additional row-level deduplication is applied. Their historical actions contain either one operation or one addition and one deletion, and therefore map without truncation to the six-slot action in \cref{sec:task:action}.
+
+We discard the supplied partitions and repartition correction rows 70/15/15, stratified by primary constraint family with seed 42, obtaining 1,337,555 training, 286,619 validation, and 286,620 test instances. Identifier frequencies are then computed on this training partition: identifiers occurring fewer than 100 times are mapped to \texttt{UNK} in every split, while reserved placeholders and constraint-definition identifiers are retained. Thus, the minimum-occurrence threshold changes the vocabulary rather than removing repair instances. The paper benchmark retains 50\% of every non-empty stratum defined by split, primary family, and number of locally attached constraints (bins 1--32, 33--64, 65--83, 84--107, 108, 109--160, 161--267, and 268+), using seed 42 and retaining at least one row per stratum. This yields 955,405 instances: 668,779 train, 143,310 validation, and 143,316 test. The split unit is a correction row rather than an entity or constraint definition, so both may recur across partitions; \cref{sec:discussion} discusses the resulting in-distribution scope.
+
+\begin{table}[t]
+\caption{Per-instance descriptive statistics for the 143,316 held-out test cases. A-box counts use distinct statements in the reconstructed pre-edit state; graph counts refer to the stored factorised neural input.}
+\label{tab:benchmark-statistics}
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}Xrrrr@{}}
+\toprule
+\textbf{Quantity} & \textbf{Mean} & \textbf{Median} & \textbf{95th pct.} & \textbf{Max.} \\
+\midrule
+Local A-box statements & 26.55 & 17 & 74 & 558 \\
+Locally attached constraints & 101.05 & 83 & 266 & 1,092 \\
+Executable factors & 60.60 & 51 & 168 & 662 \\
+Factorised-graph nodes & 1,054.93 & 765 & 4,337 & 8,398 \\
+Factorised-graph directed edges & 1,811.86 & 1,444 & 5,010 & 66,894 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\label{sec:constraint-families}
+Each instance designates the constraint named by its historical violation record as primary; all other locally attached constraint occurrences are secondary. Primary factors span \texttt{conflictWith}, \texttt{distinct}, \texttt{inverse}, \texttt{itemRequiresStatement}, \texttt{oneOf}, \texttt{single}, \texttt{type}, \texttt{valueRequiresStatement}, and \texttt{valueType}; \texttt{symmetric} appears only among secondary factors. A constraint family is supported when both its local validator, with the semantics in \cref{tab:validator-semantics}, and its factor construction are defined. Supported occurrences become executable factors and receive symbolic satisfaction labels; unsupported occurrences remain descriptive metadata and contribute no Boolean satisfaction outcomes.
+
+The factor-supervision labels cover 58,049,928 supported constraint occurrences. Of these occurrences, 64.9\% are checkable in the pre-repair state and 67.9\% after applying the historical repair. These labels provide training targets for the auxiliary factor heads.
+
+\subsection{Proposal architectures and baselines}
+\label{subsec:models-baselines}
+The Direct group contains two neural systems whose six output slots are decoded independently. The Direct--Factor GNN is the executable-factor architecture described in \cref{sec:executable-factors}; it uses family-specific executors, pressure, and auxiliary factor heads. The Direct--Passive GNN is the neural baseline and uses a passive GINE encoder. Its graph retains the primary constraint-definition branch but has no executable factor scopes, auxiliary factor heads, or pressure.
+
+The Baseline group contains four non-neural comparators. Baseline--DB (Delete Base) and Baseline--AM (Add Mirror) are deterministic symbolic heuristics. Baseline--DB always deletes \(S_i\). For inverse and symmetric constraints, Baseline--AM reverses the base statement, using a known inverse property when available and otherwise retaining the original property; it predicts no edit for other families. Baseline--FM (Family Majority) and Baseline--DM (Definition Majority) are statistical: each predicts the most frequent training target independently for every action slot, conditioned on the constraint family or concrete definition, respectively. Because concrete definitions may occur across the random split, Baseline--DM measures in-distribution memorisation, never test-label access.
+
+\subsection{Decision-level candidate systems}
+\label{subsec:decision-variants}
+The Direct--Factor GNN gives constraint information a pathway into the repair representation, but its six heads choose slot values independently and do not compare complete actions by their constraint consequences. The candidate systems address this limitation by assembling candidate edits and testing whether explicit action selection can improve primary repair and limit secondary regressions while retaining historical fidelity. Candidate--SR provides a narrower diagnostic of what happens when selection optimises local satisfaction alone.
+
+The two Direct systems each decode one six-slot action. Candidate--C (Chooser), Candidate--DP (Direct Penalty), and Candidate--SR (Satisfaction Reranker) instead choose from a candidate set \(\Gamma_i\) derived from proposal logits and constraint heuristics. Let \(G_{ij}\) be the state after candidate \(j\), and let \(a_{ij}\) be its raw selection score. All three systems normalise over the candidates of that instance as \(q_{ij}=\exp(a_{ij})/\sum_{k=1}^{|\Gamma_i|}\exp(a_{ik})\). Candidate--C and Candidate--SR learn \(a_{ij}\); for Candidate--DP it is the sum of the six proposal logits selected by the candidate. Let \(j_i^{\mathrm{hist}}\) denote the historical candidate included when computing the candidate-selection loss during training and validation.
+
+The candidate-level primary term is \(s_{ij}^{\mathrm{prim}}=\mathbf{1}[\chi_{c_i^\star}(G_{ij})=1\land s_{c_i^\star}(G_{ij})=1]\), so making the primary uncheckable is a failure. Candidate secondary regression is measured against the pre-edit state, not the historical post-edit state. Specifically, let
+\[
+\mathcal{C}_{ij}^{\mathrm{sec}}=
+\{c\in\mathcal{C}_i\setminus\{c_i^\star\}:\chi_c(\Gpre)=\chi_c(G_{ij})=1\}.
+\]
+Then
+\[
+\mathrm{SRR}_{ij}^{\mathrm{cand}}=
+\frac{\sum_{c\in\mathcal{C}_{ij}^{\mathrm{sec}}}\mathbf{1}[s_c(\Gpre)=1\land s_c(G_{ij})=0]}
+{\sum_{c\in\mathcal{C}_{ij}^{\mathrm{sec}}}\mathbf{1}[s_c(\Gpre)=1]},
+\]
+with value zero when the denominator is empty. The historical repair enters Candidate--C only as the comparison candidate below; each candidate's rate uses its own common support.
+
+Candidate--C adds a learned chooser whose goal is to imitate the historical candidate while favouring primary fixes and discouraging secondary regressions beyond those caused by the historical repair. It scores each candidate from the Direct--Factor GNN graph embedding and the mean learned embedding of its six slot IDs. In addition to \(\mathcal{L}_{\mathrm{factor}}^{(i)}\), it uses
+\[
+0.25\!\left[
+-\log q_{i,j_i^{\mathrm{hist}}}
++0.25\sum_j q_{ij}\max\!\left(0,
+\mathrm{SRR}_{ij}^{\mathrm{cand}}-
+\mathrm{SRR}_{i,j_i^{\mathrm{hist}}}^{\mathrm{cand}}\right)
++0.2\sum_j q_{ij}(1-s_{ij}^{\mathrm{prim}})
+\right].
+\]
+Candidate--DP has no separate chooser: it derives candidate probabilities directly from the proposal slot logits and trains the proposal model itself to favour primary fixes with fewer secondary regressions. It adds the expected penalty
+\[
+\sum_jq_{ij}(1-s_{ij}^{\mathrm{prim}})
++0.5\sum_jq_{ij}\mathrm{SRR}_{ij}^{\mathrm{cand}}.
+\]
+Candidate--SR is deliberately satisfaction-only: it keeps the Direct--Factor GNN frozen for candidate generation and trains a separate graph encoder and candidate reranker to prefer candidates that satisfy the largest fraction of checkable local constraints. It minimises
+\[
+\mathcal{L}_{\mathrm{SR}}^{(i)}=-\sum_jq_{ij}\bar s_{ij},
+\]
+where \(\bar s_{ij}=|\{c\in\mathcal{C}_i:\chi_c(G_{ij})=1\land s_c(G_{ij})=1\}|/|\{c\in\mathcal{C}_i:\chi_c(G_{ij})=1\}|\), defined as zero when no local constraint is checkable. Because the denominator and candidate SRR support depend on \(G_{ij}\), making a constraint uncheckable can remove it from either quantity; in particular, removing violated constraints can raise \(\bar s_{ij}\). This vulnerability is the purpose of the Candidate--SR diagnostic. At inference, Candidate--C and Candidate--SR use learned-score argmax, while Candidate--DP uses proposal-logit argmax. These candidate-level terms are instance-normalised training quantities, not the occurrence-pooled metrics in \cref{sec:evaluation}.
+
+\subsection{Optimisation and candidate construction}
+\label{subsec:training-protocol}
+The Direct--Passive GNN, Direct--Factor GNN, Candidate--C, and Candidate--DP use seed 42, Adam (learning rate \(10^{-4}\), weight decay \(1.1{\times}10^{-4}\)), batch size 256, gradient clipping 0.5, and at most ten epochs. The Direct--Factor GNN, Candidate--C, and Candidate--DP use 400-dimensional hidden states, three GINE--factor blocks, and dropout 0.17; the Direct--Passive GNN uses 128-dimensional hidden states, one GINE block, and dropout 0.5. Validation loss on validation instances selects checkpoints with patience two. Factorised systems use 128-dimensional node-ID and 16-dimensional role embeddings, GINE predicate-edge attributes, and \(\lambda=0.1\). Active families come only from train/validation, with an error on an unseen test family. Candidate--SR also uses seed 42 and trains a fresh reranker with 64-dimensional slot embeddings, a 128-dimensional candidate hidden state, batch size 64, and weight decay \(10^{-4}\).
+
+Candidate construction combines single-add and single-delete actions from the five highest-scoring IDs per slot with instantiated constraint heuristics. Before stable deduplication and an 80-candidate cap, each action contributes at most 20 proposal candidates and 30 heuristic candidates. The historical repair is added only to candidate sets used to compute training and validation losses and may contain both an addition and a deletion; inference and candidate-oracle sets are label-blind. The supplementary reproducibility appendix specifies the scoring, ordering, heuristics, chooser architectures, and edge-case conventions.
+
+Candidate--C and Candidate--DP are trained jointly with the Direct--Factor graph encoder and edit heads. Candidate membership is discrete and is constructed from detached proposal logits; gradients then pass through the Candidate--C chooser scores or Candidate--DP's six selected proposal logits. Candidate--SR instead freezes the proposal model and jointly trains its new graph encoder and reranker. Candidate--C and Candidate--DP compute their candidate-level symbolic terms from role-projected states without alias merging or mandatory insertion of \(S_i\); Candidate--SR uses the alias-aware reconstruction in \cref{subsec:evaluation-protocol}. All reported metrics use the latter reconstruction for every system.
+
+\subsection{Evaluation protocol}
+\label{subsec:evaluation-protocol}
+Evaluation reconstructs the pre- and post-edit symbolic states for every test instance, merging graph roles that denote the same entity, ensuring that the base statement is initially present, and applying deletion before addition. Checkability and satisfaction are then recomputed from these states. Reported metrics use this common procedure for every system. Each aggregate metric is accompanied by its numerator and denominator, and no test metric is used for model selection.
+
+\begin{table}[H]
+\caption{Pre-edit state of the primary constraint on the full test split. PFR and EPPF use the checkable-and-violated row as a fixed eligibility set; all 143,316 predictions remain present in the evaluation.}
+\label{tab:primary-eligibility}
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Pre-edit primary state} & \textbf{Instances} & \textbf{Share} \\
+\midrule
+Checkable and violated (eligible) & 54,234 & 37.84\% \\
+Uncheckable from local evidence & 39,781 & 27.76\% \\
+Checkable but already satisfied & 49,301 & 34.40\% \\
+\midrule
+Total & 143,316 & 100.00\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+PFR and EPPF are evaluated on 54,234 instances because eligibility requires the primary constraint to be checkable and violated before repair. Some test instances lack sufficient local evidence, especially for type- and dependency-related validators, while in others the primary constraint is already satisfied after entity aliases and local evidence are resolved. Neither category represents a primary violation that the predicted edit can meaningfully fix, so both are excluded from the denominator. If an eligible primary becomes uncheckable after the predicted edit, it counts as a failure rather than being removed from the fixed denominator.
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Historical fidelity and symbolic behaviour diverge}
+\label{subsec:aggregate-results}
+
+The aggregate results do not induce a single model ranking. The system that best reproduces historical edits is not the one that most often satisfies the primary validator, and improvements in local satisfaction can coincide with more aggressive evidence removal. We therefore interpret \cref{tab:main-results,tab:symbolic-results,tab:transition-results} as complementary views of repair behaviour rather than interchangeable measures of quality. Arrows in table headers indicate the preferred direction; unmarked columns are descriptive. Bold and underlined values mark the best and second-best results, respectively.
+
+\begin{table}[h]
+\caption{Historical fidelity and predicted-edit disruption. Add and Del are the mean numbers of complete addition and deletion operations predicted per instance.}
+\label{tab:main-results}
+\centering
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+\textbf{Model} & \textbf{Precision \(\uparrow\)} & \textbf{Recall \(\uparrow\)} & \textbf{Micro-F1 \(\uparrow\)} & \textbf{Add} & \textbf{Del} & \textbf{Disrupt. \(\downarrow\)} \\
+\midrule
+Direct--Passive GNN & 0.5659 & 0.5296 & 0.5471 & 0.5159 & 0.4821 & 0.9979 \\
+Direct--Factor GNN  & \textbf{0.6890} & \textbf{0.6689} & \textbf{0.6788} & 0.5747 & 0.4604 & 1.0352 \\
+\midrule
+Candidate--C  & 0.5318 & 0.4988 & 0.5148 & 0.5676 & 0.4324 & 1.0000 \\
+Candidate--DP & 0.4528 & 0.4222 & 0.4370 & 0.5326 & 0.4617 & \underline{0.9943} \\
+Candidate--SR & 0.2726 & 0.2557 & 0.2639 & 0.0000 & 1.0000 & 1.0000 \\
+\midrule
+Baseline--DB & 0.2897 & 0.2717 & 0.2804 & 0.0000 & 1.0000 & 1.0000 \\
+Baseline--AM & 0.2814 & 0.0276 & 0.0503 & 0.1047 & 0.0000 & \textbf{0.1047} \\
+Baseline--FM & 0.2732 & 0.2580 & 0.2654 & 0.5305 & 0.4766 & 1.0072 \\
+Baseline--DM & \underline{0.6563} & \underline{0.6404} & \underline{0.6482} & 0.5603 & 0.4801 & 1.0404 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At the system level, the Direct--Factor GNN exceeds the Direct--Passive GNN by 0.1317 Micro-F1 while predicting only 0.0373 more operations per instance, so the fidelity difference is not explained by indiscriminately producing more edits. Baseline--DM is nevertheless only 0.0306 behind the factor model. Concrete constraint definitions therefore carry strong in-distribution priors about curator actions, making this memorisation baseline a much more competitive comparator than the passive GNN. As discussed in \cref{sec:discussion}, the Direct--Factor and Direct--Passive systems differ in several respects besides factor execution, so this comparison should be interpreted as system-level rather than as an isolated causal estimate of factorisation.
+
+\begin{table}[h]
+\caption{Primary, local, and base-statement-preservation metrics. \(n_{\locsat}\) and \(n_{\Delta}\) are eligible constraint-occurrence denominators.}
+\label{tab:symbolic-results}
+\centering
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+\textbf{Model} & \textbf{PFR \(\uparrow\)} & \textbf{LocalSat \(\uparrow\)} & \(n_{\locsat}\) & \(\Delta\locsat\,\uparrow\) & \(n_{\Delta}\) & \textbf{BaseDel \(\downarrow\)} & \textbf{DelBase \(\downarrow\)} & \textbf{EPPF \(\uparrow\)} & \textbf{Vacuous \(\downarrow\)} \\
+\midrule
+Direct--Passive GNN & 0.8109 & 0.7622 & 5,322,054 & 0.0201 & 4,691,844 & 0.4342 & 0.4345 & \underline{0.1201} & 0.3419 \\
+Direct--Factor GNN  & 0.6278 & 0.7518 & 5,189,194 & 0.0154 & 4,691,910 & 0.3517 & 0.3622 & 0.1053 & 0.2702 \\
+\midrule
+Candidate--C  & 0.5950 & 0.7490 & 5,127,377 & 0.0156 & 4,691,615 & \underline{0.3121} & \underline{0.3121} & 0.1026 & \underline{0.2364} \\
+Candidate--DP & 0.7707 & 0.7628 & 5,331,576 & 0.0202 & 4,692,049 & 0.4442 & 0.4442 & 0.0350 & 0.3576 \\
+Candidate--SR & \underline{0.9200} & \textbf{0.8021} & 5,931,955 & \textbf{0.0394} & 4,689,235 & 0.9741 & 0.9741 & 0.0604 & 0.5659 \\
+\midrule
+Baseline--DB & \textbf{0.9218} & \underline{0.7995} & 5,962,474 & \underline{0.0349} & 4,690,179 & 1.0000 & 1.0000 & 0.0000 & 0.5782 \\
+Baseline--AM & 0.0148 & 0.7105 & 4,692,077 & 0.0002 & 4,692,077 & \textbf{0.0000} & \textbf{0.0000} & 0.0148 & \textbf{0.0000} \\
+Baseline--FM & 0.6719 & 0.7530 & 5,217,600 & 0.0152 & 4,691,561 & 0.3713 & 0.3714 & 0.1192 & 0.2891 \\
+Baseline--DM & 0.8037 & 0.7589 & 5,280,993 & 0.0185 & 4,691,750 & 0.4078 & 0.4166 & \textbf{0.1462} & 0.3229 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+The fidelity advantage does not transfer to symbolic repair outcomes. The Direct--Passive GNN fixes substantially more eligible primaries than the Direct--Factor GNN, but also removes the base statement 8.25 percentage points more often and produces 7.17 points more vacuous improvements. The Direct--Factor GNN therefore preserves the triggering statement more often, yet leaves more primary violations unresolved. Neither system dominates: the passive system obtains stronger validator outcomes partly through more deletion, whereas the factor system achieves higher curator agreement with less evidence removal.
+
+Candidate--DP demonstrates that decision-level penalties can move the targeted rule metrics. Relative to the Direct--Factor GNN, it raises PFR by 14.29 points, raises SIR by 0.93 points, and lowers SRR by 0.09 points. These changes cost 24.18 points of Micro-F1, increase base deletion by 9.25 points, and reduce EPPF by 7.03 points. The extra primary fixes therefore do not constitute a general safety improvement: most of the gain disappears once retention of the base statement is required. Candidate--C occupies a more conservative point, with the lowest base-deletion and vacuous-improvement rates among learned systems, but it improves neither fidelity nor primary repair over the Direct--Factor GNN.
+
+\begin{table}[h]
+\caption{Occurrence-pooled secondary satisfaction transitions. The \(n\) columns give the eligible constraint-occurrence denominators.}
+\label{tab:transition-results}
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Model} & \textbf{SIR \(\uparrow\)} & \(n_{\mathrm{SIR}}\) & \textbf{SRR \(\downarrow\)} & \(n_{\mathrm{SRR}}\) \\
+\midrule
+Direct--Passive GNN & 0.0521 & 1,305,030 & 0.0053 & 3,283,279 \\
+Direct--Factor GNN  & 0.0413 & 1,305,024 & 0.0048 & 3,283,351 \\
+\midrule
+Candidate--C  & 0.0417 & 1,304,991 & 0.0041 & 3,283,089 \\
+Candidate--DP & 0.0506 & 1,305,021 & \underline{0.0039} & 3,283,493 \\
+Candidate--SR & \textbf{0.1221} & 1,304,470 & 0.0074 & 3,281,230 \\
+\midrule
+Baseline--DB & \underline{0.1113} & 1,304,929 & 0.0095 & 3,281,715 \\
+Baseline--AM & 0.0000 & 1,305,033 & \textbf{0.0000} & 3,283,509 \\
+Baseline--FM & 0.0392 & 1,305,031 & 0.0049 & 3,282,995 \\
+Baseline--DM & 0.0483 & 1,304,998 & 0.0060 & 3,283,217 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+The secondary transitions reinforce this non-monotonic picture. Candidate--DP achieves the lowest SRR among non-trivial learned systems, but does so while deleting more base statements. Candidate--SR and Baseline--DB obtain the largest SIR values and simultaneously the largest regression rates, consistent with broad deletion changing many local constraint states at once. SIR and SRR are therefore meaningful only alongside the action and base-statement-preservation diagnostics.
+
+\subsection{The aggregate gain is family-dependent}
+\label{subsec:family-results}
+
+The aggregate fidelity advantage of the Direct--Factor GNN over the Direct--Passive GNN is not uniform across primary constraint families. Supplementary Table~S1 reports the family supports, both direct-system F1 scores, the best system, and Candidate--SR's base-deletion rate. The Direct--Factor GNN improves on the passive system in six of nine families, with its largest gain on \texttt{distinct}, but Baseline--DM leads six families overall. Candidate--SR's deletion shortcut is more uniform, reaching near-total base deletion in all but \texttt{conflictWith}. The aggregate results should therefore be interpreted as mixtures of family-specific effects rather than evidence that one architecture improves every rule type.
+
+\subsection{Local satisfaction admits a deletion shortcut}
+\label{subsec:evidence-results}
+
+Baseline--DB provides a deterministic counterexample to interpreting high satisfaction as useful repair: deleting \(S_i\) in every instance yields PFR 0.9218 and Local Satisfaction 0.7995, while EPPF is necessarily zero. Candidate--SR independently learns nearly the same strategy from a satisfaction-only objective. It predicts one deletion in every case, removes \(S_i\) 97.41\% of the time, and attains PFR 0.9200 and Local Satisfaction 0.8021, despite a historical-fidelity Micro-F1 of 0.2639. The result does not imply that deletion is intrinsically wrong. It establishes that local satisfaction cannot distinguish justified deletion from systematic removal of the evidence that made the constraint applicable.
+
+\subsection{Executable factors are used, principally through secondary context}
+\label{subsec:h2-results}
+
+The two mechanistic diagnostics answer different questions. Satisfaction probes test whether factor states encode the symbolic satisfaction labels; pressure masking tests whether factor-to-local messages affect the decoded action. Supplementary Table~S2 reports support, class balance, discrimination, and calibration for every factor family. The pre-repair heads show strong label-aligned signal on average, but support and class balance vary substantially across families, and calibration is uneven. High aggregate F1 therefore does not establish uniform rare-violation discrimination or agreement with independently reconstructed constraint status. The post-historical-edit head is used only during training and validation and is not included in this diagnostic.
+
+\begin{table}[h]
+\caption{Direct--Factor GNN inference-time pressure masking results.}
+\label{tab:pressure-masking}
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrr}
+\toprule
+\textbf{Masking intervention} & \textbf{\(\Delta\) Micro-F1 \(\uparrow\)} & \textbf{\(\Delta\) PFR \(\uparrow\)} & \textbf{\(\Delta\) LocalSat \(\uparrow\)} & \textbf{\(\Delta\) Disruption \(\downarrow\)} & \textbf{Prediction changed} \\
+\midrule
+No factor pressure       & -0.3985 & -0.5818 & -0.0422 & \textbf{-0.1268} & 0.5855 \\
+Primary-only pressure    & \underline{-0.3422} & \underline{-0.4122} & \underline{-0.0316} & \underline{-0.1224} & 0.5372 \\
+Secondary-only pressure  & \textbf{-0.0024} & \textbf{-0.0036} & \textbf{0.0002} & -0.0004 & 0.0295 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+Masking establishes that the trained Direct--Factor model materially uses the factor pathway. Masking all pressure changes 58.55\% of predictions and lowers Micro-F1 by 0.3985. More strikingly, retaining only secondary pressure nearly reproduces normal inference, whereas retaining only primary pressure loses 0.3422 F1. Non-primary factors therefore carry most of the pressure-dependent imitation behaviour. Because the model weights are fixed, this intervention establishes pathway use rather than validator-equivalent reasoning, semantic causality, or a safety benefit; it also does not isolate factor execution as the cause of the between-system fidelity difference.
+
+\subsection{Base-statement-preserving candidates are the main bottleneck}
+\label{subsec:candidate-oracle-results}
+
+Candidate-based systems can fail because their generator does not propose a suitable repair or because their decision rule overlooks one that is available. We distinguish these failure modes by inspecting the label-blind candidate sets after inference. Availability records whether a set contains an edit that fixes the primary constraint without causing a secondary regression or reducing satisfaction among constraints checkable both before and after the edit; selection records whether the system chooses such an edit. We repeat the analysis while additionally requiring preservation of the base statement.
+
+The sets contain about 42.4 candidates on average. Supplementary Table~S3 identifies availability and selection for the Direct--Factor proposal and the three candidate-based systems over both the full test set and the 54,234 PFR-eligible cases. Among eligible cases, 90.78--91.19\% of sets contain a suitable candidate, whereas only 24.85--25.85\% contain one that also preserves \(S_i\). Selection of such a base-statement-preserving candidate ranges from 3.16\% to 9.57\%. Thus ordinary primary-fixing, no-regression candidates are commonly generated; base-statement-preserving generation and selection are the bottlenecks. These are candidate-set diagnostics, not aggregate repair-quality measures.
+
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph*{What executable factors contribute.}
+At the system level, the Direct--Factor GNN achieves higher historical-repair fidelity than the Direct--Passive GNN, while masking pressure with all learned parameters held fixed shows that predictions of the trained Direct--Factor model materially depend on that pathway. These observations are complementary but should not be conflated: because the two systems differ in capacity, depth, dropout, graph content, and auxiliary objectives, the 0.1317 Micro-F1 gap does not isolate the causal effect of factorisation. What the masking experiment does establish is functional use of the explicit factor pathway. The near-complete recovery obtained with secondary-only pressure further indicates that the model uses constraints as a representation of the wider local repair context, rather than treating only the originally flagged rule as relevant. This is a useful form of inspectability: factor states can be probed and their messages intervened upon. It is not, however, evidence that the neural executors implement the associated validators or that factor use improves safety. The strong Baseline--DM result and imperfect calibration of the factor heads counsel a narrower claim: the executable interface provides semantically designated channels whose states align with symbolic satisfaction labels and whose messages influence repair prediction, against a benchmark with powerful in-distribution definition priors.
+
+\paragraph*{Why fidelity and symbolic safety must remain separate.}
+Historical fidelity measures agreement with one observed curator action; local validators measure the consequences of an action within bounded evidence. Neither is a complete gold standard. A historically plausible repair may retain a violation or create a neighbouring one, while a validator-improving repair may simply delete the statement that exposed the problem. Candidate--SR makes the latter failure mode explicit: a learned optimiser can discover satisfaction-by-deletion without being given an always-delete rule. Base retention and EPPF reveal this shortcut, but they too are diagnostics rather than universal correctness criteria, because deletion can be the appropriate repair. The practical implication is to report a profile of fidelity, primary repair, secondary transitions, disruption, and base-statement preservation, or a Pareto frontier over them, instead of collapsing them into a single ``safe repair'' score.
+
+\paragraph*{Implications for repair generation and control.}
+Candidate--DP shows that candidate-level symbolic terms can improve primary and secondary validator outcomes, but the accompanying losses in fidelity and EPPF show that the objective is under-specified. Preservation cannot be repaired solely by reranking when only about one quarter of PFR-eligible instances has a base-statement-preserving option satisfying the local requirements. Future systems should first broaden structured generation toward witness-specific alternatives---for example, adding missing support, replacing a value, or editing conflicting context---and then compare complete actions with symbolic revalidation. Base deletion can be retained as an admissible operation, but should require separate evidence or an explicit policy rather than receiving an automatic advantage from making constraints disappear. Abstention and curator review are preferable when no candidate meets the chosen criteria.
+
+\paragraph*{Limitations and threats to validity.}
+The symbolic analysis is local. Only 37.84\% of test instances have a primary constraint that is both checkable and violated in the reconstructed pre-edit state, and validators use a bounded one-hop graph without a materialised transitive class hierarchy. Reported satisfaction therefore describes consequences under the available local evidence, not global Wikidata validity. An operation outside the represented subject and local-predicate closure is a symbolic no-op under this evaluator, and its frequency is not quantified here. The repair language is also restricted to at most one direct-statement addition and deletion: qualifier, rank, reference, and T-box repairs are excluded, while base retention captures only one aspect of evidence preservation.
+
+Factor-head supervision and reported symbolic outcomes use different state constructions. The states used to generate the supervision labels do not merge coincident entity roles or guarantee the initial presence of \(S_i\), whereas evaluation resolves aliases, inserts \(S_i\), and applies deletion before addition. This mismatch may change checkability for some occurrences and introduce semantic drift. All factor-supervised systems share the same labels, preserving their comparability, but future datasets should use the evaluation state construction for both supervision and reporting. Accordingly, the satisfaction probes establish alignment with the symbolic satisfaction labels rather than agreement with independently reconstructed constraint status.
+
+Causal claims about the candidate systems are limited by joint changes to objectives and decision mechanisms. The reported learned systems use one selected run, so small differences should not be read as estimates of variability.
+
+Finally, the random split permits entities and concrete constraint definitions to recur across train and test, particularly given node-ID encoding. As exposed by Baseline--DM, the evaluation therefore measures same-corpus, in-distribution historical event prediction rather than temporal, definition-disjoint, or unseen-entity transfer. Temporal and definition-disjoint splits, together with multi-seed evaluation, are needed to assess generalisation beyond these priors. The finite proposal and heuristic candidate sets also bound the candidate-oracle analysis, and historical edits remain observational supervision that may reflect ambiguity, incomplete context, or curator preference rather than a unique correct repair.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We introduced executable constraint factors for neural Wikidata repair and evaluated them with separate measures of curator agreement, post-edit constraint behaviour, collateral transitions, disruption, and base-statement preservation. Among the evaluated systems, the Direct--Factor GNN attains the highest historical fidelity, and pressure-masking interventions on the trained model show that its predictions materially depend on factor pressure, primarily from non-primary constraint context. These observations support the value of the executable interface for representation and inspectability, but they do not by themselves establish the isolated causal effect of factorisation or symbolic safety. Candidate-level penalties improve selected validator outcomes at a large cost in fidelity and base-statement-preserving repair, while a satisfaction-only reranker learns to delete the base statement almost universally.
+
+The central lesson is therefore methodological as well as representational: making rules executable and inspectable does not make a learned repair useful by construction. Reliable systems need preservation-aware candidate generation, explicit comparison of complete edits, richer repair actions, and evaluation under multiple non-substitutable criteria. Multi-seed, temporal, and definition-disjoint tests, consistent reconstruction for supervision and evaluation, broader symbolic evidence, and curator-facing abstention are necessary next steps toward repair models that are both faithful to collaborative practice and defensible under rule-based validation.
+
+
+\bibliography{references}
+
+\end{document}

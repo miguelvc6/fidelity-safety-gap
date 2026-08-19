@@ -4,6 +4,11 @@ version = "0.1.0"
 description = "Executable constraint factors for KG repair"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
+license = "MIT"
+authors = [
+    { name = "Miguel Vázquez", email = "miguel.vazquez@wu.ac.at" },
+    { name = "Axel Polleres", email = "axel.polleres@wu.ac.at" },
+]
 
 dependencies = [
     "datasets>=4.5.0",
@@ -23,6 +28,9 @@ dependencies = [
     "torch-geometric>=2.7.0",
     "tqdm>=4.67.1",
 ]
+
+[project.urls]
+Repository = "https://github.com/miguelvc6/fidelity-safety-gap"
 
 [dependency-groups]
 dev = [

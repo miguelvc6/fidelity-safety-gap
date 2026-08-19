@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this software or its research artifacts, please cite the accompanying article."
+title: "The Fidelity–Safety Gap in Neural Wikidata Constraint Repair"
+type: software
+authors:
+  - family-names: "Vázquez"
+    given-names: "Miguel"
+    orcid: "https://orcid.org/0009-0002-9067-959X"
+  - family-names: "Polleres"
+    given-names: "Axel"
+    orcid: "https://orcid.org/0000-0001-5670-1146"
+repository-code: "https://github.com/miguelvc6/fidelity-safety-gap"
+version: 0.1.0
+license: MIT
+preferred-citation:
+  type: article
+  title: "The Fidelity–Safety Gap in Neural Wikidata Constraint Repair"
+  authors:
+    - family-names: "Vázquez"
+      given-names: "Miguel"
+      orcid: "https://orcid.org/0009-0002-9067-959X"
+    - family-names: "Polleres"
+      given-names: "Axel"
+      orcid: "https://orcid.org/0000-0001-5670-1146"
+  year: 2026

@@ -1,0 +1,11 @@
+Creative Commons Attribution 4.0 International (CC BY 4.0)
+
+SPDX-License-Identifier: CC-BY-4.0
+
+The complete, authoritative legal code is available from Creative Commons at:
+
+https://creativecommons.org/licenses/by/4.0/legalcode.txt
+
+A human-readable summary is available at:
+
+https://creativecommons.org/licenses/by/4.0/

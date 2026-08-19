@@ -1,18 +1,63 @@
 .venv/
+.tools/
+.pytest_cache/
 __pycache__/
 *.pyc
+*.egg-info/
 .ipynb_checkpoints/
-*.egg-info
+
+# Local data, generated graphs, checkpoints, and execution logs.
 data/
 kg_repairs/*
+logs/
+
+# Track only the experiment artifacts used by the submitted paper. All other
+# runs stay available locally but are excluded from the release repository.
+models/*
+!models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/
+!models/a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id/**
+!models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/
+!models/b0_eswc_reproduction__full_strat1m_minocc100__node_id/**
+!models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/
+!models/m1c_safe_factor_chooser_compact_grouped__full_strat1m_minocc100__node_id/**
+!models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/
+!models/m1d_safe_factor_direct_compact_grouped__full_strat1m_minocc100__node_id/**
+!models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/
+!models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/**
+!models/baselines/
+models/baselines/*
+!models/baselines/full_strat1m/
+!models/baselines/full_strat1m/**
+models/baselines/full_strat1m/parquet/baselines_all.json
+!models/paper_diagnostics/
+models/paper_diagnostics/*
+!models/paper_diagnostics/benchmark_provenance_and_statistics.json
+!models/paper_diagnostics/corrected_paper_readiness.json
+!models/paper_diagnostics/factor_semantics_summary.csv
+!models/paper_diagnostics/label_semantics_audit.json
+
+# These local files remain excluded even inside an allowed paper run.
+models/**/*.pth
+models/**/*.png
+models/**/reranker_predictions.json
+models/**/evaluations/*.pre-schema-v2.*
+models/**/evaluations/model.direct.json
+
+# Local research notes and superseded browser/notebook views.
+commands.md
+notebooks/nb.ipynb
+docs-conceptual/deprecated/
+docs-conceptual/constraint_factors_research_overview.html
 deprecated/*
 99_*
 model-configs/*
-models/*/*.pth
-logs/*
-models/baselines/full_strat1m/parquet/baselines_all.json
-models/baselines/full_strat1m_minocc100/parquet/baselines_all.json
-models/*/*/model.json
-latex_paper/
-.tools/
-models/**/evaluations/*.pre-schema-v2.*
+
+# Track the submitted manuscript and supplement, but not local build products,
+# working notes, or the earlier conference-paper source.
+latex_paper/*
+!latex_paper/main.tex
+!latex_paper/main.pdf
+!latex_paper/supplement.tex
+!latex_paper/supplement.pdf
+!latex_paper/references.bib
+!latex_paper/tgdk-v2021.cls

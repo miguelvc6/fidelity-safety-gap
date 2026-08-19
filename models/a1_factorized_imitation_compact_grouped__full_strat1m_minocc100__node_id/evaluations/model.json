@@ -1,0 +1,1103 @@
+{
+  "global_counts": {
+    "fn": 50604,
+    "fp": 46143,
+    "tp": 102214
+  },
+  "macro_f1": 0.6468346560967166,
+  "macro_precision": 0.662412113846717,
+  "macro_recall": 0.6327229593203799,
+  "micro_f1": 0.6787681580476468,
+  "micro_precision": 0.6889732200031007,
+  "micro_recall": 0.6688609980499679,
+  "model_selection": {
+    "disruption": 1.0351740210444054,
+    "fidelity_micro_f1": 0.6787681580476468,
+    "missing_fields": [],
+    "notes": "score = w_primary*pfr + w_srr*(1 - pooled_srr) + w_fidelity*fidelity_micro_f1 - w_disrupt*disruption",
+    "pfr": 0.6278349374930855,
+    "pooled_srr": 0.004764339846699302,
+    "score_weighted_sum": 1.7554198724613284,
+    "score_weighted_sum_log_disruption": 1.820338410817174,
+    "weights": {
+      "disrupt": 0.2,
+      "disruption_field": "mean_disruption_total",
+      "fidelity": 0.5,
+      "primary": 1.0,
+      "srr": 1.0
+    }
+  },
+  "paper_metrics": {
+    "base_deletion_rate": {
+      "denominator": 143316,
+      "numerator": 50409,
+      "value": 0.35173323285606634
+    },
+    "deletes_base_action_rate": {
+      "denominator": 143316,
+      "numerator": 51904,
+      "value": 0.3621647268972062
+    },
+    "delta_local_satisfaction": {
+      "denominator": 4691910,
+      "numerator": 72262,
+      "value": 0.015401403692739204
+    },
+    "disruption": {
+      "denominator": 143316,
+      "numerator": 148357,
+      "value": 1.0351740210444054
+    },
+    "eppf": {
+      "denominator": 54234,
+      "numerator": 5713,
+      "value": 0.10533982372681344
+    },
+    "local_satisfaction": {
+      "denominator": 5189194,
+      "numerator": 3901059,
+      "value": 0.751765881175381
+    },
+    "pfr": {
+      "denominator": 54234,
+      "numerator": 34050,
+      "value": 0.6278349374930855
+    },
+    "sir": {
+      "denominator": 1305024,
+      "numerator": 53873,
+      "value": 0.041281233142072486
+    },
+    "srr": {
+      "denominator": 3283351,
+      "numerator": 15643,
+      "value": 0.004764339846699302
+    },
+    "vacuous_improvement": {
+      "denominator": 143316,
+      "numerator": 38719,
+      "value": 0.27016522928354125
+    }
+  },
+  "paper_metrics_computed": true,
+  "paper_metrics_per_constraint_type": {
+    "conflictWith": {
+      "base_deletion_rate": {
+        "denominator": 15093,
+        "numerator": 7646,
+        "value": 0.5065924600808321
+      },
+      "deletes_base_action_rate": {
+        "denominator": 15093,
+        "numerator": 7888,
+        "value": 0.5226263830914993
+      },
+      "delta_local_satisfaction": {
+        "denominator": 675753,
+        "numerator": 28252,
+        "value": 0.041808175472398935
+      },
+      "disruption": {
+        "denominator": 15093,
+        "numerator": 16727,
+        "value": 1.1082621082621082
+      },
+      "eppf": {
+        "denominator": 14819,
+        "numerator": 3289,
+        "value": 0.22194480059383223
+      },
+      "local_satisfaction": {
+        "denominator": 765072,
+        "numerator": 444359,
+        "value": 0.5808067737415563
+      },
+      "pfr": {
+        "denominator": 14819,
+        "numerator": 10034,
+        "value": 0.6771037181996086
+      },
+      "sir": {
+        "denominator": 334144,
+        "numerator": 19806,
+        "value": 0.059273846006512164
+      },
+      "srr": {
+        "denominator": 326664,
+        "numerator": 1582,
+        "value": 0.004842896676707565
+      },
+      "vacuous_improvement": {
+        "denominator": 15093,
+        "numerator": 6708,
+        "value": 0.4444444444444444
+      }
+    },
+    "distinct": {
+      "base_deletion_rate": {
+        "denominator": 34232,
+        "numerator": 26676,
+        "value": 0.7792708576770273
+      },
+      "deletes_base_action_rate": {
+        "denominator": 34232,
+        "numerator": 26712,
+        "value": 0.7803225052582379
+      },
+      "delta_local_satisfaction": {
+        "denominator": 973196,
+        "numerator": 43388,
+        "value": 0.044583002807245406
+      },
+      "disruption": {
+        "denominator": 34232,
+        "numerator": 36023,
+        "value": 1.0523194671652256
+      },
+      "eppf": {
+        "denominator": 25754,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "local_satisfaction": {
+        "denominator": 1245598,
+        "numerator": 1171702,
+        "value": 0.940674278539304
+      },
+      "pfr": {
+        "denominator": 25754,
+        "numerator": 18432,
+        "value": 0.7156946493748544
+      },
+      "sir": {
+        "denominator": 91530,
+        "numerator": 25105,
+        "value": 0.274281656287556
+      },
+      "srr": {
+        "denominator": 847438,
+        "numerator": 149,
+        "value": 0.0001758240720855095
+      },
+      "vacuous_improvement": {
+        "denominator": 34232,
+        "numerator": 23812,
+        "value": 0.6956064501051648
+      }
+    },
+    "inverse": {
+      "base_deletion_rate": {
+        "denominator": 15001,
+        "numerator": 506,
+        "value": 0.033731084594360375
+      },
+      "deletes_base_action_rate": {
+        "denominator": 15001,
+        "numerator": 509,
+        "value": 0.03393107126191587
+      },
+      "delta_local_satisfaction": {
+        "denominator": 264806,
+        "numerator": -25,
+        "value": -9.440873696215342e-05
+      },
+      "disruption": {
+        "denominator": 15001,
+        "numerator": 14851,
+        "value": 0.9900006666222252
+      },
+      "eppf": {
+        "denominator": 804,
+        "numerator": 208,
+        "value": 0.25870646766169153
+      },
+      "local_satisfaction": {
+        "denominator": 270471,
+        "numerator": 167221,
+        "value": 0.6182585193976434
+      },
+      "pfr": {
+        "denominator": 804,
+        "numerator": 437,
+        "value": 0.5435323383084577
+      },
+      "sir": {
+        "denominator": 102421,
+        "numerator": 246,
+        "value": 0.0024018511828628893
+      },
+      "srr": {
+        "denominator": 147384,
+        "numerator": 708,
+        "value": 0.00480377788633773
+      },
+      "vacuous_improvement": {
+        "denominator": 15001,
+        "numerator": 391,
+        "value": 0.026064929004733017
+      }
+    },
+    "itemRequiresStatement": {
+      "base_deletion_rate": {
+        "denominator": 15001,
+        "numerator": 71,
+        "value": 0.004733017798813412
+      },
+      "deletes_base_action_rate": {
+        "denominator": 15001,
+        "numerator": 72,
+        "value": 0.004799680021331911
+      },
+      "delta_local_satisfaction": {
+        "denominator": 239129,
+        "numerator": -2369,
+        "value": -0.009906786713447554
+      },
+      "disruption": {
+        "denominator": 15001,
+        "numerator": 14922,
+        "value": 0.9947336844210386
+      },
+      "eppf": {
+        "denominator": 737,
+        "numerator": 460,
+        "value": 0.6241519674355496
+      },
+      "local_satisfaction": {
+        "denominator": 239784,
+        "numerator": 158396,
+        "value": 0.6605778534013946
+      },
+      "pfr": {
+        "denominator": 737,
+        "numerator": 461,
+        "value": 0.6255088195386703
+      },
+      "sir": {
+        "denominator": 78083,
+        "numerator": 408,
+        "value": 0.0052252090723973205
+      },
+      "srr": {
+        "denominator": 157137,
+        "numerator": 3238,
+        "value": 0.020606222595569473
+      },
+      "vacuous_improvement": {
+        "denominator": 15001,
+        "numerator": 9,
+        "value": 0.0005999600026664889
+      }
+    },
+    "oneOf": {
+      "base_deletion_rate": {
+        "denominator": 1028,
+        "numerator": 780,
+        "value": 0.7587548638132295
+      },
+      "deletes_base_action_rate": {
+        "denominator": 1028,
+        "numerator": 842,
+        "value": 0.8190661478599222
+      },
+      "delta_local_satisfaction": {
+        "denominator": 48548,
+        "numerator": 1042,
+        "value": 0.021463294059487516
+      },
+      "disruption": {
+        "denominator": 1028,
+        "numerator": 1531,
+        "value": 1.4892996108949417
+      },
+      "eppf": {
+        "denominator": 1028,
+        "numerator": 0,
+        "value": 0.0
+      },
+      "local_satisfaction": {
+        "denominator": 55216,
+        "numerator": 36792,
+        "value": 0.6663286004056795
+      },
+      "pfr": {
+        "denominator": 1028,
+        "numerator": 780,
+        "value": 0.7587548638132295
+      },
+      "sir": {
+        "denominator": 18438,
+        "numerator": 369,
+        "value": 0.020013016596160105
+      },
+      "srr": {
+        "denominator": 29082,
+        "numerator": 107,
+        "value": 0.003679251770854824
+      },
+      "vacuous_improvement": {
+        "denominator": 1028,
+        "numerator": 776,
+        "value": 0.754863813229572
+      }
+    },
+    "single": {
+      "base_deletion_rate": {
+        "denominator": 17958,
+        "numerator": 13879,
+        "value": 0.7728588929724913
+      },
+      "deletes_base_action_rate": {
+        "denominator": 17958,
+        "numerator": 14983,
+        "value": 0.8343356721238445
+      },
+      "delta_local_satisfaction": {
+        "denominator": 579614,
+        "numerator": 8005,
+        "value": 0.013810915540342366
+      },
+      "disruption": {
+        "denominator": 17958,
+        "numerator": 19175,
+        "value": 1.067769239336229
+      },
+      "eppf": {
+        "denominator": 5852,
+        "numerator": 990,
+        "value": 0.16917293233082706
+      },
+      "local_satisfaction": {
+        "denominator": 698694,
+        "numerator": 453766,
+        "value": 0.6494488288149032
+      },
+      "pfr": {
+        "denominator": 5852,
+        "numerator": 3066,
+        "value": 0.5239234449760766
+      },
+      "sir": {
+        "denominator": 247080,
+        "numerator": 6823,
+        "value": 0.027614537801521774
+      },
+      "srr": {
+        "denominator": 314576,
+        "numerator": 1872,
+        "value": 0.005950867199023447
+      },
+      "vacuous_improvement": {
+        "denominator": 17958,
+        "numerator": 6923,
+        "value": 0.3855106359282771
+      }
+    },
+    "type": {
+      "base_deletion_rate": {
+        "denominator": 15001,
+        "numerator": 476,
+        "value": 0.03173121791880541
+      },
+      "deletes_base_action_rate": {
+        "denominator": 15001,
+        "numerator": 508,
+        "value": 0.03386440903939737
+      },
+      "delta_local_satisfaction": {
+        "denominator": 316176,
+        "numerator": -6604,
+        "value": -0.020887100855219876
+      },
+      "disruption": {
+        "denominator": 15001,
+        "numerator": 15108,
+        "value": 1.0071328578094794
+      },
+      "eppf": {
+        "denominator": 402,
+        "numerator": 119,
+        "value": 0.2960199004975124
+      },
+      "local_satisfaction": {
+        "denominator": 318673,
+        "numerator": 246287,
+        "value": 0.7728517947865053
+      },
+      "pfr": {
+        "denominator": 402,
+        "numerator": 170,
+        "value": 0.4228855721393035
+      },
+      "sir": {
+        "denominator": 64486,
+        "numerator": 774,
+        "value": 0.012002605216636169
+      },
+      "srr": {
+        "denominator": 249433,
+        "numerator": 7548,
+        "value": 0.030260631111360566
+      },
+      "vacuous_improvement": {
+        "denominator": 15001,
+        "numerator": 67,
+        "value": 0.004466368908739417
+      }
+    },
+    "valueRequiresStatement": {
+      "base_deletion_rate": {
+        "denominator": 15003,
+        "numerator": 316,
+        "value": 0.0210624541758315
+      },
+      "deletes_base_action_rate": {
+        "denominator": 15003,
+        "numerator": 321,
+        "value": 0.021395720855828835
+      },
+      "delta_local_satisfaction": {
+        "denominator": 490076,
+        "numerator": 665,
+        "value": 0.0013569323941592733
+      },
+      "disruption": {
+        "denominator": 15003,
+        "numerator": 15011,
+        "value": 1.0005332266879958
+      },
+      "eppf": {
+        "denominator": 565,
+        "numerator": 500,
+        "value": 0.8849557522123894
+      },
+      "local_satisfaction": {
+        "denominator": 490741,
+        "numerator": 335206,
+        "value": 0.6830609221564939
+      },
+      "pfr": {
+        "denominator": 565,
+        "numerator": 521,
+        "value": 0.9221238938053097
+      },
+      "sir": {
+        "denominator": 155633,
+        "numerator": 224,
+        "value": 0.0014392834424575764
+      },
+      "srr": {
+        "denominator": 325580,
+        "numerator": 80,
+        "value": 0.0002457153387800233
+      },
+      "vacuous_improvement": {
+        "denominator": 15003,
+        "numerator": 26,
+        "value": 0.0017329867359861361
+      }
+    },
+    "valueType": {
+      "base_deletion_rate": {
+        "denominator": 14999,
+        "numerator": 59,
+        "value": 0.003933595573038203
+      },
+      "deletes_base_action_rate": {
+        "denominator": 14999,
+        "numerator": 69,
+        "value": 0.004600306687112474
+      },
+      "delta_local_satisfaction": {
+        "denominator": 1104612,
+        "numerator": -92,
+        "value": -8.328716327543066e-05
+      },
+      "disruption": {
+        "denominator": 14999,
+        "numerator": 15009,
+        "value": 1.0006667111140743
+      },
+      "eppf": {
+        "denominator": 4273,
+        "numerator": 147,
+        "value": 0.03440205944301428
+      },
+      "local_satisfaction": {
+        "denominator": 1104945,
+        "numerator": 887330,
+        "value": 0.8030535456515935
+      },
+      "pfr": {
+        "denominator": 4273,
+        "numerator": 149,
+        "value": 0.034870114673531474
+      },
+      "sir": {
+        "denominator": 213209,
+        "numerator": 118,
+        "value": 0.0005534475561538209
+      },
+      "srr": {
+        "denominator": 886057,
+        "numerator": 359,
+        "value": 0.0004051658076173429
+      },
+      "vacuous_improvement": {
+        "denominator": 14999,
+        "numerator": 7,
+        "value": 0.00046669777985199013
+      }
+    }
+  },
+  "per_constraint_type": {
+    "conflictWith": {
+      "macro": {
+        "f1": 0.6154568428390921,
+        "precision": 0.6162896996403461,
+        "recall": 0.625357256376107
+      },
+      "micro": {
+        "f1": 0.7088351088466884,
+        "fn": 5574,
+        "fp": 4484,
+        "precision": 0.7319304119088899,
+        "recall": 0.6871527193130157,
+        "tp": 12243
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.4694730077120822,
+          "fn": 1263,
+          "fp": 2039,
+          "precision": 0.4174285714285714,
+          "recall": 0.5363436123348018,
+          "tp": 1461
+        },
+        "del": {
+          "f1": 0.7614406779661018,
+          "fn": 4311,
+          "fp": 2445,
+          "precision": 0.8151508278521207,
+          "recall": 0.714370900417412,
+          "tp": 10782
+        }
+      }
+    },
+    "distinct": {
+      "macro": {
+        "f1": 0.7647264670028868,
+        "precision": 0.7672825085899235,
+        "recall": 0.7621875544835057
+      },
+      "micro": {
+        "f1": 0.9182659711364171,
+        "fn": 3066,
+        "fp": 2841,
+        "precision": 0.9211337201232546,
+        "recall": 0.9154160229529905,
+        "tp": 33182
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.5919840677122231,
+          "fn": 827,
+          "fp": 812,
+          "precision": 0.5942028985507246,
+          "recall": 0.589781746031746,
+          "tp": 1189
+        },
+        "del": {
+          "f1": 0.9374688662935506,
+          "fn": 2239,
+          "fp": 2029,
+          "precision": 0.9403621186291223,
+          "recall": 0.9345933629352653,
+          "tp": 31993
+        }
+      }
+    },
+    "inverse": {
+      "macro": {
+        "f1": 0.6648134357191755,
+        "precision": 0.8737184998376034,
+        "recall": 0.5891739848312251
+      },
+      "micro": {
+        "f1": 0.7937622090520808,
+        "fn": 3365,
+        "fp": 2864,
+        "precision": 0.807151033600431,
+        "recall": 0.7808103178738927,
+        "tp": 11987
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.811941983978544,
+          "fn": 2493,
+          "fp": 2836,
+          "precision": 0.802231520223152,
+          "recall": 0.8218904050868043,
+          "tp": 11504
+        },
+        "del": {
+          "f1": 0.517684887459807,
+          "fn": 872,
+          "fp": 28,
+          "precision": 0.9452054794520548,
+          "recall": 0.35645756457564576,
+          "tp": 483
+        }
+      }
+    },
+    "itemRequiresStatement": {
+      "macro": {
+        "f1": 0.3638777301504311,
+        "precision": 0.553526936026936,
+        "recall": 0.3227168430562243
+      },
+      "micro": {
+        "f1": 0.5077523256977095,
+        "fn": 7455,
+        "fp": 7308,
+        "precision": 0.5102533172496985,
+        "recall": 0.5052757316344814,
+        "tp": 7614
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.5116750582908121,
+          "fn": 7172,
+          "fp": 7279,
+          "precision": 0.5098316498316499,
+          "recall": 0.513531845621651,
+          "tp": 7571
+        },
+        "del": {
+          "f1": 0.21608040201005024,
+          "fn": 283,
+          "fp": 29,
+          "precision": 0.5972222222222222,
+          "recall": 0.13190184049079753,
+          "tp": 43
+        }
+      }
+    },
+    "oneOf": {
+      "macro": {
+        "f1": 0.6647506500575462,
+        "precision": 0.7283312987944495,
+        "recall": 0.6117153589107056
+      },
+      "micro": {
+        "f1": 0.6932294787297784,
+        "fn": 650,
+        "fp": 374,
+        "precision": 0.7557152188112345,
+        "recall": 0.6402877697841727,
+        "tp": 1157
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.42944785276073616,
+          "fn": 464,
+          "fp": 373,
+          "precision": 0.4578488372093023,
+          "recall": 0.40436456996148906,
+          "tp": 315
+        },
+        "del": {
+          "f1": 0.9000534473543561,
+          "fn": 186,
+          "fp": 1,
+          "precision": 0.9988137603795967,
+          "recall": 0.8190661478599222,
+          "tp": 842
+        }
+      }
+    },
+    "single": {
+      "macro": {
+        "f1": 0.5005549768877995,
+        "precision": 0.5106019510258555,
+        "recall": 0.49184579389083827
+      },
+      "micro": {
+        "f1": 0.5625769491695771,
+        "fn": 9429,
+        "fp": 7980,
+        "precision": 0.5838331160365059,
+        "recall": 0.5428141970519783,
+        "tp": 11195
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.4152401987852016,
+          "fn": 1538,
+          "fp": 1639,
+          "precision": 0.4076617275027105,
+          "recall": 0.423105776444111,
+          "tp": 1128
+        },
+        "del": {
+          "f1": 0.5858697549903975,
+          "fn": 7891,
+          "fp": 6341,
+          "precision": 0.6135421745490005,
+          "recall": 0.5605858113375655,
+          "tp": 10067
+        }
+      }
+    },
+    "type": {
+      "macro": {
+        "f1": 0.556298893242593,
+        "precision": 0.6621003567907284,
+        "recall": 0.49152153110047847
+      },
+      "micro": {
+        "f1": 0.4435685192484562,
+        "fn": 8584,
+        "fp": 8356,
+        "precision": 0.44691554143500134,
+        "recall": 0.44027125717266563,
+        "tp": 6752
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.432597786485186,
+          "fn": 8207,
+          "fp": 8301,
+          "precision": 0.4312046046320406,
+          "recall": 0.434,
+          "tp": 6293
+        },
+        "del": {
+          "f1": 0.6799999999999999,
+          "fn": 377,
+          "fp": 55,
+          "precision": 0.8929961089494164,
+          "recall": 0.5490430622009569,
+          "tp": 459
+        }
+      }
+    },
+    "valueRequiresStatement": {
+      "macro": {
+        "f1": 0.638203159834372,
+        "precision": 0.7662237428692362,
+        "recall": 0.5734894585200451
+      },
+      "micro": {
+        "f1": 0.7456900814187296,
+        "fn": 4015,
+        "fp": 3700,
+        "precision": 0.7535140896675772,
+        "recall": 0.738026882422028,
+        "tp": 11311
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.7529443801484104,
+          "fn": 3629,
+          "fp": 3629,
+          "precision": 0.7529443801484104,
+          "recall": 0.7529443801484104,
+          "tp": 11060
+        },
+        "del": {
+          "f1": 0.5234619395203337,
+          "fn": 386,
+          "fp": 71,
+          "precision": 0.7795031055900621,
+          "recall": 0.3940345368916798,
+          "tp": 251
+        }
+      }
+    },
+    "valueType": {
+      "macro": {
+        "f1": 0.36989718671674127,
+        "precision": 0.6745799584978914,
+        "recall": 0.3118627521408139
+      },
+      "micro": {
+        "f1": 0.44783126157101294,
+        "fn": 8466,
+        "fp": 8236,
+        "precision": 0.4512625757878606,
+        "recall": 0.4444517356781941,
+        "tp": 6773
+      },
+      "per_action": {
+        "add": {
+          "f1": 0.4501392010196894,
+          "fn": 8164,
+          "fp": 8229,
+          "precision": 0.44915991699578284,
+          "recall": 0.45112276455560035,
+          "tp": 6710
+        },
+        "del": {
+          "f1": 0.2896551724137931,
+          "fn": 302,
+          "fp": 7,
+          "precision": 0.9,
+          "recall": 0.1726027397260274,
+          "tp": 63
+        }
+      }
+    }
+  },
+  "prediction_artifacts": {
+    "manifest": "predictions.manifest.json",
+    "predictions": "predictions.parquet",
+    "predictions_sha256": "b9c0588e6e06b2f34774f45ba06a5455c98491fe74c2fecc2cba200d5a246750"
+  },
+  "repair_metrics": {
+    "by_action": {
+      "add": {
+        "alternative": 4277,
+        "alternative_rate": 0.029843143822043595,
+        "exact": 105288,
+        "exact_rate": 0.7346562840157415,
+        "failed": 30860,
+        "fix_rate": 0.764499427837785,
+        "missing": 2891,
+        "total": 143316
+      },
+      "del": {
+        "alternative": 9763,
+        "alternative_rate": 0.06812219152083508,
+        "exact": 126285,
+        "exact_rate": 0.8811646989868542,
+        "failed": 1243,
+        "fix_rate": 0.9492868905076893,
+        "missing": 6025,
+        "total": 143316
+      }
+    },
+    "overall": {
+      "alternative": 14040,
+      "alternative_rate": 0.048982667671439335,
+      "exact": 231573,
+      "exact_rate": 0.8079104915012978,
+      "failed": 32103,
+      "fix_rate": 0.8568931591727371,
+      "missing": 8916,
+      "total": 286632
+    },
+    "per_constraint_type": {
+      "conflictWith": {
+        "add": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 12097,
+          "exact_rate": 0.8014973828927318,
+          "failed": 2039,
+          "fix_rate": 0.8014973828927318,
+          "missing": 957,
+          "total": 15093
+        },
+        "del": {
+          "alternative": 2038,
+          "alternative_rate": 0.13502948386669317,
+          "exact": 10782,
+          "exact_rate": 0.714370900417412,
+          "failed": 407,
+          "fix_rate": 0.8494003842841052,
+          "missing": 1866,
+          "total": 15093
+        }
+      },
+      "distinct": {
+        "add": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 33116,
+          "exact_rate": 0.9673989249824725,
+          "failed": 812,
+          "fix_rate": 0.9673989249824725,
+          "missing": 304,
+          "total": 34232
+        },
+        "del": {
+          "alternative": 1265,
+          "alternative_rate": 0.03695372750642673,
+          "exact": 31993,
+          "exact_rate": 0.9345933629352653,
+          "failed": 764,
+          "fix_rate": 0.971547090441692,
+          "missing": 210,
+          "total": 34232
+        }
+      },
+      "inverse": {
+        "add": {
+          "alternative": 619,
+          "alternative_rate": 0.04126391573895074,
+          "exact": 12063,
+          "exact_rate": 0.8041463902406506,
+          "failed": 2217,
+          "fix_rate": 0.8454103059796013,
+          "missing": 102,
+          "total": 15001
+        },
+        "del": {
+          "alternative": 26,
+          "alternative_rate": 0.001733217785480968,
+          "exact": 14103,
+          "exact_rate": 0.9401373241783881,
+          "failed": 2,
+          "fix_rate": 0.9418705419638691,
+          "missing": 870,
+          "total": 15001
+        }
+      },
+      "itemRequiresStatement": {
+        "add": {
+          "alternative": 2385,
+          "alternative_rate": 0.15898940070661957,
+          "exact": 7627,
+          "exact_rate": 0.5084327711485901,
+          "failed": 4894,
+          "fix_rate": 0.6674221718552097,
+          "missing": 95,
+          "total": 15001
+        },
+        "del": {
+          "alternative": 29,
+          "alternative_rate": 0.0019332044530364642,
+          "exact": 14689,
+          "exact_rate": 0.9792013865742284,
+          "failed": 0,
+          "fix_rate": 0.9811345910272649,
+          "missing": 283,
+          "total": 15001
+        }
+      },
+      "oneOf": {
+        "add": {
+          "alternative": 75,
+          "alternative_rate": 0.07295719844357977,
+          "exact": 498,
+          "exact_rate": 0.48443579766536965,
+          "failed": 298,
+          "fix_rate": 0.5573929961089494,
+          "missing": 157,
+          "total": 1028
+        },
+        "del": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 842,
+          "exact_rate": 0.8190661478599222,
+          "failed": 1,
+          "fix_rate": 0.8190661478599222,
+          "missing": 185,
+          "total": 1028
+        }
+      },
+      "single": {
+        "add": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 15269,
+          "exact_rate": 0.8502617217953001,
+          "failed": 1639,
+          "fix_rate": 0.8502617217953001,
+          "missing": 1050,
+          "total": 17958
+        },
+        "del": {
+          "alternative": 6280,
+          "alternative_rate": 0.3497048669116828,
+          "exact": 10067,
+          "exact_rate": 0.5605858113375655,
+          "failed": 61,
+          "fix_rate": 0.9102906782492483,
+          "missing": 1550,
+          "total": 17958
+        }
+      },
+      "type": {
+        "add": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 6585,
+          "exact_rate": 0.4389707352843144,
+          "failed": 8301,
+          "fix_rate": 0.4389707352843144,
+          "missing": 115,
+          "total": 15001
+        },
+        "del": {
+          "alternative": 49,
+          "alternative_rate": 0.0032664489034064394,
+          "exact": 14571,
+          "exact_rate": 0.9713352443170455,
+          "failed": 6,
+          "fix_rate": 0.974601693220452,
+          "missing": 375,
+          "total": 15001
+        }
+      },
+      "valueRequiresStatement": {
+        "add": {
+          "alternative": 1198,
+          "alternative_rate": 0.0798506965273612,
+          "exact": 11293,
+          "exact_rate": 0.7527161234419782,
+          "failed": 2431,
+          "fix_rate": 0.8325668199693395,
+          "missing": 81,
+          "total": 15003
+        },
+        "del": {
+          "alternative": 70,
+          "alternative_rate": 0.0046657335199626745,
+          "exact": 14547,
+          "exact_rate": 0.9696060787842431,
+          "failed": 1,
+          "fix_rate": 0.9742718123042058,
+          "missing": 385,
+          "total": 15003
+        }
+      },
+      "valueType": {
+        "add": {
+          "alternative": 0,
+          "alternative_rate": 0.0,
+          "exact": 6740,
+          "exact_rate": 0.4493632908860591,
+          "failed": 8229,
+          "fix_rate": 0.4493632908860591,
+          "missing": 30,
+          "total": 14999
+        },
+        "del": {
+          "alternative": 6,
+          "alternative_rate": 0.000400026668444563,
+          "exact": 14691,
+          "exact_rate": 0.9794652976865125,
+          "failed": 1,
+          "fix_rate": 0.979865324354957,
+          "missing": 301,
+          "total": 14999
+        }
+      }
+    }
+  },
+  "schema_version": 2,
+  "support_per_constraint_type": {
+    "conflictWith": 15093,
+    "distinct": 34232,
+    "inverse": 15001,
+    "itemRequiresStatement": 15001,
+    "oneOf": 1028,
+    "single": 17958,
+    "type": 15001,
+    "valueRequiresStatement": 15003,
+    "valueType": 14999
+  }
+}

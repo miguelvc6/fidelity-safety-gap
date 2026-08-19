@@ -1,0 +1,144 @@
+\RequirePackage{amssymb}
+\documentclass[a4paper,UKenglish,cleveref,autoref,thm-restate]{tgdk-v2021}
+
+\hideTGDK
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{tabularx}
+
+\newcommand{\eppf}{\mathrm{EPPF}}
+\renewcommand{\thetable}{S\arabic{table}}
+
+\title{Supplementary Results for The Fidelity--Safety Gap in Neural Wikidata Constraint Repair}
+\titlerunning{Supplementary Results for The Fidelity--Safety Gap}
+\author{Miguel V\'azquez}{Vienna University of Economics and Business (WU Wien), Vienna, Austria}{miguel.vazquez@wu.ac.at}{https://orcid.org/0009-0002-9067-959X}{}
+\author{Axel Polleres}{Vienna University of Economics and Business (WU Wien), Vienna, Austria}{axel.polleres@wu.ac.at}{https://orcid.org/0000-0001-5670-1146}{}
+\authorrunning{M. V\'azquez and A. Polleres}
+\Copyright{Miguel V\'azquez and Axel Polleres}
+
+\Volume{1}
+\Issue{1}
+\Article{42}
+\DateSubmission{Date of submission}
+\DateAcceptance{Date of acceptance}
+\DatePublished{Date of publishing}
+\SectionAreaEditor{TGDK section area editor}
+
+\begin{document}
+\maketitle
+
+This supplement reports the detailed results underlying the family-level and diagnostic summaries in the main article. Unless stated otherwise, support is measured on the held-out test split of 143,316 repair instances. All reported values come from the evaluations underlying the main results.
+
+\begin{table}[ht]
+\caption{Historical-repair F1 and base-statement deletion by primary constraint family. The best-system column compares all nine systems evaluated in the main article. Baseline--DM denotes the Definition Majority baseline; Candidate--SR denotes the Satisfaction Reranker. Arrows indicate the preferred direction.}
+\label{tab:family-results}
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrlr@{}}
+\toprule
+\textbf{Primary family} & \textbf{Support} & \textbf{Direct--Passive F1 $\uparrow$} & \textbf{Direct--Factor F1 $\uparrow$} & \textbf{Best F1 $\uparrow$} & \textbf{Best system} & \textbf{Candidate--SR base deletion $\downarrow$} \\
+\midrule
+\texttt{conflictWith}           & 15,093 & 0.7205 & 0.7088 & 0.8230 & Baseline--DM   & 0.7662 \\
+\texttt{single}                 & 17,958 & 0.5100 & 0.5626 & 0.5626 & Direct--Factor & 0.9898 \\
+\texttt{type}                   & 15,001 & 0.5242 & 0.4436 & 0.6838 & Baseline--DM   & 1.0000 \\
+\texttt{distinct}               & 34,232 & 0.5733 & 0.9183 & 0.9183 & Direct--Factor & 0.9999 \\
+\texttt{valueType}              & 14,999 & 0.3524 & 0.4478 & 0.4908 & Baseline--DM   & 1.0000 \\
+\texttt{itemRequiresStatement}  & 15,001 & 0.3497 & 0.5078 & 0.7512 & Baseline--DM   & 1.0000 \\
+\texttt{inverse}                & 15,001 & 0.6980 & 0.7938 & 0.9011 & Baseline--DM   & 1.0000 \\
+\texttt{valueRequiresStatement} & 15,003 & 0.5920 & 0.7457 & 0.7457 & Direct--Factor & 1.0000 \\
+\texttt{oneOf}                  &  1,028 & 0.6951 & 0.6932 & 0.8441 & Baseline--DM   & 1.0000 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[ht]
+\caption{Direct--Factor pre-repair satisfaction-head diagnostics by factor family. Support is the number of factor occurrences included in the probe evaluation; positive rate is the share carrying a positive symbolic satisfaction label. The final row is the unweighted mean across the ten families. Arrows indicate the preferred direction where one exists.}
+\label{tab:factor-probes}
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+\textbf{Factor family} & \textbf{Support} & \textbf{Positive rate} & \textbf{F1 $\uparrow$} & \textbf{AUROC $\uparrow$} & \textbf{AUPRC $\uparrow$} & \textbf{ECE $\downarrow$} \\
+\midrule
+\texttt{conflictWith}           & 1,843,471 & 0.7164 & 0.9612 & 0.9886 & 0.9949 & 0.2431 \\
+\texttt{distinct}               &   431,550 & 0.9407 & 0.9994 & 0.9996 & 1.0000 & 0.0626 \\
+\texttt{inverse}                &    42,384 & 0.3294 & 0.9577 & 0.9928 & 0.9898 & 0.6553 \\
+\texttt{itemRequiresStatement}  &   705,718 & 0.9935 & 0.9971 & 0.8346 & 0.9983 & 0.0040 \\
+\texttt{oneOf}                  &     3,331 & 0.7577 & 0.8622 & 0.5841 & 0.8315 & 0.0872 \\
+\texttt{single}                 & 1,368,781 & 0.9986 & 0.9993 & 0.9171 & 0.9998 & 0.0003 \\
+\texttt{symmetric}              &     4,698 & 0.9453 & 0.9719 & 0.8393 & 0.9854 & 0.0442 \\
+\texttt{type}                   &   752,048 & 0.9429 & 0.9889 & 0.9744 & 0.9976 & 0.0350 \\
+\texttt{valueRequiresStatement} &    20,344 & 0.9631 & 0.9812 & 0.8477 & 0.9927 & 0.0375 \\
+\texttt{valueType}              &   466,401 & 0.8708 & 0.9822 & 0.9839 & 0.9967 & 0.1055 \\
+\midrule
+Unweighted mean                 &           & 0.8458 & 0.9701 & 0.8962 & 0.9787 & 0.1275 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[ht]
+\caption{Candidate availability and selection by system. Each rate cell reports availability/selection (A/S) as percentages. ``Eligible'' restricts the denominator to the 54,234 instances whose primary constraint is checkable and violated before repair; ``+ base'' additionally requires the base statement to remain present. Candidate--SR shares the frozen Direct--Factor proposal generator, so their availability rates are identical. Arrows indicate that higher rates are preferred under the stated suitability requirements.}
+\label{tab:candidate-oracle}
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+\textbf{System} & \textbf{Mean $|\Gamma_i|$} & \textbf{All test A/S $\uparrow$} & \textbf{All test + base A/S $\uparrow$} & \textbf{Eligible A/S $\uparrow$} & \textbf{Eligible + base A/S $\uparrow$} \\
+\midrule
+Direct--Factor & 42.42 & \textbf{34.51}/23.19 & \textbf{9.78}/\textbf{3.62} & \textbf{91.19}/61.28 & \textbf{25.85}/\textbf{9.57} \\
+Candidate--C   & 42.42 & \underline{34.42}/21.82 & \underline{9.63}/\underline{3.40} & \underline{90.97}/57.66 & \underline{25.46}/\underline{8.99} \\
+Candidate--DP  & 42.41 & 34.35/\underline{28.37} & 9.41/1.20 & 90.78/\underline{74.96} & 24.85/3.16 \\
+Candidate--SR  & 42.42 & \textbf{34.51}/\textbf{33.16} & \textbf{9.78}/1.68 & \textbf{91.19}/\textbf{87.64} & \textbf{25.85}/4.45 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\section{Candidate-system reproducibility}
+\label{sec:candidate-reproducibility}
+
+\paragraph*{Finite candidate pool.}
+Each candidate is a six-ID vector \((a_s,a_p,a_o,d_s,d_p,d_o)\), with ID 0 denoting \textsc{none}. For each action separately, the construction takes the five highest-logit IDs in each of its subject, predicate, and object slots, enumerates their Cartesian product (at most \(5^3=125\) triples), assigns each triple the sum of its three raw slot logits, and retains the first 20 after a stable descending sort. When entity/predicate class masks are supplied, they restrict the corresponding slots; a mask containing fewer than five IDs falls back to the full target vocabulary. Heuristic patterns retain at most the first three distinct, nonzero, non-placeholder IDs per component and at most 30 instantiated additions and 30 instantiated deletions.
+
+Before deduplication, candidates occur in the following order: the historical repair when enabled, heuristic additions, heuristic deletions, proposal additions, and proposal deletions. Out-of-range vectors are discarded, exact six-slot duplicates are removed while retaining their first occurrence, and the first 80 remaining vectors form \(\Gamma_i\). The historical repair is included only when computing training and validation losses; it can contain both actions, whereas proposal and instantiated heuristic candidates contain at most one. Inference and candidate-oracle evaluation never insert it.
+
+\begin{table}[ht]
+\caption{Heuristic patterns dispatched by the primary constraint family. Every family first proposes deletion of the focus statement and, when present, the competing statement identified by the \texttt{other\_*} fields. The table lists the additional patterns.}
+\label{tab:candidate-heuristics}
+\centering
+\scriptsize
+\begin{tabularx}{\textwidth}{@{}p{0.25\textwidth}X@{}}
+\toprule
+\textbf{Primary family} & \textbf{Additional candidate pattern} \\
+\midrule
+\texttt{conflictWith}, \texttt{single} & Delete overlapping statements formed from the focus and competing subject, property, and value when their roles coincide. \\
+\texttt{oneOf} & Use the same overlap deletions; add the focus property with a value listed by items (P2305). \\
+\texttt{distinct} & Delete the competing subject's duplicate statement when it has the same property and value as the focus statement. \\
+\texttt{type} & Add a statement about the focus subject using class (P2308) and relation (P2309); if no relation is supplied, use instance of (P31) or subclass of (P279). \\
+\texttt{valueType} & Apply the \texttt{type} construction to the focus object's entity rather than the focus subject. \\
+\texttt{itemRequiresStatement} & Form \((s_i,p,*)\) for each required property \(p\) listed by property (P2306). \\
+\texttt{valueRequiresStatement} & Form \((o_i,p,*)\) for each required property \(p\) listed by property (P2306). \\
+\texttt{inverse} & Add \((o_i,p^{-1},s_i)\), using inverse property (P1696), or the focus property when no inverse is supplied. \\
+\texttt{symmetric} & No family-specific pattern beyond the general deletions; this family occurs only as a secondary constraint in the benchmark. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The asterisk in the two dependency templates is a wildcard, not a target-vocabulary ID. Because finite heuristic instantiation requires a concrete subject, property, and object, these templates do not themselves add a candidate; a concrete dependency repair must therefore be supplied by the proposal top-\(k\) set.
+
+\paragraph*{Candidate--C chooser.}
+The chooser uses one shared 400-dimensional ID embedding for all six candidate slots and averages the six resulting vectors. It concatenates this 400-dimensional candidate representation with the Direct--Factor graph representation and scores it with \(\mathrm{Linear}(800,400)\), ReLU, and \(\mathrm{Linear}(400,1)\). There is no chooser-specific dropout. A softmax is applied over the candidates of each instance during training; inference selects their score argmax. The chooser, graph encoder, and proposal heads are trained jointly under the protocol in the main article.
+
+\paragraph*{Candidate--SR reranker.}
+The frozen Direct--Factor model supplies the proposal logits, while the reranker includes a separately initialised graph encoder over the factorised input graph. This encoder has an input projection followed by one 128-dimensional GIN message-passing block; it uses 128-dimensional node-ID embeddings and dropout 0.5, without role embeddings, predicate-edge attributes, or factor pressure. Each of the six candidate IDs is embedded in 64 dimensions. Their concatenation passes through \(\mathrm{Linear}(384,128)\), ReLU, dropout 0.1, \(\mathrm{Linear}(128,128)\), and ReLU. Concatenating that output with the 128-dimensional graph representation gives a 256-dimensional vector, scored by \(\mathrm{Linear}(256,128)\), ReLU, dropout 0.1, and \(\mathrm{Linear}(128,1)\). The graph encoder and reranker are trained jointly with Adam, learning rate \(10^{-4}\), weight decay \(10^{-4}\), batch size 64, gradient clipping 0.5, and seed 42. Training lasts at most ten epochs, uses the first 25,000 validation instances, halves the learning rate after one epoch without validation improvement, stops after two such epochs, and retains the parameter state with minimum mean validation loss.
+
+\paragraph*{Edge cases.}
+An addition or deletion executes only when all three IDs in that action are nonzero; an incomplete branch is a symbolic no-op. No explicit no-op candidate is inserted, although proposal logits or the historical repair included during training and validation can yield one. Exact vectors are deduplicated before operation resolution, so distinct incomplete vectors can resolve to the same no-op. Deletion is applied before addition, preserving delete-and-reinsert behaviour. The reported top-\(k\) settings normally make every pool nonempty; an empty pool is treated as a failure rather than being replaced by a fallback candidate. Exact score ties are resolved by the first candidate in the stable pool order above.
+
+\end{document}
