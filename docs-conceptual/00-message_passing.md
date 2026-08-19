@@ -2,7 +2,10 @@
 
 This document specifies the **conceptual message-passing equations** and computational semantics of **constraint factors as executable subprograms**, expanding the informal description into a precise, paper-ready formulation.
 
-It is the architecture-specification companion to [docs-conceptual/00-constraint_factors.md](/home/mvazquez/constraint_factors/docs-conceptual/00-constraint_factors.md). Implementation status and code-level boundaries belong in [docs-technical/00-message_passing.md](/home/mvazquez/constraint_factors/docs-technical/00-message_passing.md).
+It is the architecture-specification companion to
+[00-constraint_factors.md](00-constraint_factors.md). Implementation status and
+configuration details belong in the
+[technical documentation](../docs-technical/README.md).
 
 The goal is to make explicit:
 - how constraint semantics are computed,

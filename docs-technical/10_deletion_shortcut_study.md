@@ -2,7 +2,10 @@
 
 ## Isolation and rollback
 
-The pre-study repository state is tagged `pre-m1d-g0-stability-v2`. Historical M1D and G0 directories are read-only evidence and are never reused. The study writes four additive versioned directories listed in `commands.md`.
+The pre-study repository state is tagged `pre-m1d-g0-stability-v2`. Historical
+M1D and G0 directories are read-only evidence and are never reused. The study
+writes the four additive versioned directories defined by
+`scripts/make_experiment_configs.py --study deletion-shortcut-v2`.
 
 The implementation is opt-in. Legacy direct-safety behavior remains `loss_weight=1`, `score_temperature=1`, and `focus_deletion_weight=0`; last-checkpoint persistence and stability thresholds are disabled by default. The config generator's `--study deletion-shortcut-v2` mode emits only the four study configs and does not overwrite existing configs.
 

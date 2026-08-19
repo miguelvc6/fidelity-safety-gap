@@ -59,12 +59,12 @@ Paper-facing additions:
   - allowed values: `per_type_v1`, `per_type_grouped_v2`, `legacy_shared`
   - default: `per_type_v1`, retaining the original module layout and checkpoint keys
   - `per_type_grouped_v2` packs the same independent per-type MLP weights into tensor banks and groups rows by compact type index; it requires `active_factor_type_ids`
-  - `legacy_shared` is retained for the H2 shared-executor ablation and is not part of the compact A1 change
+  - `legacy_shared` is retained only for the H2 shared-executor ablation
 
 - `active_factor_type_ids`
   - sorted, unique stable factor-type ids that are reachable in the selected dataset
   - `num_factor_types` remains the upper bound of the stable registry address space; it is not replaced by the active count
-  - the compact A1 generator derives this list from train and validation only, then verifies that test has no unseen types
+  - the paper-suite generator derives this list from train and validation only, then verifies that test has no unseen types
 
 - `gold_edit_embedding_mode`
   - allowed values: `full`, `compact`

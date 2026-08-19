@@ -5,12 +5,10 @@ project. It records the current paper narrative: executable constraint factors
 are valuable because they improve historical repair imitation and reveal where
 imitation, symbolic safety, and non-vacuous repair quality diverge.
 
-Current implementation details, code-level boundaries, and run status belong in
-[docs-technical/00-constraint_factors.md](/home/mvazquez/constraint_factors/docs-technical/00-constraint_factors.md).
-A browser-readable paper overview is available at
-[constraint_factors_research_overview.html](/home/mvazquez/constraint_factors/docs-conceptual/constraint_factors_research_overview.html).
-Earlier hypothesis documents have been moved to
-[docs-conceptual/deprecated/](/home/mvazquez/constraint_factors/docs-conceptual/deprecated/).
+Implementation details, code-level boundaries, and run status belong in the
+[technical documentation](../docs-technical/README.md). The paper-facing system
+mapping is maintained in the
+[models and evaluation matrix](../docs-technical/00_models_and_evaluation_matrix.md).
 
 ## 1) Research Idea, Main Thesis, Scientific Contribution
 
@@ -377,10 +375,9 @@ Current role:
 Current role:
 
 - intended diagnostic endpoint, not a practical repair system;
-- excluded from the corrected comparison because the retained run has no
-  reranker checkpoint; and
-- requires retraining because 909 saved selections are absent from the
-  reconstructed label-blind candidate sets.
+- included as the learned satisfaction-reranking endpoint; and
+- demonstrates that a satisfaction objective can favor evidence deletion even
+  when candidates are produced without injecting the historical edit.
 
 ### Heuristic baselines
 
@@ -408,13 +405,13 @@ factorized reasoning.
 The evaluation applies each predicted edit to the pre-repair local graph and
 then rechecks symbolic constraints.
 
-The canonical definitions are now specified in
-[the corrected evaluation protocol](08_corrected_evaluation_protocol.md). In
+The canonical definitions are specified in
+[the evaluation protocol](08_corrected_evaluation_protocol.md). In
 particular, pre/post states are reconstructed from interim rows, all aggregates
 carry explicit numerators and denominators, PFR replaces the historical
 action-derived primary diagnostic, and EPPF/base-deletion metrics make
 non-vacuity explicit. The GFR wording below is retained only to interpret prior
-outputs; schema-v2 reports `local_satisfaction` instead.
+outputs; current reports use `local_satisfaction` instead.
 
 ### Historical fidelity
 
@@ -492,11 +489,10 @@ edits that improve metrics by deleting the focus evidence.
 
 ## 9) Prior schema-v1 empirical pattern
 
-The values in this section predate corrected state reconstruction. They are
-retained for provenance and must not be copied into the corrected main table.
-Compact A1 is now canonical; Original A1 is compression-equivalence evidence
-only. Original B0 is the current corrected passive comparison; the proposed
-parameter-matched B0 is deferred and excluded from the current paper suite.
+The values in this section predate the current state reconstruction. They are
+retained only as historical project notes and must not be copied into the paper.
+The current comparison and reader-facing system names are defined in the
+[models and evaluation matrix](../docs-technical/00_models_and_evaluation_matrix.md).
 
 The current paper-facing result table should be narrated as evidence for a
 fidelity-safety gap, not as a single leaderboard.

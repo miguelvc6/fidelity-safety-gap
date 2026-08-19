@@ -2,7 +2,7 @@
 
 This document specifies the data artifacts produced by the constraint-factors
 pipeline. It follows the executable pipeline in `src/` and the conceptual model
-in [docs-conceptual/00-constraint_factors.md](/home/mvazquez/constraint_factors/docs-conceptual/00-constraint_factors.md).
+in [the conceptual framing](../docs-conceptual/00-constraint_factors.md).
 
 ## 1) Dataset Variants
 Variants are named with:

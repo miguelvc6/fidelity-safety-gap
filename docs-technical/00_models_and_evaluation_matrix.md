@@ -1,137 +1,73 @@
-# Paper-Facing Models and Evaluation Matrix
+# Paper Models and Evaluation Matrix
 
-Date: 2026-08-06
+This document maps the reader-facing systems in the paper to repository
+configurations. Internal run names are retained only to make commands and
+artifacts unambiguous.
 
-This document defines the canonical paper-facing suite implemented in the repository. The default experiment surface should describe only these models.
+## Learned systems
 
-## Canonical learned suite
+| Paper name | Internal prefix | Representation | Training entry point | Decision rule |
+| --- | --- | --- | --- | --- |
+| Direct--Passive GNN | `b0_eswc_reproduction` | passive constraint context | `src/07_train.py` | independent slot argmax |
+| Direct--Factor GNN | `a1_factorized_imitation_compact_grouped` | executable factors | `src/07_train.py` | independent slot argmax |
+| Candidate--C | `m1c_safe_factor_chooser_compact_grouped` | executable factors | `src/07_train.py` | learned chooser over candidates |
+| Candidate--DP | `m1d_safe_factor_direct_compact_grouped` | executable factors | `src/07_train.py` | proposal-score candidate selection |
+| Candidate--SR | `g0_globalfix_reference_v2` | factor proposals plus reranker | `src/08_train_reranker.py` | learned satisfaction reranking |
 
-| ID | Name | Representation | Training path | Objective | Inference role |
-| --- | --- | --- | --- | --- | --- |
-| `B0-R` | `Original B0 ESWC-Reproduction` | `eswc_passive` | `src/07_train.py` | `L_edit` | slot argmax |
-| `B0-M` | `Parameter-matched B0` | `eswc_passive` | `src/07_train.py` | `L_edit` | slot argmax |
-| `A1` | `Compact A1 Factorized Imitation` | `factorized` | existing checkpoint | `L_edit` | slot argmax |
-| `M1C` | `M1C Safe Factor Chooser` | `factorized` | `src/07_train.py` | `L_edit + L_chooser` | chooser over symbolic candidates |
-| `M1D` | `M1D Safe Factor Direct` | `factorized` | `src/07_train.py` | `L_edit + alpha L_primary + beta L_secondary` | candidate argmax from proposal logits |
-| `G0` | `G0 GlobalFix Reference` | `factorized` proposal + reranker | `src/08_train_reranker.py` | `L_global` | reranker over symbolic candidates |
+All reported training uses seed 42. Direct--Passive GNN has a 128-wide,
+two-layer backbone and dropout 0.5. The three factor-based proposal models use
+the same 400-wide, four-layer backbone and the recorded factorized graph suite.
+Candidate--SR draws proposals from Direct--Factor GNN.
 
-## Definitions
+The default generator emits exactly these five configurations. Experimental
+and appendix configurations, including the unused 304-wide passive capacity
+control, require `--include-experimental` or a study-specific option and are not
+part of the paper suite.
 
-### Original and parameter-matched B0
-- Uses `constraint_representation="eswc_passive"`.
-- Disables local executable factor expansion, local factor-scope wiring, typed pressure, chooser loss, and direct safety loss.
-- Original B0 is the 128×2 replication baseline. Parameter-matched B0 is the
-  304×4 capacity control and differs from Compact A1 by at most 0.1% trainable
-  parameters. Both consume the same passive graph suite.
+## Factor-model defaults
 
-### A1 Factorized Imitation
-- Uses `constraint_representation="factorized"`.
-- Keeps the factorized graph, per-type factor executors, and per-role pressure, but trains only with edit imitation plus auxiliary factor supervision.
-- Answers whether factorized local constraint context helps before any safety-aware decision objective.
-- The compact/grouped 400×4 checkpoint is canonical. Original A1 is prior
-  compression-equivalence evidence only and is not retrained.
+Direct--Factor GNN, Candidate--C, and Candidate--DP use:
 
-### M1C Safe Factor Chooser
-- Builds on `A1`.
-- Uses chooser scoring over the same symbolic candidate set used by reranking.
-- Retains the same per-type factor executor backbone and auxiliary factor supervision as `A1`.
-- Default paper configs should keep a non-zero primary term (`gamma_primary > 0`) so primary-fix preference is explicit.
+- `factor_executor_impl="per_type_grouped_v2"`;
+- `gold_edit_embedding_mode="compact"`;
+- `pressure_module_sharing="per_type"`;
+- active factor IDs derived from training and validation only; and
+- rejection of any factor family that appears only at test time.
 
-### M1D Safe Factor Direct
-- Builds on `A1`.
-- Reuses the same candidate builder and symbolic evaluator contract as `M1C` and `G0`.
-- Retains the same per-type factor executor backbone and auxiliary factor supervision as `A1`.
-- Computes candidate scores directly from proposal slot logits, then optimizes expected primary-failure and secondary-regression penalties.
+Candidate--C uses `gamma_primary=0.2`. Candidate--DP adds direct primary and
+secondary candidate losses. Candidate--SR trains a separate reranker for local
+constraint satisfaction and saves its final checkpoint.
 
-### G0 GlobalFix Reference
-- Uses the factorized proposal regime as candidate source.
-- Trains a reranker for expected global satisfaction.
-- It is a frontier reference, not the default practical system.
+## Deterministic baselines
 
-## Fixed paper defaults
+The paper reports:
 
-The default paper-facing generator should enforce these settings for `A1`, `M1C`, and `M1D`:
+| Paper name | Implementation |
+| --- | --- |
+| Baseline--DB | `DeleteFocusBaseline` |
+| Baseline--AM | `AddMirrorBaseline` |
+| Baseline--FM | `ConstraintFamilyMajorityBaseline` |
+| Baseline--DM | `ConstraintDefinitionMajorityBaseline` |
 
-- backbone: `GIN_PRESSURE`
-- graph path: multi-relational / edge-attribute regime
-- encoding: whichever dataset artifact is selected, typically frozen text embeddings when available
-- role embeddings: enabled
-- dynamic per-type reweighting: fixed by the locked winning `M1C` configuration
-- fix-probability loss: disabled
-- factor-loss-only training: disabled
-- factor executor: `per_type_grouped_v2`
-- gold edit embedding: `compact`
-- pressure modules: `per_type`
-- active factor IDs: train/validation union, with test-only IDs rejected
+These systems have no learned checkpoint. Their outputs are written under
+`models/baselines/full_strat1m/parquet/`.
 
-`B0` is the exception: it keeps the passive representation and disables typed pressure.
+## Required evaluation outputs
 
-## Default experiment bundle
+Every system reports operation-level precision, recall, and micro-F1; mean
+additions and deletions; and the symbolic metrics defined in the paper:
+Primary-Fix Rate, Local Satisfaction, change in Local Satisfaction, Secondary
+Improvement and Regression Rates, disruption, both base-deletion measures,
+Evidence-Preserving Primary Fix, and Vacuous Improvement.
 
-The default config generator should emit only:
+Each symbolic aggregate stores `value`, `numerator`, and `denominator`.
+Evaluation reconstructs pre- and post-edit states from benchmark rows rather
+than treating stored graph factor-label tensors as evaluation truth.
 
-- `b0_eswc_reproduction`
-- `b0_parameter_matched`
-- `a1_factorized_imitation_compact_grouped`
-- `m1c_safe_factor_chooser_compact_grouped`
-- `m1d_safe_factor_direct_compact_grouped`
-- `g0_globalfix_reference`
+## Diagnostics
 
-Appendix or exploratory variants such as policy-choice, factor-loss-only, untyped-pressure, and non-paper rerankers should be gated behind `--include-experimental` or a more specific appendix flag.
-
-## Main evaluation suites
-
-### Main results
-- `DFB`
-- `CFM`
-- `CDM`
-- `B0`
-- `A1`
-- `M1C`
-- `M1D`
-- `G0`
-
-### Minimal ablation view
-- `B0 -> A1`: representation effect
-- `A1 -> M1C`: chooser-based safe selection
-- `A1 -> M1D`: direct-loss safe selection
-
-### Required metrics
-- historical fidelity: precision / recall / micro-F1
-- PFR
-- pooled Local Satisfaction and common-support ΔLocalSat
-- pooled secondary regression and improvement rates (`SRR`, `SIR`)
-- disruption
-- Base-deletion Rate and Deletes-base-action Rate
-- EPPF and Vacuous Improvement
-
-Each paper metric contains `value`, `numerator`, and `denominator`. Stored graph
-pre-label tensors are never paper-metric truth; pre/post states are recomputed
-from interim rows.
-
-### Evaluation rule
-- `M1C`, `M1D`, and `G0` must share the same candidate-level symbolic evaluator contract so reported safety metrics are definitionally aligned.
-
-## H2 appendix diagnostics
-
-H2 is evaluated as an opt-in diagnostic layer over existing factorized train/test graph artifacts and trained checkpoints. It is not part of the canonical main-suite score and writes under `models/<run>/evaluations/h2/` so the normal `evaluations/model.json` remains unchanged.
-
-The H2 report includes:
-
-- factor semantic metrics for `factor_logits_pre` and `factor_logits_post_gold` against existing factor satisfaction labels, grouped by factor state, family, and compact type
-- transfer slices by train-set factor exposure bucket (`unseen`, `low_1_10`, `medium_11_100`, `high_gt100`), primary vs secondary role, and family
-- density/composition slices by local factor count bucket (`1`, `2_4`, `5_16`, `17_64`, `65_plus`) plus shared pressure-overlap summaries
-- inference-time pressure masking variants: `normal`, `no_factor_pressure`, `primary_only_pressure`, and `secondary_only_pressure`
-- counterfactual prediction-change rates and repair/global metric deltas relative to `normal`
-
-Factor semantic rows report support, positive rate, accuracy, precision, recall, F1, AUROC, AUPRC, and ECE. If a model checkpoint does not emit factor logits, the H2 report is marked partial and records the unsupported section instead of failing the whole evaluation.
-
-## H2 supporting ablations
-
-The H2 ablations are appendix/supporting runs. They are not canonical main-suite models and should be trained only into new run directories:
-
-- `h2_a1_no_factor_loss__<variant>__<encoding>`: A1-style factorized graph and pressure, but disables auxiliary factor satisfaction loss.
-- `h2_a1_shared_pressure__<variant>__<encoding>`: keeps factor pressure enabled but shares role pressure modules across factor types through `pressure_module_sharing="shared"`.
-- `h2_a1_legacy_shared_executor__<variant>__<encoding>`: uses the older shared factor executor path through `factor_executor_impl="legacy_shared"`.
-
-All three use current processed factorized graphs, A1-style slot inference, no chooser, and no direct safety objective.
+H2 pressure masking and the candidate oracle are supporting analyses for
+Direct--Factor GNN, Candidate--C, and Candidate--DP. They write below each run's
+`evaluations/` directory and never overwrite the main result. The final
+readiness check validates all five learned systems, all four deterministic
+baselines, diagnostic selection modes, prediction provenance, and paper tables.

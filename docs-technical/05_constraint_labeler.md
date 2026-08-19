@@ -84,7 +84,10 @@ static catalog in `data/static/constraint_type_catalog.json`. On a fresh clone,
 - `valueType`
 - `distinct`
 
-Semantics follow the short descriptions in [docs-conceptual/constraint_types.md](/home/mvazquez/constraint_factors/docs-conceptual/constraint_types.md). When evidence is insufficient, the factor is marked **not checkable** to prioritize correctness over coverage.
+Semantics follow the short descriptions in
+[constraint_types.md](../docs-conceptual/constraint_types.md). When evidence is
+insufficient, the factor is marked **not checkable** to prioritize correctness
+over coverage.
 
 ## Coverage Summary
 At the end of a run, the script prints a per-type summary including:

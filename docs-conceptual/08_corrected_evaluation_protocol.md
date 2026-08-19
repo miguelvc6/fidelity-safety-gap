@@ -1,68 +1,56 @@
-# Corrected Evaluation Protocol
+# Evaluation Protocol
 
-The corrected paper protocol separates training-label continuity from symbolic
-evaluation correctness. The current factorized graphs retain their historical
-factor labels so Compact A1 can be evaluated without checkpoint migration and
-M1C/M1D remain directly comparable to it. At evaluation time, however, both the
-pre-edit and post-edit evidence states are reconstructed from the interim row
-under the corrected semantics. Stored graph satisfaction tensors are not
-evaluation truth.
+The paper separates continuity of the training target from correctness of the
+symbolic evaluation. The reported factor-based models use the same recorded
+labels and factorized graphs, preserving a common historical-imitation target.
+At evaluation time, pre- and post-edit evidence states are reconstructed from
+the benchmark rows. Stored graph satisfaction tensors are therefore training
+metadata, not evaluation truth.
 
-## Canonical comparison
+## Comparison scope
 
-Compact A1 is the canonical factorized imitation system. Original A1 is kept
-only as prior compression-equivalence evidence; its older safety diagnostics do
-not belong in the corrected main comparison.
+The learned comparison contains a passive-context GNN, a direct factor-based
+GNN, two candidate-selection variants, and a learned satisfaction reranker.
+The factor-based proposal systems share the same graph artifacts and backbone;
+the reranker uses proposals from the direct factor-based model. All training
+uses seed 42. Multiple-seed confirmation remains future work.
 
-Original B0 is the passive comparison in the current paper suite. It is the
-128-wide, two-layer replication system and answers whether the earlier passive
-setup can be reproduced. The proposed 304-wide, four-layer parameter-matched
-B0 remains a future capacity control but is excluded from the current run and
-paper comparison.
-
-Compact M1C and M1D use the same stored factorized train/validation/test graphs
-as Compact A1. The G0 design uses Compact A1 proposals, but the retained G0 run
-is excluded because its reranker checkpoint is missing and its saved selections
-cannot all be reconstructed from label-blind candidates. Restoring G0 requires
-single-seed retraining with seed 42. All new training uses that seed;
-multiple-seed confirmation remains deferred.
+Older architecture variants and an unused passive capacity control are outside
+the reported comparison. They are not needed to interpret the paper's claims.
 
 ## Symbolic-state contract
 
-One evidence-state definition is used for corrected evaluation and future label
-generation:
+One evidence-state definition is used for evaluation and for labeling future
+datasets:
 
 - evidence projections are merged when graph roles resolve to the same entity;
-- the base statement is inserted into every reconstructed pre-state;
+- the base statement is inserted into every reconstructed pre-edit state;
 - deletion is applied before addition; and
-- deleting and then adding the same statement preserves reinsertion.
+- deleting and adding the same statement preserves its reinsertion.
 
-The current labeled Parquet and graph artifacts are intentionally not rebuilt.
-A read-only label-semantics audit measures their drift from this corrected
-contract.
+The recorded benchmark labels and graphs are not rebuilt. A read-only audit
+quantifies differences between their stored factor labels and recomputation
+under this contract without changing training artifacts.
 
-## Paper metrics
+## Metrics
 
-Every aggregate reports a value together with its numerator and denominator.
+Every aggregate reports a value, numerator, and denominator.
 
-- PFR: a pre-checkable, pre-violated primary constraint that is checkable and
-  satisfied after the edit.
-- Local Satisfaction: pooled satisfied post-edit constraints over post-edit
+- Primary-Fix Rate measures eligible primary violations that become satisfied.
+- Local Satisfaction pools satisfied post-edit constraints over post-edit
   checkable constraints.
-- ΔLocalSat: the signed satisfaction change over common pre/post checkable
-  support.
-- SIR and SRR: pooled secondary improvements and regressions on common support.
-- Disruption: complete non-`none` predicted add/delete slot groups per instance;
-  partial groups do not count, while a complete group still counts if bounded
-  state reconstruction cannot apply it.
-- Base-deletion Rate: reconstructed base statements removed by the edit.
-- Deletes-base-action Rate: predictions whose resolved delete action names the
-  base statement.
-- EPPF: eligible primary fixes that preserve the base evidence.
-- Vacuous Improvement: base-deleting edits with positive common-support
-  ΔLocalSat.
+- Change in Local Satisfaction measures signed change on constraints checkable
+  both before and after the edit.
+- Secondary Improvement and Regression Rates pool secondary transitions on that
+  common support.
+- Disruption counts complete predicted addition and deletion operations.
+- Base-deletion Rate measures whether the reconstructed base statement is lost.
+- Deletes-base-action Rate measures whether the predicted deletion explicitly
+  names the base statement.
+- Evidence-Preserving Primary Fix credits an eligible primary fix only when the
+  base evidence remains.
+- Vacuous Improvement records a positive common-support satisfaction change
+  accompanied by base deletion.
 
-This schema replaces the historical GFR label and action-history-derived
-primary-fix diagnostic. The deletion-focused baseline is an explicit
-non-vacuity control: it must delete the base on every row and cannot receive
-EPPF credit.
+The delete-base baseline is the non-vacuity control: it deletes the base on
+every row and cannot receive evidence-preserving primary-fix credit.
