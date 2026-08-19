@@ -16,7 +16,7 @@
   },
   "paper": {
     "path": "latex_paper/main.tex",
-    "sha256": "bd77bf1a32b8403d6e854697a6da738d770b81140d6e7ad733c7a824afc0c399",
+    "sha256": "c6ec1daf76e70889ad13a87efb20bdb487c2db93eb02df199eb4ebd940636d62",
     "validated_tables": [
       "tab:main-results",
       "tab:symbolic-results",
