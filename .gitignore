@@ -52,6 +52,10 @@ deprecated/*
 99_*
 model-configs/*
 
+# Locally assembled submission archives. Their contents are generated from
+# tracked release files and explicitly selected ignored research artifacts.
+release/
+
 # Track the submitted manuscript and supplement, but not local build products,
 # working notes, or the earlier conference-paper source.
 latex_paper/*

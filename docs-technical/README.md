@@ -12,6 +12,7 @@ operating procedures:
 - [Graph generation](06_graph.md)
 - [Training](07_train.md)
 - [Deletion-shortcut study](10_deletion_shortcut_study.md)
+- [Zenodo release preparation](11_zenodo_release.md)
 
 Research rationale belongs in the
 [conceptual documentation](../docs-conceptual/README.md).
