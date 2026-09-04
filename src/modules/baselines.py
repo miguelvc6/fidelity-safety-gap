@@ -193,8 +193,8 @@ class AddMirrorBaseline(Baseline):
     For inverse/symmetric constraints, add the mirror triple.
     - If predicate is symmetric: add (o, p, s)
     - Else if predicate has a known inverse p_inv: add (o, p_inv, s)
-    - Else (unknown): fall back to (o, p, s) which is correct for symmetric
-      and a heuristic for inverse when mapping is missing.
+    - Else (unknown inverse definition): emit no edit rather than treating the
+      property as symmetric.
 
     By default, only fires if the sample is marked as inverse/symmetric via
     `constraint_type` / `shape_kind`. Set `only_if_marked=False` to always attempt.
@@ -204,6 +204,7 @@ class AddMirrorBaseline(Baseline):
         self,
         num_graph_nodes: int,
         inverse_predicates: Optional[Dict[int, int]] = None,
+        inverse_by_constraint: Optional[Mapping[int, int]] = None,
         symmetric_predicates: Optional[Iterable[int]] = None,
         *,
         only_if_marked: bool = True,
@@ -218,6 +219,9 @@ class AddMirrorBaseline(Baseline):
             placeholders=placeholders,
         )
         self.inverse_predicates = dict(inverse_predicates or {})
+        self.inverse_by_constraint = {
+            int(key): int(value) for key, value in (inverse_by_constraint or {}).items()
+        }
         self.symmetric_predicates = set(int(x) for x in (symmetric_predicates or []))
         self.only_if_marked = bool(only_if_marked)
 
@@ -227,13 +231,20 @@ class AddMirrorBaseline(Baseline):
 
         should_fire = not self.only_if_marked or (kind in {"inverse", "symmetric"})
         if should_fire:
-            if p in self.symmetric_predicates:
+            constraint_id = _extract_shape_id(d)
+            if kind == "symmetric" or p in self.symmetric_predicates:
                 p_m = p
+            elif constraint_id in self.inverse_by_constraint:
+                p_m = self.inverse_by_constraint[constraint_id]
             elif p in self.inverse_predicates:
                 p_m = self.inverse_predicates[p]
             else:
-                # Unknown: heuristic fallback
-                p_m = p
+                # An inverse definition without a resolved P2306 property is
+                # not safely representable as a symmetric edit.
+                return torch.tensor(
+                    [self.default_add_class] * 3 + [self.default_del_class] * 3,
+                    dtype=torch.long,
+                )
 
             add_s = self._placeholder("object", o)
             add_p = self._placeholder("predicate", p_m) if p_m == p else p_m
@@ -432,6 +443,7 @@ def _build_cli_baseline(
     default_add_class: int,
     default_del_class: int,
     inverse_map: Dict[int, int],
+    inverse_by_constraint: Mapping[int, int],
     symmetric_set: Iterable[int],
     train_data: Optional[Iterable[Data]],
     fit_csm_on_train: bool,
@@ -448,6 +460,7 @@ def _build_cli_baseline(
         return AddMirrorBaseline(
             num_graph_nodes=num_graph_nodes,
             inverse_predicates=inverse_map,
+            inverse_by_constraint=inverse_by_constraint,
             symmetric_predicates=symmetric_set,
             only_if_marked=True,
             default_add_class=default_add_class,
@@ -493,6 +506,7 @@ def evaluate_baselines(
     save_run: Callable[[str, BaseGraphModel], Dict[str, float]],
     results_dir: Path | None = None,
     placeholders: Optional[Mapping[str, int]] = None,
+    inverse_by_constraint: Optional[Mapping[int, int]] = None,
 ) -> Dict[str, Dict[str, float]]:
     if baseline_choice != "all" and baseline_choice not in BASELINE_NAMES:
         allowed_display = ", ".join(["'all'"] + [f"'{name}'" for name in BASELINE_NAMES])
@@ -519,6 +533,7 @@ def evaluate_baselines(
             default_add_class=default_add_class,
             default_del_class=default_del_class,
             inverse_map=inverse_map,
+            inverse_by_constraint=inverse_by_constraint or {},
             symmetric_set=symmetric_set,
             train_data=train_data,
             fit_csm_on_train=fit_csm_on_train,

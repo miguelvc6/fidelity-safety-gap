@@ -17,7 +17,7 @@ from typing import Any
 
 import pandas as pd
 
-from modules.constraint_checkers import CHECKERS
+from modules.constraint_checkers import SUPPORTED_FAMILIES
 from modules.constraint_type_map import canonicalize_constraint_type
 
 CONSTRAINT_TYPE_PREDICATE = "<http://www.wikidata.org/entity/P2302>"
@@ -97,7 +97,7 @@ def build_registry(
         constraint_family, constraint_supported = canonicalize_constraint_type(constraint_type_item or "")
         if not constraint_family:
             constraint_family = "unsupported"
-        if constraint_family in CHECKERS:
+        if constraint_family in SUPPORTED_FAMILIES:
             constraint_supported = True
 
         constrained_property = constraint_to_property.get(constraint_id)

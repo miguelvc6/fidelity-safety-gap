@@ -8,8 +8,9 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
+import pandas as pd
 import torch
 from torch_geometric.loader import DataLoader
 from tqdm.auto import tqdm
@@ -31,10 +32,13 @@ from modules.data_encoders import (  # noqa: E402
     graph_dataset_filename,
 )
 from modules.evaluation_artifacts import (  # noqa: E402
+    EVALUATION_SCHEMA_VERSION,
+    PREDICTION_COLUMNS,
     atomic_write_json,
     repository_relative_path,
     sha256_file,
 )
+from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION  # noqa: E402
 from modules.repair_eval import (  # noqa: E402
     ConstraintRepairHeuristics,
     load_violation_contexts,
@@ -66,21 +70,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _slots(value: Any, *, row_index: int) -> tuple[int, int, int, int, int, int]:
-    if not isinstance(value, dict):
-        raise ValueError(f"Prediction row {row_index} must be an object.")
-    add = value.get("add")
-    delete = value.get("del", value.get("delete"))
-    if not isinstance(add, Sequence) or isinstance(add, (str, bytes)) or len(add) != 3:
-        raise ValueError(f"Prediction row {row_index} has an invalid add action.")
-    if not isinstance(delete, Sequence) or isinstance(delete, (str, bytes)) or len(delete) != 3:
-        raise ValueError(f"Prediction row {row_index} has an invalid delete action.")
-    slots = tuple(int(item) for item in (*add, *delete))
-    if any(item < 0 for item in slots):
-        raise ValueError(f"Prediction row {row_index} contains a negative class id.")
-    return slots  # type: ignore[return-value]
-
-
 def main() -> None:
     args = parse_args()
     run_directory = args.run_directory.resolve()
@@ -107,11 +96,28 @@ def main() -> None:
     contexts = load_violation_contexts(interim_directory, "test", none_class=0)
 
     predictions_path = args.predictions.resolve()
-    with predictions_path.open("r", encoding="utf-8") as handle:
-        prediction_payload = json.load(handle)
-    if not isinstance(prediction_payload, list):
-        raise ValueError("Predictions must be a JSON array.")
-    predictions = [_slots(value, row_index=index) for index, value in enumerate(prediction_payload)]
+    if predictions_path.suffix.lower() != ".parquet":
+        raise ValueError("Candidate membership requires a schema-v3 prediction Parquet artifact.")
+    predictions_manifest_path = predictions_path.with_suffix(".manifest.json")
+    with predictions_manifest_path.open("r", encoding="utf-8") as handle:
+        predictions_manifest = json.load(handle)
+    if int(predictions_manifest.get("schema_version", -1)) != EVALUATION_SCHEMA_VERSION:
+        raise ValueError("Candidate membership rejects non-schema-v3 predictions.")
+    if int(predictions_manifest.get("validator_semantics_version", -1)) != VALIDATOR_SEMANTICS_VERSION:
+        raise ValueError("Candidate membership rejects cross-validator predictions.")
+    hierarchy_identity = predictions_manifest.get("hierarchy") or {}
+    if not hierarchy_identity.get("content_sha256"):
+        raise ValueError("Prediction manifest lacks a hierarchy identity.")
+    if (predictions_manifest.get("predictions") or {}).get("sha256") != sha256_file(predictions_path):
+        raise ValueError("Prediction Parquet checksum does not match its manifest.")
+    prediction_frame = pd.read_parquet(predictions_path)
+    missing_columns = set(PREDICTION_COLUMNS) - set(prediction_frame.columns)
+    if missing_columns:
+        raise ValueError(f"Predictions are missing columns: {sorted(missing_columns)}")
+    predictions = [
+        tuple(int(value) for value in row)
+        for row in prediction_frame.loc[:, list(PREDICTION_COLUMNS)].itertuples(index=False, name=None)
+    ]
     if len(predictions) != len(contexts):
         raise ValueError(
             f"Prediction/context count mismatch: {len(predictions)} versus {len(contexts)}."
@@ -209,7 +215,9 @@ def main() -> None:
         raise RuntimeError(f"Audited {processed} rows but expected {len(predictions)}.")
 
     report = {
-        "schema_version": 1,
+        "schema_version": EVALUATION_SCHEMA_VERSION,
+        "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+        "hierarchy": hierarchy_identity,
         "status": "ok" if membership_count == len(predictions) else "failed",
         "run_directory": repository_relative_path(run_directory),
         "config": {
@@ -219,6 +227,8 @@ def main() -> None:
         "predictions": {
             "path": repository_relative_path(predictions_path),
             "sha256": sha256_file(predictions_path),
+            "manifest_path": repository_relative_path(predictions_manifest_path),
+            "manifest_sha256": sha256_file(predictions_manifest_path),
         },
         "proposal": {
             "run_directory": repository_relative_path(proposal_run_directory),

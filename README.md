@@ -32,50 +32,39 @@ recommended for training the reported models.
 uv sync --group dev --python 3.12
 ```
 
-## Sample smoke run
+## Validator-v2 smoke run
 
-The sample pipeline is intended for development, not reproduction of the paper
-table.
+The self-contained smoke fixture exercises label generation and factorized
+graph construction without consulting live Wikidata:
 
 ```bash
-uv run src/01_data_downloader.py --dataset sample
-uv run src/02_dataframe_builder.py --dataset sample --min-occurrence 100 --max-rows 300
-uv run src/03_constraint_registry.py --dataset sample
-uv run src/05_constraint_labeler.py --dataset sample --min-occurrence 100 --constraint-scope local --max-rows 300
-uv run src/06_graph.py --dataset sample --min-occurrence 100 --encoding node_id --constraint-scope local --constraint-representation factorized
-uv run src/09_eval.py --run-baselines --dataset sample --min-occurrence 100
+uv run python tests/smoke_validator_v2_pipeline.py
 ```
 
 ## Reproducing the reported experiment suite
 
-The paper uses `full_strat1m_minocc100`, `node_id` encoding, seed 42, and the
-recorded labeled Parquet and graph artifacts. These large inputs and learned
-checkpoints are intentionally not stored in Git. Place them under `data/` and
-the corresponding `models/<run>/checkpoint.pth` paths before running the suite.
-The checked-in configurations, aggregate reports, prediction manifests, and
-paper tables record their identities and checksums.
-
-Do not rerun `src/05_constraint_labeler.py` over the released paper benchmark:
-the reported models were trained on its recorded labels. Evaluation reconstructs
-pre- and post-edit symbolic states from the benchmark rows using the current
-semantics. The labeler contains the same semantics for future datasets.
-
-Generate or restore the passive graph suite once; all factor-based systems use
-the recorded factorized graph suite:
+The paper uses `full_strat1m_minocc100`, `node_id` encoding, seed 42, validator
+semantics version 2, and a fixed Wikidata class hierarchy cut off at
+2018-07-01. Build that artifact first, then regenerate labels and both graph
+suites. Large generated inputs and checkpoints are intentionally not stored in
+Git.
 
 ```bash
-uv run src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-representation eswc_passive --registry-dataset full --shard-size 10000 --use-torch-save --persistence-profile research_safe --overwrite atomic
-uv run scripts/make_experiment_configs.py --variant full_strat1m_minocc100 --encoding node_id
-uv run src/09_eval.py --run-baselines --dataset full_strat1m --min-occurrence 100 --strict-global-metrics --per-constraint-csv --batch-size 256
-uv run src/10_scheduler.py --paper-suite --dry-run
-uv run src/10_scheduler.py --paper-suite
-uv run scripts/check_corrected_paper_readiness.py --paper latex_paper/main.tex --verify-graph-checksums
+uv run python scripts/build_historical_class_hierarchy.py --seeds-only
+uv run python scripts/build_historical_class_hierarchy.py
+uv run python src/05_constraint_labeler.py --dataset full_strat1m --min-occurrence 100 --registry-dataset full --constraint-scope local --hierarchy data/static/wikidata-p279-2018-07-01.v1.json
+uv run python src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-representation factorized --registry-dataset full --constraint-scope local --shard-size 200000 --use-torch-save --persistence-profile research_safe --overwrite atomic --hierarchy data/static/wikidata-p279-2018-07-01.v1.json
+uv run python src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-representation eswc_passive --registry-dataset full --constraint-scope local --shard-size 10000 --use-torch-save --persistence-profile research_safe --overwrite atomic --use-unlabeled-interim --hierarchy data/static/wikidata-p279-2018-07-01.v1.json
+uv run python scripts/make_experiment_configs.py --variant full_strat1m_minocc100 --encoding node_id
+uv run python src/10_scheduler.py --paper-suite --dry-run
+uv run python src/10_scheduler.py --paper-suite
 ```
 
 The dry run prints exactly the five learned experiments and whether each will be
-trained or evaluated. An existing checkpoint is evaluated; otherwise its model
-is trained first. Direct--Factor GNN is the exception: its retained checkpoint
-must be restored and is never retrained by the paper scheduler.
+trained or evaluated. Only the checksummed Direct--Passive checkpoint is
+retained; all factor-dependent systems are retrained. The scheduler also runs
+the four baselines, diagnostics, and acceptance checks. Paper values are updated
+only after that suite passes.
 
 For individual training, evaluation, replay, and diagnostic commands, see the
 [execution guide](docs-technical/00_training_and_evaluation_execution_plan.md)
@@ -98,7 +87,7 @@ commands are ignored by Git.
 ## Validation
 
 ```bash
-uv run pytest
+uv run pytest -q
 uv run python -m compileall -q src scripts
 ```
 

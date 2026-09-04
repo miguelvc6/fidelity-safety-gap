@@ -13,6 +13,7 @@ if str(SRC) not in sys.path:
 
 from modules.baselines import (  # noqa: E402
     BASELINE_NAMES,
+    AddMirrorBaseline,
     BaselineAdapter,
     ConstraintDefinitionMajorityBaseline,
     ConstraintFamilyMajorityBaseline,
@@ -65,6 +66,16 @@ def test_baseline_adapter_evaluation_hook_uses_plain_forward() -> None:
 
     assert logits.shape == (1, 6, 30)
     assert logits.argmax(dim=-1).tolist() == [[0, 0, 0, 1, 2, 3]]
+
+
+def test_add_mirror_uses_definition_specific_inverse_and_fails_closed() -> None:
+    inverse = _graph(7, "inverse", [0, 0, 0, 0, 0, 0])
+    inverse.focus_triple = torch.tensor([1, 10, 5], dtype=torch.long)
+    baseline = AddMirrorBaseline(num_graph_nodes=30, inverse_by_constraint={7: 20})
+    assert baseline.predict_one(inverse).tolist() == [5, 20, 1, 0, 0, 0]
+
+    unresolved = AddMirrorBaseline(num_graph_nodes=30)
+    assert unresolved.predict_one(inverse).tolist() == [0, 0, 0, 0, 0, 0]
 
 
 if __name__ == "__main__":

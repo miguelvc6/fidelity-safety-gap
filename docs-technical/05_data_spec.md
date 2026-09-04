@@ -178,6 +178,8 @@ re-run.
 - `coverage_<scope>.csv`, `coverage_<scope>.md`
 - `filtered_factors_<scope>.csv`, `filtered_factors_<scope>.md`
 - `filtered_factor_families_<scope>.csv`
+- `label_manifest.json` (validator, hierarchy, source, registry, encoder, code,
+  row-count, checksum, and per-family outcome provenance)
 
 **Additional parquet columns**
 - `factor_checkable_pre`, `factor_satisfied_pre`
@@ -186,6 +188,7 @@ re-run.
 - `factor_constraint_ids`
 - `num_checkable_factors_pre`, `coverage_pre`
 - `num_checkable_factors_post_gold`, `coverage_post_gold`
+- `validator_semantics_version`, `hierarchy_content_sha256`
 
 The labeler can operate on either `local_constraint_ids` or
 `local_constraint_ids_focus`, controlled by `--constraint-scope`.
@@ -193,6 +196,8 @@ By default, `--factor-family-policy supported_only` keeps raw local-closure
 columns unchanged but writes only supported executable secondary constraints to
 `factor_constraint_ids` and aligned label arrays. Unsupported primary
 constraints, if any, are retained and marked not checkable.
+Under validator v2, not checkable is the storage representation of the
+three-valued `unknown` outcome.
 When this directory exists, `06_graph.py` uses it automatically unless
 `--use-unlabeled-interim` is passed.
 

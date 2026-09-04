@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only audit of stored factor labels against corrected reconstruction.
-
-This command never writes Parquet or graph artifacts and never invokes training.
-It is intended to quantify the legacy-label drift that the corrected evaluation
-deliberately tolerates for the current experiment suite.
-"""
+"""Read-only equality audit of validator-v2 labels and shared reconstruction."""
 
 from __future__ import annotations
 
@@ -23,7 +18,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from modules.evaluation_artifacts import atomic_write_json, repository_relative_path
+from modules.evaluation_artifacts import atomic_write_json, repository_relative_path, sha256_file
+from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION
 
 
 def _load_eval_module():
@@ -70,6 +66,9 @@ def _counter() -> dict[str, int]:
 
 def run_audit(args: argparse.Namespace) -> dict[str, object]:
     labeled_dir = Path(args.labeled_dir)
+    label_manifest = json.loads((labeled_dir / "label_manifest.json").read_text(encoding="utf-8"))
+    if label_manifest.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
+        raise ValueError("Label audit requires validator semantics v2")
     support = EVAL._maybe_prepare_global_support(
         args.dataset,
         args.min_occurrence,
@@ -80,11 +79,20 @@ def run_audit(args: argparse.Namespace) -> dict[str, object]:
     )
     if support is None:
         raise RuntimeError("Unable to construct corrected symbolic evaluator.")
+    if support.evaluator.hierarchy_identity != label_manifest.get("hierarchy"):
+        raise ValueError("Label audit hierarchy differs from the shared evaluator hierarchy")
 
     report: dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+        "hierarchy": label_manifest.get("hierarchy"),
         "mode": "read_only",
         "labeled_directory": repository_relative_path(labeled_dir),
+        "label_manifest": {
+            "path": repository_relative_path(labeled_dir / "label_manifest.json"),
+            "sha256": sha256_file(labeled_dir / "label_manifest.json"),
+        },
+        "mismatch_count": 0,
         "splits": {},
     }
     for split in args.splits:
@@ -121,6 +129,12 @@ def run_audit(args: argparse.Namespace) -> dict[str, object]:
             "overall": overall,
             "by_constraint_family": dict(sorted(by_family.items())),
         }
+        split_mismatches = overall["length_mismatches"] + sum(
+            overall[f"{name}_drift"] for name, _ in FIELDS
+        )
+        report["mismatch_count"] = int(report["mismatch_count"]) + split_mismatches
+        if split_mismatches:
+            raise AssertionError(f"Stored labels drift from shared validator reconstruction in {split}")
     return report
 
 

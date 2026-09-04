@@ -237,7 +237,7 @@ def _evaluate(run: StudyRun, run_directory: Path) -> None:
                 "--proposal-run-directory",
                 str(A1_RUN),
                 "--predictions",
-                str(run_directory / "reranker_predictions.json"),
+                str(evaluation_directory / "predictions.parquet"),
                 "--output",
                 str(evaluation_directory / "candidate_membership_audit.json"),
                 "--batch-size",

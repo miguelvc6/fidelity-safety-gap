@@ -73,10 +73,18 @@ def compute_p_local(row: Any, *, cast_int: bool = True) -> set[Any]:
 
 
 def _other_entity_id(row: Any, *, cast_int: bool) -> Any:
+    subject = coerce_value(getattr(row, "subject", None), cast_int=cast_int)
+    obj = coerce_value(getattr(row, "object", None), cast_int=cast_int)
     other_subject = coerce_value(getattr(row, "other_subject", None), cast_int=cast_int)
+    other_object = coerce_value(getattr(row, "other_object", None), cast_int=cast_int)
+    if other_subject == subject and other_object not in EMPTY_VALUES:
+        return other_object
+    if other_object == obj and other_subject not in EMPTY_VALUES:
+        return other_subject
+    # Keep a conservative fallback for older row fixtures that provide only
+    # one side of the auxiliary triple.
     if other_subject not in EMPTY_VALUES:
         return other_subject
-    other_object = coerce_value(getattr(row, "other_object", None), cast_int=cast_int)
     if other_object not in EMPTY_VALUES:
         return other_object
     return 0
@@ -145,6 +153,21 @@ def build_facts_state(
             p_local=local_predicates,
             cast_int=cast_int,
         )
+
+    other_subject = coerce_value(getattr(row, "other_subject", None), cast_int=cast_int)
+    other_predicate = coerce_value(getattr(row, "other_predicate", None), cast_int=cast_int)
+    other_object = coerce_value(getattr(row, "other_object", None), cast_int=cast_int)
+    if other_subject not in EMPTY_VALUES:
+        facts_by_entity.setdefault(other_subject, {})
+        predicates_present.setdefault(other_subject, set())
+    if (
+        other_subject not in EMPTY_VALUES
+        and other_predicate not in EMPTY_VALUES
+        and other_object not in EMPTY_VALUES
+    ):
+        local_predicates.add(other_predicate)
+        facts_by_entity[other_subject].setdefault(other_predicate, set()).add(other_object)
+        predicates_present[other_subject].add(other_predicate)
 
     focus_predicate = coerce_value(getattr(row, "predicate", None), cast_int=cast_int)
     focus_object = coerce_value(getattr(row, "object", None), cast_int=cast_int)
@@ -236,6 +259,7 @@ def apply_evidence_edits(
     """
 
     facts, present = clone_fact_maps(pre_state.facts_by_entity, pre_state.predicates_present)
+    local_predicates = set(p_local)
     missing_edits: set[tuple[Any, Any]] = set()
     resolved = {
         "del": resolve_triple(delete, resolver=resolver),
@@ -246,10 +270,17 @@ def apply_evidence_edits(
         if triple is None:
             return
         subject, predicate, obj = triple
-        if subject not in facts or predicate not in p_local:
+        if subject not in facts:
             missing_edits.add((subject, predicate))
             return
-        if not pre_state.assume_complete and predicate not in pre_state.predicates_present.get(subject, set()):
+        if kind == "del" and predicate not in local_predicates:
+            missing_edits.add((subject, predicate))
+            return
+        if (
+            kind == "del"
+            and not pre_state.assume_complete
+            and predicate not in pre_state.predicates_present.get(subject, set())
+        ):
             missing_edits.add((subject, predicate))
             return
         entity_facts = facts[subject]
@@ -258,6 +289,7 @@ def apply_evidence_edits(
         else:
             entity_facts.setdefault(predicate, set()).add(obj)
             present.setdefault(subject, set()).add(predicate)
+            local_predicates.add(predicate)
 
     _apply("del", resolved["del"])
     _apply("add", resolved["add"])

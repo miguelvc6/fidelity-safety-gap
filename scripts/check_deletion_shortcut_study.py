@@ -212,7 +212,7 @@ def _check_evaluation(system: str, run: Path) -> dict[str, Any]:
             raise ValueError(f"{system}: direct/replay mismatch in {key}")
     manifest = _load(manifest_path)
     if manifest.get("schema_version") != EVALUATION_SCHEMA_VERSION:
-        raise ValueError(f"{system}: prediction manifest is not schema v2")
+        raise ValueError(f"{system}: prediction manifest is not schema v3")
     frame = pd.read_parquet(predictions_path)
     if int(manifest.get("row_count", -1)) != len(frame):
         raise ValueError(f"{system}: prediction row-count mismatch")

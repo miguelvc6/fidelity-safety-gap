@@ -10,6 +10,13 @@ Implementation details, code-level boundaries, and run status belong in the
 mapping is maintained in the
 [models and evaluation matrix](../docs-technical/00_models_and_evaluation_matrix.md).
 
+Sections 9--11 retain the pre-validator-rewrite empirical pattern only as
+historical hypothesis context. Their numbers and conclusions must not supply
+the manuscript. Current evaluation-population decisions are in
+[Validator-v2 evaluation populations](10_validator_v2_evaluation_population.md),
+and new empirical claims are added only after the regenerated suite passes its
+acceptance gate.
+
 ## 1) Research Idea, Main Thesis, Scientific Contribution
 
 ### Core idea
@@ -481,7 +488,7 @@ over-editing, but it does not by itself measure semantic usefulness.
 
 ### Deferred non-vacuity metric
 
-The current results reveal that evidence preservation needs an explicit metric.
+The prior results revealed that evidence preservation needs an explicit metric.
 Future reporting should distinguish repairs that improve constraint state from
 edits that improve metrics by deleting the focus evidence.
 
@@ -523,7 +530,7 @@ fidelity-safety gap, not as a single leaderboard.
 
 ---
 
-## 10) H2 Diagnostics: What the Factors Actually Do
+## 10) Prior H2 Diagnostics
 
 ### Factor semantics are learned
 
@@ -549,7 +556,7 @@ repair behavior rather than secondary no-regression.
 
 ---
 
-## 11) Revised Research Questions
+## 11) Pre-v2 Research Expectations
 
 ### RQ1: Do executable factors improve historical repair modeling?
 

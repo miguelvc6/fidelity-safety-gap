@@ -16,6 +16,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 from pathlib import Path
@@ -54,14 +55,25 @@ BASELINE_RUNS = {
 GRAPH_METADATA = (
     "data/processed/full_strat1m_minocc100/target_vocabs.json",
     "data/processed/full_strat1m_minocc100/train_graph-node_id.pkl.manifest.json",
+    "data/processed/full_strat1m_minocc100/train_graph-node_id.pkl.build-contract.json",
     "data/processed/full_strat1m_minocc100/val_graph-node_id.pkl.manifest.json",
+    "data/processed/full_strat1m_minocc100/val_graph-node_id.pkl.build-contract.json",
     "data/processed/full_strat1m_minocc100/test_graph-node_id.pkl.manifest.json",
+    "data/processed/full_strat1m_minocc100/test_graph-node_id.pkl.build-contract.json",
     "data/processed/full_strat1m_minocc100/"
     "train_graph_repr-eswc_passive-node_id.pkl.manifest.json",
     "data/processed/full_strat1m_minocc100/"
+    "train_graph_repr-eswc_passive-node_id.pkl.build-contract.json",
+    "data/processed/full_strat1m_minocc100/"
     "val_graph_repr-eswc_passive-node_id.pkl.manifest.json",
     "data/processed/full_strat1m_minocc100/"
+    "val_graph_repr-eswc_passive-node_id.pkl.build-contract.json",
+    "data/processed/full_strat1m_minocc100/"
     "test_graph_repr-eswc_passive-node_id.pkl.manifest.json",
+    "data/processed/full_strat1m_minocc100/"
+    "test_graph_repr-eswc_passive-node_id.pkl.build-contract.json",
+    "data/interim/full_strat1m_minocc100_labeled/label_manifest.json",
+    "data/static/wikidata-p279-2018-07-01.v1.json",
 )
 
 BENCHMARK_INPUTS = (
@@ -294,9 +306,10 @@ tar -xzf fidelity-safety-gap-{version}-paper-checkpoints.tar.gz -C /path/to/fide
 tar -xzf fidelity-safety-gap-{version}-paper-results.tar.gz -C /path/to/fidelity-safety-gap
 ```
 
-The benchmark archive contains both the exact rows used to reconstruct
-evaluation states and the recorded labels used to construct the training
-graphs. Do not rerun the constraint labeler for this benchmark.
+The benchmark archive contains the exact immutable sampled rows, the
+validator-v2 labels used to construct the training graphs, and the fixed
+2018-07-01 class hierarchy. Rebuilding labels is permitted only with that
+hierarchy and the matching validator version; manifests reject mixed inputs.
 
 ## Generated graph caches
 
@@ -308,7 +321,7 @@ suites with the pinned software environment:
 ```bash
 uv sync --frozen
 uv run src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-representation factorized --registry-dataset full --constraint-scope local --shard-size 200000 --use-torch-save --persistence-profile research_safe --overwrite atomic
-uv run src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-representation eswc_passive --registry-dataset full --constraint-scope local --shard-size 10000 --use-torch-save --persistence-profile research_safe --overwrite atomic
+uv run src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-representation eswc_passive --registry-dataset full --constraint-scope local --shard-size 10000 --use-torch-save --persistence-profile research_safe --overwrite atomic --use-unlabeled-interim
 ```
 
 The release documentation describes training, prediction replay, diagnostics,
@@ -366,6 +379,7 @@ def main() -> None:
                 f"{run_path}/config.json",
                 f"{run_path}/evaluations/model.json",
                 f"{run_path}/evaluations/per_constraint.csv",
+                f"{run_path}/evaluations/historical_strata.csv",
                 f"{run_path}/evaluations/predictions.manifest.json",
                 f"{run_path}/evaluations/predictions.parquet",
             )
@@ -376,6 +390,7 @@ def main() -> None:
             (
                 f"{baseline_root}/{directory}.json",
                 f"{baseline_root}/{directory}/per_constraint.csv",
+                f"{baseline_root}/{directory}/historical_strata.csv",
                 f"{baseline_root}/{directory}/predictions.manifest.json",
                 f"{baseline_root}/{directory}/predictions.parquet",
             )
@@ -387,6 +402,20 @@ def main() -> None:
             "required results are not tracked by Git:\n"
             + "\n".join(f"  - {path}" for path in missing_from_results)
         )
+
+    # Packaging is deliberately downstream of the semantic acceptance gate.
+    # This rejects stale schema-v2 or cross-hierarchy artifacts even if their
+    # filenames happen to match the release allowlist.
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/validate_regenerated_suite.py",
+            "--skip-expensive-input-checks",
+            "--require-paper",
+        ],
+        cwd=root,
+        check=True,
+    )
 
     supplement = root / "latex_paper/supplement.pdf"
     if not supplement.is_file():
@@ -443,7 +472,9 @@ def main() -> None:
         shutil.copyfile(root / "LICENSES/README.md", license_scope_output)
 
         manifest = {
-            "schema_version": 1,
+            "schema_version": 3,
+            "validator_semantics_version": 2,
+            "hierarchy_artifact": "data/static/wikidata-p279-2018-07-01.v1.json",
             "title": "The Fidelity--Safety Gap in Neural Wikidata Constraint Repair: reproduction artifacts",
             "release_version": args.release_version,
             "zenodo_doi": args.doi,
@@ -492,7 +523,7 @@ def main() -> None:
                 "other": [
                     "duplicate checkpoint.last.pth",
                     "legacy reranker_predictions.json",
-                    "pre-schema-v2 backups",
+                    "pre-schema-v3 backups",
                     "training plots and execution logs",
                     "stale and exploratory model runs",
                 ],

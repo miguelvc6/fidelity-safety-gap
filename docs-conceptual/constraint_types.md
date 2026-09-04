@@ -5,12 +5,16 @@
 
 ### `type`
 
-Constrains the **subject** that uses a property to be an instance/subclass of one or more specified classes.
+Constrains the **subject** that uses a property according to the definition's
+instance, subclass, or either selector. Class ancestry is evaluated against the
+fixed 1 July 2018 hierarchy.
 *Example:* items with `date of birth (P569)` should be `human (Q5)` or similar living-being classes.
 
 ### `valueType`
 
-Constrains the **value** of a property to be of certain classes (for item-valued properties) or datatypes (for literals).
+Constrains each represented **value** of a property with the analogous
+instance/subclass/either class relation. Literal/datatype forms that the
+benchmark cannot represent are `unknown`.
 *Example:* values of `mother (P25)` must be items of class `human (Q5)`.
 
 ---
@@ -56,7 +60,8 @@ An item should have **at most one** statement for the property (no multiple valu
 
 ### `distinct`
 
-All values of the property must be **globally unique across items** (no two items share the same value).
+No two represented subjects may share the same applicable value. This is a
+bounded local check, not a claim of global Wikidata uniqueness.
 *Example:* external IDs like `VIAF ID (P214)` must be distinct.
 
 ---

@@ -1,36 +1,42 @@
 # Evaluation Protocol
 
-The paper separates continuity of the training target from correctness of the
-symbolic evaluation. The reported factor-based models use the same recorded
-labels and factorized graphs, preserving a common historical-imitation target.
-At evaluation time, pre- and post-edit evidence states are reconstructed from
-the benchmark rows. Stored graph satisfaction tensors are therefore training
-metadata, not evaluation truth.
+The reported comparison uses one regenerated validator-v2 generation. All
+factor-derived labels, factorized graph wiring, factor-dependent checkpoints,
+predictions, and metrics share the same fixed semantics and 1 July 2018 class
+hierarchy. Stored graph tensors are training metadata; evaluation reconstructs
+symbolic states and metric events from benchmark rows.
 
 ## Comparison scope
 
-The learned comparison contains a passive-context GNN, a direct factor-based
-GNN, two candidate-selection variants, and a learned satisfaction reranker.
-The factor-based proposal systems share the same graph artifacts and backbone;
-the reranker uses proposals from the direct factor-based model. All training
-uses seed 42. Multiple-seed confirmation remains future work.
+The learned comparison contains Direct--Passive GNN, Direct--Factor GNN,
+Candidate--C, Candidate--DP, and Candidate--SR, plus four symbolic/statistical
+baselines. All training uses seed 42 and all sampled training rows. Only
+validator-dependent losses are masked for `unknown` instances. The passive
+checkpoint is reused because its input payload is unchanged; every
+factor-dependent system is retrained.
 
-Older architecture variants and an unused passive capacity control are outside
-the reported comparison. They are not needed to interpret the paper's claims.
+The rationale for full-population training and the historical-fix diagnostic
+strata is specified in
+[Validator-v2 evaluation populations](10_validator_v2_evaluation_population.md).
 
-## Symbolic-state contract
+## Symbolic evidence
 
-One evidence-state definition is used for evaluation and for labeling future
-datasets:
+One state definition is shared by labeling, training objectives, reranking,
+diagnostics, and evaluation:
 
-- evidence projections are merged when graph roles resolve to the same entity;
-- the base statement is inserted into every reconstructed pre-edit state;
-- deletion is applied before addition; and
-- deleting and adding the same statement preserves its reinsertion.
+- role projections resolving to the same entity are merged;
+- the focus and explicit auxiliary statements are represented;
+- deletion precedes addition;
+- delete-and-reinsert preserves the statement;
+- primary definitions bind to the focus subject/property; and
+- secondary definitions bind to every represented occurrence of their
+  constrained property.
 
-The recorded benchmark labels and graphs are not rebuilt. A read-only audit
-quantifies differences between their stored factor labels and recomputation
-under this contract without changing training artifacts.
+Constraint results are three-valued. Incomplete local evidence, unavailable
+historical hierarchy revisions, malformed definitions, unsupported scopes,
+and unrepresentable mandatory parameters produce `unknown`, not an assumed
+Boolean. Type traversal may use only the fixed historical hierarchy; live
+Wikidata is never a fallback.
 
 ## Metrics
 
@@ -41,16 +47,19 @@ Every aggregate reports a value, numerator, and denominator.
   checkable constraints.
 - Change in Local Satisfaction measures signed change on constraints checkable
   both before and after the edit.
-- Secondary Improvement and Regression Rates pool secondary transitions on that
+- Secondary Improvement and Regression Rates pool secondary transitions on
   common support.
-- Disruption counts complete predicted addition and deletion operations.
-- Base-deletion Rate measures whether the reconstructed base statement is lost.
+- Disruption counts complete predicted additions and deletions.
+- Base-deletion Rate measures whether the reconstructed focus statement is
+  lost.
 - Deletes-base-action Rate measures whether the predicted deletion explicitly
-  names the base statement.
-- Evidence-Preserving Primary Fix credits an eligible primary fix only when the
-  base evidence remains.
-- Vacuous Improvement records a positive common-support satisfaction change
-  accompanied by base deletion.
+  names it.
+- Evidence-Preserving Primary Fix requires both a primary fix and retained base
+  evidence.
+- Vacuous Improvement records positive common-support change accompanied by
+  base deletion.
 
-The delete-base baseline is the non-vacuity control: it deletes the base on
-every row and cannot receive evidence-preserving primary-fix credit.
+Historical fidelity is always reported on the full test split. Symbolic repair
+metrics use the definitely checkable, pre-edit violated primary population,
+with historical fix/non-fix/uncheckable status retained only as diagnostic
+strata.

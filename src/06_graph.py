@@ -32,12 +32,14 @@ os.environ["TRANSFORMERS_NO_TF"] = "1"
 
 import argparse
 import gc
+import hashlib
 import itertools
 import json
 import logging
 import pickle
 import re
 import shutil
+import subprocess
 from datetime import datetime, timezone
 from collections.abc import Iterable, Iterator
 from pathlib import Path
@@ -71,6 +73,8 @@ from modules.data_encoders import (
     dump_stream,
     iter_stream,
 )
+from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION
+from modules.class_hierarchy import ClassHierarchy, HIERARCHY_CUTOFF
 
 
 LITERAL_ID = 0
@@ -81,6 +85,29 @@ OVERWRITE_MODE_ATOMIC = "atomic"
 OVERWRITE_MODE_UNSAFE = "unsafe"
 OVERWRITE_MODE_SKIP = "skip"
 OVERWRITE_MODE_CHOICES = (OVERWRITE_MODE_ATOMIC, OVERWRITE_MODE_UNSAFE, OVERWRITE_MODE_SKIP)
+GRAPH_BUILD_CONTRACT_SCHEMA_VERSION = 1
+
+
+def _resolve_registry_id_with_encoder(raw_id: str | None, encoder: GlobalIntEncoder) -> int:
+    if not raw_id:
+        return 0
+    raw = str(raw_id).strip().strip("<>")
+    token = raw.rsplit("/", 1)[-1]
+    candidates = (
+        str(raw_id),
+        raw,
+        token,
+        f"http://www.wikidata.org/entity/{token}",
+        f"<http://www.wikidata.org/entity/{token}>",
+    )
+    for candidate in candidates:
+        try:
+            value = encoder.encode(candidate, add_new=False)
+        except Exception:
+            continue
+        if value:
+            return int(value)
+    return 0
 
 
 def _torch_load_trusted(path: Path) -> Any:
@@ -542,7 +569,6 @@ def create_graph(
 
     param_property_gid = _maybe_encode_registry_token("<http://www.wikidata.org/entity/P2306>")
     param_relation_gid = _maybe_encode_registry_token("<http://www.wikidata.org/entity/P2309>")
-    param_inverse_gid = _maybe_encode_registry_token("<http://www.wikidata.org/entity/P1696>")
     default_relation_gids = [
         gid
         for gid in (
@@ -637,7 +663,8 @@ def create_graph(
         factor_local_ids.append(factor_local_id)
         constraint_type = _constraint_family_from_registry_entry(registry_entry)
         factor_constraint_types.append(constraint_type)
-        if constraint_id == int(graph["constraint_id"]):
+        is_primary_factor = constraint_id == int(graph["constraint_id"])
+        if is_primary_factor:
             primary_factor_index = idx
 
         constrained_property = registry_entry.get("constrained_property")
@@ -672,6 +699,19 @@ def create_graph(
                     matches.append(obj_gid)
             return matches
 
+        def _type_relation_gids() -> list[int]:
+            selectors = []
+            for pred_raw, obj_raw in zip(param_predicates, param_objects):
+                if _maybe_encode_registry_token(pred_raw) == param_relation_gid:
+                    selectors.append(str(obj_raw).strip("<>").rsplit("/", 1)[-1])
+            if selectors == ["Q21503252"]:
+                return default_relation_gids[:1]
+            if selectors == ["Q21514624"]:
+                return default_relation_gids[1:2]
+            if selectors == ["Q30208840"]:
+                return list(default_relation_gids)
+            return []
+
         matched_predicate_local_ids = 0
         wiring_edges_created = 0
         matched_focus_predicate = False
@@ -680,21 +720,13 @@ def create_graph(
         if factorized_representation:
             if constrained_property:
                 constrained_gid = _resolve_registry_id(constrained_property)
-                if constrained_gid is not None:
-                    _add_observed(constrained_gid)
 
             if constraint_type == "conflictWith":
-                for obj_raw in param_objects:
-                    if _is_property_token(obj_raw):
-                        obj_gid = _resolve_registry_id(obj_raw)
-                        if obj_gid is not None:
-                            _add_observed(obj_gid)
-                other_predicate_gid = int(graph.get("other_predicate") or 0)
-                if other_predicate_gid:
-                    _add_observed(other_predicate_gid)
+                for obj_gid in _collect_param_object_gids(param_property_gid):
+                    _add_observed(obj_gid)
             elif constraint_type in {"inverse", "symmetric"}:
-                inverse_gids = _collect_param_object_gids(param_inverse_gid)
-                if not inverse_gids and constrained_gid is not None:
+                inverse_gids = _collect_param_object_gids(param_property_gid)
+                if constraint_type == "symmetric" and not inverse_gids and constrained_gid is not None:
                     inverse_gids = [constrained_gid]
                 for obj_gid in inverse_gids:
                     _add_observed(obj_gid)
@@ -705,38 +737,55 @@ def create_graph(
                 for obj_gid in _collect_param_object_gids(param_property_gid):
                     _add_observed(obj_gid)
             elif constraint_type == "type":
-                relation_gids = _collect_param_object_gids(param_relation_gid)
-                if not relation_gids:
-                    relation_gids = list(default_relation_gids)
+                relation_gids = _type_relation_gids()
                 for obj_gid in relation_gids:
                     _add_observed(obj_gid)
             elif constraint_type == "valueType":
-                relation_gids = _collect_param_object_gids(param_relation_gid)
-                if not relation_gids:
-                    relation_gids = list(default_relation_gids)
+                relation_gids = _type_relation_gids()
                 for obj_gid in relation_gids:
                     _add_observed(obj_gid)
 
+            all_constrained_triples = (
+                pred_global_to_local_triples.get(constrained_gid, [])
+                if constrained_gid is not None
+                else []
+            )
+            constrained_triples = all_constrained_triples
+            if is_primary_factor:
+                focus_subject_id = focus_local_nodes.get("subject")
+                if constraint_type == "distinct":
+                    focus_values = {
+                        object_id
+                        for subject_id, _predicate_id, object_id in constrained_triples
+                        if subject_id == focus_subject_id
+                    }
+                    constrained_triples = [
+                        triple
+                        for triple in constrained_triples
+                        if triple[0] == focus_subject_id or triple[2] in focus_values
+                    ]
+                else:
+                    constrained_triples = [
+                        triple for triple in constrained_triples if triple[0] == focus_subject_id
+                    ]
+
             subject_scope_ids: set[int] | None
-            if constraint_type in {"single", "conflictWith", "itemRequiresStatement"}:
+            if is_primary_factor and constraint_type in {"conflictWith", "itemRequiresStatement", "type"}:
                 subject_id = focus_local_nodes.get("subject")
                 subject_scope_ids = {subject_id} if subject_id is not None else set()
-            elif constraint_type in {"valueRequiresStatement", "valueType"}:
-                object_id = focus_local_nodes.get("object")
-                if object_id is not None and not _is_literal_node(graph, "object"):
-                    subject_scope_ids = {object_id}
-                else:
-                    subject_scope_ids = set()
-            elif constraint_type == "distinct":
-                subject_scope_ids = set()
-                focus_subject_id = focus_local_nodes.get("subject")
-                if focus_subject_id is not None:
-                    subject_scope_ids.add(focus_subject_id)
-                other_subject_gid = int(graph.get("other_subject") or 0)
-                if other_subject_gid:
-                    other_subject_id = global_to_local_id_encoder.global_to_local.get(other_subject_gid)
-                    if other_subject_id is not None:
-                        subject_scope_ids.add(other_subject_id)
+            elif is_primary_factor and constraint_type in {"valueRequiresStatement", "valueType", "inverse", "symmetric"}:
+                # Primary value-anchored definitions apply to every represented
+                # occurrence of the focus subject/property.  Restricting this
+                # to the deleted focus object made replacement and multi-value
+                # rows disagree with the shared symbolic evaluator.
+                subject_scope_ids = {
+                    object_id
+                    for _subject_id, _predicate_id, object_id in constrained_triples
+                }
+            elif not is_primary_factor and constraint_type in {"conflictWith", "itemRequiresStatement", "type"}:
+                subject_scope_ids = {subject_id for subject_id, _predicate_id, _object_id in constrained_triples}
+            elif not is_primary_factor and constraint_type in {"valueRequiresStatement", "valueType", "inverse", "symmetric"}:
+                subject_scope_ids = {object_id for _subject_id, _predicate_id, object_id in constrained_triples}
             else:
                 subject_scope_ids = None
 
@@ -752,6 +801,21 @@ def create_graph(
 
             scope_pred_local_ids: list[int] = []
             scope_pred_local_ids_seen: set[int] = set()
+
+            # Every factor is wired to the predicate occurrence(s) that make
+            # its constrained property applicable. Family-specific evidence
+            # below uses subject anchors (conflict/requires/type) or value
+            # anchors (inverse/value-requires/value-type) independently.
+            for _subject_id, predicate_id, _object_id in constrained_triples:
+                if predicate_id in scope_pred_local_ids_seen:
+                    continue
+                scope_pred_local_ids_seen.add(predicate_id)
+                scope_pred_local_ids.append(predicate_id)
+            if constrained_gid is not None and constrained_triples:
+                scope_predicate_counts[constrained_gid] = len(
+                    {predicate_id for _subject_id, predicate_id, _object_id in constrained_triples}
+                )
+
             for predicate_gid in observed_predicates:
                 local_pred_ids = _collect_pred_local_ids(predicate_gid, subject_scope_ids)
                 if local_pred_ids:
@@ -773,8 +837,7 @@ def create_graph(
                     matched_focus_predicate = True
 
             if constrained_gid is not None:
-                local_triples = pred_global_to_local_triples.get(constrained_gid, [])
-                for subject_id, predicate_id, object_id in local_triples:
+                for subject_id, predicate_id, object_id in constrained_triples:
                     edges.append((factor_local_id, subject_id))
                     edge_types.append(EDGE_FACTOR_TO_LOCAL_SUBJECT)
                     edges.append((subject_id, factor_local_id))
@@ -1138,6 +1201,76 @@ def _manifest_path_for_split(output_path: Path) -> Path:
     return output_path.with_suffix(output_path.suffix + ".manifest.json")
 
 
+def _build_contract_path_for_split(output_path: Path) -> Path:
+    return output_path.with_suffix(output_path.suffix + ".build-contract.json")
+
+
+def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    temporary_path = path.with_name(path.name + ".tmp")
+    temporary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary_path.replace(path)
+
+
+def _require_matching_build_contract(output_path: Path, expected: dict[str, Any]) -> None:
+    contract_path = _build_contract_path_for_split(output_path)
+    if not contract_path.exists():
+        raise RuntimeError(
+            f"Cannot reuse graph artifacts without a build contract: {contract_path}. "
+            "Regenerate without --resume-partial-shards/--overwrite skip."
+        )
+    actual = json.loads(contract_path.read_text(encoding="utf-8"))
+    if actual != expected:
+        raise RuntimeError(
+            f"Graph build contract mismatch for {output_path}; refusing to mix shards from "
+            "different inputs, semantics, code, or build options."
+        )
+
+
+def _split_build_contract(
+    *,
+    split: str,
+    parquet_path: Path,
+    dataset_variant: str,
+    encoding: str,
+    constraint_scope: str,
+    constraint_representation: str,
+    store_node_names: bool,
+    persistence_profile: str,
+    shard_size: int,
+    use_torch_save: bool,
+    embedding_dtype: np.dtype | None,
+    max_instances: int,
+    debug_factor_wiring: bool,
+    validator_provenance: dict[str, Any] | None,
+) -> dict[str, Any]:
+    return {
+        "schema_version": GRAPH_BUILD_CONTRACT_SCHEMA_VERSION,
+        "split": split,
+        "dataset_variant": dataset_variant,
+        "source_parquet": {
+            "path": str(parquet_path.resolve()),
+            "size_bytes": parquet_path.stat().st_size,
+            "sha256": _sha256_file(parquet_path),
+        },
+        "encoding": encoding,
+        "constraint_scope": constraint_scope,
+        "constraint_representation": constraint_representation,
+        "store_node_names": bool(store_node_names),
+        "persistence_profile": persistence_profile,
+        "shard_size": int(shard_size),
+        "use_torch_save": bool(use_torch_save),
+        "embedding_dtype": str(embedding_dtype) if embedding_dtype is not None else None,
+        "max_instances": int(max_instances),
+        "debug_factor_wiring": bool(debug_factor_wiring),
+        "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+        "validator_provenance": validator_provenance,
+        "graph_builder": {
+            "path": str(Path(__file__).resolve()),
+            "sha256": _sha256_file(Path(__file__)),
+        },
+    }
+
+
 def _load_existing_vocab_targets(vocab_path: Path, split: str) -> dict[str, list[int]] | None:
     if not vocab_path.exists():
         return None
@@ -1297,6 +1430,8 @@ def _write_split_manifest(
     dataset_variant: str,
     constraint_scope: str,
     constraint_representation: str,
+    build_contract: dict[str, Any],
+    validator_provenance: dict[str, Any] | None = None,
 ) -> None:
     manifest = {
         "split": split,
@@ -1304,6 +1439,13 @@ def _write_split_manifest(
         "encoding": encoding,
         "constraint_scope": constraint_scope,
         "constraint_representation": constraint_representation,
+        "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+        "validator_provenance": validator_provenance,
+        "build_contract": {
+            "path": str(_build_contract_path_for_split(output_path).resolve()),
+            "sha256": _sha256_file(_build_contract_path_for_split(output_path)),
+            "schema_version": build_contract["schema_version"],
+        },
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "graph_count": int(graph_count),
         "shard_count": int(shard_count),
@@ -1318,8 +1460,8 @@ def _write_split_manifest(
             {
                 "path": str(artifact.path),
                 "bytes": int(artifact.bytes_written),
-                "checksum": artifact.checksum,
-                "checksum_mode": "sha256_prefix_16mb",
+                "checksum": _sha256_file(artifact.path),
+                "checksum_mode": "sha256",
             }
             for artifact in artifact_writes
         ],
@@ -1328,6 +1470,14 @@ def _write_split_manifest(
     with manifest_path.open("w", encoding="utf-8") as fh:
         json.dump(manifest, fh, indent=2)
     logging.info("Wrote split manifest to %s", manifest_path)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def main(
@@ -1348,6 +1498,7 @@ def main(
     check_sample_size: int = 32,
     max_instances: int = 0,
     debug_factor_wiring: bool = False,
+    validator_provenance: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     """Sequentially build graphs per split and persist them to disk."""
 
@@ -1409,8 +1560,27 @@ def main(
             encoding,
             constraint_representation=constraint_representation,
         )
+        build_contract = _split_build_contract(
+            split=split,
+            parquet_path=parquet_path,
+            dataset_variant=dataset_variant,
+            encoding=encoding,
+            constraint_scope=constraint_scope,
+            constraint_representation=constraint_representation,
+            store_node_names=store_node_names,
+            persistence_profile=persistence_profile,
+            shard_size=shard_size,
+            use_torch_save=use_torch_save,
+            embedding_dtype=embedding_dtype,
+            max_instances=max_instances,
+            debug_factor_wiring=debug_factor_wiring,
+            validator_provenance=validator_provenance,
+        )
         existing_artifacts = discover_graph_artifacts(output_path)
         if overwrite_mode == OVERWRITE_MODE_SKIP and existing_artifacts:
+            _require_matching_build_contract(output_path, build_contract)
+            if not _manifest_path_for_split(output_path).exists():
+                raise RuntimeError(f"Cannot skip incomplete graph split without manifest: {output_path}")
             logging.info(
                 "Skipping %s split because artifacts already exist and overwrite mode is 'skip'.",
                 split,
@@ -1441,6 +1611,7 @@ def main(
         if resume_partial_shards and shard_size > 0:
             existing_split_shards = _discover_split_shards(output_path, use_torch_save=use_torch_save)
             if existing_split_shards:
+                _require_matching_build_contract(output_path, build_contract)
                 resume_skip_rows, start_shard = _load_resume_state(
                     existing_split_shards,
                     split_entity_targets=split_entity_targets,
@@ -1464,6 +1635,9 @@ def main(
                     resume_skip_rows,
                     start_shard,
                 )
+
+        if not existing_split_shards:
+            _write_json_atomic(_build_contract_path_for_split(output_path), build_contract)
 
         # Build graphs (the heavy lifting happens here)
         row_iter = iter_parquet_rows(
@@ -1499,7 +1673,7 @@ def main(
         artifact_writes: list[ArtifactWriteResult] = []
         atomic_write = overwrite_mode == OVERWRITE_MODE_ATOMIC
         if shard_size > 0:
-            total_objects, shard_count, artifact_writes = dump_in_shards(
+            total_objects, shard_count, new_artifact_writes = dump_in_shards(
                 generator,
                 output_path,
                 shard_size=shard_size,
@@ -1509,6 +1683,10 @@ def main(
             )
             shard_count += existing_shard_count
             total_objects += resume_skip_rows
+            artifact_writes = [
+                ArtifactWriteResult(path=path, bytes_written=path.stat().st_size, checksum="")
+                for path in existing_split_shards[:existing_shard_count]
+            ] + new_artifact_writes
         else:
             total_objects, stream_artifact = dump_stream(
                 generator,
@@ -1539,6 +1717,8 @@ def main(
             dataset_variant=dataset_variant,
             constraint_scope=constraint_scope,
             constraint_representation=constraint_representation,
+            build_contract=build_contract,
+            validator_provenance=validator_provenance,
         )
 
         del generator
@@ -1729,6 +1909,12 @@ def parse_args():
         help="Path to the precomputed Wikidata cache parquet file.",
     )
     parser.add_argument(
+        "--hierarchy",
+        type=Path,
+        default=Path("data/static/wikidata-p279-2018-07-01.v1.json"),
+        help="Fixed hierarchy artifact whose identity is written into graph manifests.",
+    )
+    parser.add_argument(
         "--debug_factor_wiring",
         "--debug-factor-wiring",
         action="store_true",
@@ -1844,6 +2030,36 @@ if __name__ == "__main__":
     encoder = GlobalIntEncoder()
     encoder.load(base_interim_path / "globalintencoder.txt")
     encoder.freeze()
+    if not args.hierarchy.exists():
+        raise FileNotFoundError(
+            f"Graph provenance requires validator-v2 hierarchy artifact {args.hierarchy}"
+        )
+    hierarchy = ClassHierarchy.from_artifact(
+        args.hierarchy,
+        resolve_id=lambda raw: _resolve_registry_id_with_encoder(raw, encoder),
+        expected_cutoff=HIERARCHY_CUTOFF,
+    )
+    validator_provenance: dict[str, Any] = {
+        "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+        "hierarchy": hierarchy.identity.__dict__ if hierarchy.identity is not None else None,
+        "code_version": subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1], text=True
+        ).strip(),
+    }
+    label_manifest_path = labeled_interim_path / "label_manifest.json"
+    if use_labeled_interim:
+        if not label_manifest_path.exists():
+            raise FileNotFoundError(f"Labeled graph input lacks provenance manifest: {label_manifest_path}")
+        label_manifest = json.loads(label_manifest_path.read_text(encoding="utf-8"))
+        if label_manifest.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
+            raise ValueError("Labeled graph input uses incompatible validator semantics")
+        label_hierarchy = label_manifest.get("hierarchy") or {}
+        if label_hierarchy.get("content_sha256") != hierarchy.identity.content_sha256:
+            raise ValueError("Labeled graph input and graph builder use different hierarchies")
+        validator_provenance["labels"] = {
+            "path": str(label_manifest_path.resolve()),
+            "sha256": _sha256_file(label_manifest_path),
+        }
 
     registry_candidates = []
     if args.registry_dataset:
@@ -1859,6 +2075,17 @@ if __name__ == "__main__":
             break
     if registry_path is None:
         raise FileNotFoundError(f"No constraint registry found for candidates: {', '.join(dict.fromkeys(registry_candidates))}")
+    validator_provenance["registry"] = {
+        "path": str(registry_path.resolve()),
+        "size_bytes": registry_path.stat().st_size,
+        "sha256": _sha256_file(registry_path),
+    }
+    encoder_path = base_interim_path / "globalintencoder.txt"
+    validator_provenance["encoder"] = {
+        "path": str(encoder_path.resolve()),
+        "size_bytes": encoder_path.stat().st_size,
+        "sha256": _sha256_file(encoder_path),
+    }
     registry_df = pd.read_parquet(registry_path)
     if "registry_json" not in registry_df.columns:
         raise KeyError(f"Missing registry_json column in {registry_path}")
@@ -1896,6 +2123,7 @@ if __name__ == "__main__":
         embedding_dtype=text_embedding_dtype,
         max_instances=args.max_instances,
         debug_factor_wiring=args.debug_factor_wiring,
+        validator_provenance=validator_provenance,
     )
 
     if args.show_graph:

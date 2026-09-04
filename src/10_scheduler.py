@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Any, Iterable, List, Optional
 
 from modules.model_store import sanitize_fragment
+from modules.class_hierarchy import load_hierarchy_artifact
+from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION
+from modules.data_encoders import graph_dataset_filename
+from modules.semantics_provenance import DEFAULT_HIERARCHY_PATH, validate_graph_semantics
 
 LOG_DIR = Path("logs")
 RAW_LOG_DIR = LOG_DIR / "runs"
@@ -26,12 +30,73 @@ PAPER_RUN_DIRECTORIES = (
     "g0_globalfix_reference_v2__full_strat1m_minocc100__node_id",
 )
 PAPER_RETAINED_CHECKPOINT = (
-    "a1_factorized_imitation_compact_grouped__full_strat1m_minocc100__node_id"
+    "b0_eswc_reproduction__full_strat1m_minocc100__node_id"
 )
 
 
 class ExperimentError(Exception):
     """Raised when an experiment cannot be prepared or executed."""
+
+
+def _paper_graph_paths(config: dict[str, Any]) -> list[Path]:
+    model = config["model_config"]
+    dataset_variant = str(model["dataset_variant"])
+    representation = str(model.get("constraint_representation", "factorized"))
+    encoding = str(model["encoding"])
+    root = Path("data/processed") / dataset_variant
+    return [
+        root / graph_dataset_filename(split, encoding, constraint_representation=representation)
+        for split in ("train", "val", "test")
+    ]
+
+
+def _validate_checkpoint_semantics(
+    checkpoint_path: Path,
+    *,
+    allow_archived_passive: bool,
+    expected_config: dict[str, Any] | None = None,
+) -> None:
+    import torch
+
+    if allow_archived_passive:
+        archive_manifest = Path("deprecated/pre-validator-rewrite-2026-09-04/ARCHIVE_MANIFEST.json")
+        manifest = json.loads(archive_manifest.read_text(encoding="utf-8"))
+        retained = manifest["retained_active_checkpoint"]
+        import hashlib
+
+        digest = hashlib.sha256()
+        with checkpoint_path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != retained["sha256"]:
+            raise ExperimentError("Direct--Passive checkpoint differs from the archived retained checkpoint")
+        payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False, mmap=True)
+        if str(payload.get("model_name", "")).upper() != "GIN":
+            raise ExperimentError("Retained Direct--Passive checkpoint architecture is not GIN")
+        if expected_config is not None:
+            stored = payload.get("model_cfg") or {}
+            expected = expected_config.get("model_config") or {}
+            architecture_keys = (
+                "model", "constraint_representation", "encoding", "num_layers",
+                "hidden_channels", "head_hidden", "num_embedding_size",
+                "use_node_embeddings", "use_edge_attributes",
+            )
+            mismatches = [key for key in architecture_keys if stored.get(key) != expected.get(key)]
+            if mismatches:
+                raise ExperimentError(
+                    "Retained Direct--Passive architecture differs from its config: "
+                    + ", ".join(mismatches)
+                )
+        return
+
+    payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False, mmap=True)
+    provenance = payload.get("training_provenance") or {}
+    if int(provenance.get("validator_semantics_version", -1)) != VALIDATOR_SEMANTICS_VERSION:
+        raise ExperimentError(f"Checkpoint has incompatible validator semantics: {checkpoint_path}")
+    _hierarchy_payload, hierarchy = load_hierarchy_artifact(DEFAULT_HIERARCHY_PATH)
+    checkpoint_hierarchy = provenance.get("hierarchy") or {}
+    if checkpoint_hierarchy.get("content_sha256") != hierarchy.content_sha256:
+        raise ExperimentError(f"Checkpoint has incompatible hierarchy: {checkpoint_path}")
 
 
 def configure_logging(verbose: bool = False) -> None:
@@ -139,6 +204,147 @@ def run_evaluation(
         "log_file": str(eval_log_path),
         "return_code": return_code,
     }
+
+
+def run_paper_diagnostic(
+    name: str,
+    command: list[str],
+    logger: logging.Logger,
+) -> int:
+    """Run one mandatory paper sidecar with a durable scheduler record."""
+    run_name = datetime.now(UTC).strftime(f"%Y%m%dT%H%M%SZ_{name}")
+    log_path = RAW_LOG_DIR / f"{run_name}.log"
+    logger.info("Launching paper diagnostic %s", name)
+    return_code = run_command(command, log_path)
+    write_history(
+        {
+            "model_dir": "models/paper_diagnostics",
+            "step": name,
+            "command": command,
+            "log_file": str(log_path),
+            "status": "completed" if return_code == 0 else "failed",
+            "return_code": return_code,
+            "timestamp": datetime.now(UTC).isoformat() + "Z",
+        }
+    )
+    return return_code
+
+
+def run_paper_diagnostics(logger: logging.Logger) -> int:
+    """Regenerate every sidecar required before paper values may be used."""
+    a1 = MODELS_ROOT / PAPER_RUN_DIRECTORIES[1]
+    m1c = MODELS_ROOT / PAPER_RUN_DIRECTORIES[2]
+    m1d = MODELS_ROOT / PAPER_RUN_DIRECTORIES[3]
+    g0 = MODELS_ROOT / PAPER_RUN_DIRECTORIES[4]
+    for label, run_dir, selection_flags in (
+        ("a1", a1, []),
+        ("m1c", m1c, ["--use-chooser"]),
+        ("m1d", m1d, []),
+    ):
+        commands = (
+            (
+                f"h2_{label}",
+                [
+                    sys.executable,
+                    "src/09_eval.py",
+                    "--run-directory",
+                    str(run_dir),
+                    "--strict-global-metrics",
+                    "--h2-eval",
+                    "--h2-batch-size",
+                    "256",
+                    *selection_flags,
+                ],
+            ),
+            (
+                f"oracle_{label}",
+                [
+                    sys.executable,
+                    "scripts/analyze_candidate_oracle.py",
+                    "--run-directory",
+                    str(run_dir),
+                    "--strict-global-metrics",
+                    "--batch-size",
+                    "256",
+                ],
+            ),
+        )
+        for name, command in commands:
+            if run_paper_diagnostic(name, command, logger) != 0:
+                return 1
+
+    membership_output = g0 / "evaluations" / "candidate_membership_audit.json"
+    diagnostics = (
+        (
+            "candidate_membership_g0",
+            [
+                sys.executable,
+                "scripts/audit_prediction_candidate_membership.py",
+                "--run-directory",
+                str(g0),
+                "--proposal-run-directory",
+                str(a1),
+                "--predictions",
+                str(g0 / "evaluations" / "predictions.parquet"),
+                "--output",
+                str(membership_output),
+                "--batch-size",
+                "256",
+            ],
+        ),
+        (
+            "deletion_degeneracy_g0",
+            [
+                sys.executable,
+                "scripts/analyze_deletion_degeneracy.py",
+                "--g0-run-directory",
+                str(g0),
+                "--predictions",
+                str(g0 / "evaluations" / "predictions.parquet"),
+                "--strict-global-metrics",
+            ],
+        ),
+        (
+            "label_semantics_audit",
+            [
+                sys.executable,
+                "scripts/audit_label_semantics.py",
+                "--output",
+                "models/paper_diagnostics/label_semantics_audit.json",
+            ],
+        ),
+        (
+            "factor_semantics_summary",
+            [
+                sys.executable,
+                "scripts/summarize_factor_semantics.py",
+                "--run-directory",
+                str(a1),
+                "--run-directory",
+                str(m1c),
+                "--run-directory",
+                str(m1d),
+                "--output-csv",
+                "models/paper_diagnostics/factor_semantics_summary.csv",
+            ],
+        ),
+        (
+            "benchmark_provenance",
+            [sys.executable, "scripts/regenerate_benchmark_diagnostics.py"],
+        ),
+        (
+            "paper_readiness",
+            [sys.executable, "scripts/check_corrected_paper_readiness.py"],
+        ),
+        (
+            "suite_acceptance",
+            [sys.executable, "scripts/validate_regenerated_suite.py"],
+        ),
+    )
+    for name, command in diagnostics:
+        if run_paper_diagnostic(name, command, logger) != 0:
+            return 1
+    return 0
 
 
 def ensure_reranker_predictions(
@@ -285,9 +491,22 @@ def main() -> int:
         retained_checkpoint = MODELS_ROOT / PAPER_RETAINED_CHECKPOINT / CHECKPOINT_FILENAME
         if not retained_checkpoint.exists():
             logger.error(
-                "Paper suite requires the retained Direct-Factor checkpoint at %s",
+                "Paper suite requires the retained Direct--Passive checkpoint at %s",
                 retained_checkpoint,
             )
+            return 2
+        try:
+            for model_dir in model_dirs:
+                cfg = load_config(model_dir / CONFIG_FILENAME)
+                validate_graph_semantics(_paper_graph_paths(cfg))
+            retained_cfg = load_config(MODELS_ROOT / PAPER_RETAINED_CHECKPOINT / CONFIG_FILENAME)
+            _validate_checkpoint_semantics(
+                retained_checkpoint,
+                allow_archived_passive=True,
+                expected_config=retained_cfg,
+            )
+        except Exception as exc:
+            logger.error("Paper-suite semantics gate failed: %s", exc)
             return 2
     planned: list[str] = []
     for model_dir in model_dirs:
@@ -311,6 +530,17 @@ def main() -> int:
         logger.info("[%s/%s] Processing %s", index, len(model_dirs), model_dir.name)
 
         if checkpoint_path.exists():
+            try:
+                _validate_checkpoint_semantics(
+                    checkpoint_path,
+                    allow_archived_passive=(
+                        args.paper_suite and model_dir.name == PAPER_RETAINED_CHECKPOINT
+                    ),
+                    expected_config=load_config(config_path),
+                )
+            except Exception as exc:
+                logger.error("Unsafe checkpoint restart rejected for %s: %s", model_dir.name, exc)
+                return 2
             logger.info("Checkpoint already exists at %s; skipping", checkpoint_path)
             record = {
                 "model_dir": str(model_dir),
@@ -572,6 +802,36 @@ def main() -> int:
 
         write_history(record)
 
+    if args.paper_suite:
+        baseline_name = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ_paper_baselines")
+        baseline_log = RAW_LOG_DIR / f"{baseline_name}.log"
+        baseline_command = [
+            sys.executable,
+            "src/09_eval.py",
+            "--run-baselines",
+            "--dataset",
+            "full_strat1m",
+            "--min-occurrence",
+            "100",
+            "--strict-global-metrics",
+            "--per-constraint-csv",
+        ]
+        baseline_code = run_command(baseline_command, baseline_log)
+        write_history(
+            {
+                "model_dir": "models/baselines/full_strat1m/parquet",
+                "command": baseline_command,
+                "status": "completed" if baseline_code == 0 else "failed",
+                "return_code": baseline_code,
+                "timestamp": datetime.now(UTC).isoformat() + "Z",
+            }
+        )
+        if baseline_code != 0:
+            logger.error("Paper baseline evaluation failed")
+            return 1
+        if run_paper_diagnostics(logger) != 0:
+            logger.error("Mandatory paper diagnostics or acceptance validation failed")
+            return 1
     logger.info("Scheduler run finished")
     return 0
 

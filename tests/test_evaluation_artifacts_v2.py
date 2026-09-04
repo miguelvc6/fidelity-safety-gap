@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import json
 
 import pandas as pd
 import pytest
@@ -102,6 +103,43 @@ def test_parquet_replay_provenance_and_direct_equality(tmp_path) -> None:
     assert manifest["checkpoint"]["sha256"]
 
 
+def test_replay_rejects_schema_v2_and_cross_semantics_provenance(tmp_path) -> None:
+    (predictions_path, manifest_path, manifest), sources, _ = _write(tmp_path)
+    _config, _checkpoint, dataset, graph = sources
+
+    legacy = dict(manifest)
+    legacy["schema_version"] = 2
+    manifest_path.write_text(json.dumps(legacy), encoding="utf-8")
+    with pytest.raises(ValueError, match="schema version 3"):
+        load_and_validate_predictions(
+            predictions_path,
+            rows=_rows(),
+            dataset_path=dataset,
+            graph_paths=[graph],
+            dataset_variant="toy_minocc100",
+        )
+
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="validator semantics"):
+        load_and_validate_predictions(
+            predictions_path,
+            rows=_rows(),
+            dataset_path=dataset,
+            graph_paths=[graph],
+            dataset_variant="toy_minocc100",
+            validator_semantics_version=999,
+        )
+    with pytest.raises(ValueError, match="hierarchy identities"):
+        load_and_validate_predictions(
+            predictions_path,
+            rows=_rows(),
+            dataset_path=dataset,
+            graph_paths=[graph],
+            dataset_variant="toy_minocc100",
+            hierarchy_identity={"content_sha256": "different"},
+        )
+
+
 def test_replay_rejects_count_order_checksum_and_dataset_identity(tmp_path) -> None:
     (predictions_path, _manifest_path, _manifest), sources, _ = _write(tmp_path)
     _config, _checkpoint, dataset, graph = sources
@@ -148,7 +186,7 @@ def test_replay_rejects_count_order_checksum_and_dataset_identity(tmp_path) -> N
         )
 
 
-def test_schema_v2_backups_are_created_once(tmp_path) -> None:
+def test_pre_schema_v3_backups_are_created_once(tmp_path) -> None:
     model = tmp_path / "model.json"
     csv = tmp_path / "per_constraint.csv"
     model.write_text('{"legacy": 1}', encoding="utf-8")
@@ -156,8 +194,8 @@ def test_schema_v2_backups_are_created_once(tmp_path) -> None:
 
     model_backup = backup_schema_v1_once(model)
     csv_backup = backup_schema_v1_once(csv)
-    assert model_backup.name == "model.pre-schema-v2.json"
-    assert csv_backup.name == "per_constraint.pre-schema-v2.csv"
+    assert model_backup.name == "model.pre-schema-v3.json"
+    assert csv_backup.name == "per_constraint.pre-schema-v3.csv"
 
     model.write_text('{"schema_version": 2}', encoding="utf-8")
     csv.write_text("schema_version\n2\n", encoding="utf-8")

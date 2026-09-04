@@ -1,10 +1,50 @@
 #!/usr/bin/env python3
-"""
-Constraint checking utilities for the 05_constraint_labeler stage.
-"""
+"""Shared parser and three-valued symbolic validator (semantics version 2)."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Set, Tuple
+from enum import Enum
+from typing import Callable, Dict, Iterable, List, Mapping, Sequence, Set, Tuple
+
+
+VALIDATOR_SEMANTICS_VERSION = 2
+P2303 = "P2303"
+P2305 = "P2305"
+P2306 = "P2306"
+P2308 = "P2308"
+P2309 = "P2309"
+P4155 = "P4155"
+P4680 = "P4680"
+
+SELECTOR_BY_ITEM = {
+    "Q21503252": "instance",
+    "Q21514624": "subclass",
+    "Q30208840": "either",
+}
+# The expanded July-2018 registry uses the Q548... identifier. Q46466787
+# is the later canonical item used by the current constraint documentation.
+MAIN_VALUE_SCOPE_ITEMS = {"Q54828448", "Q46466787"}
+SUPPORTED_FAMILIES = frozenset(
+    {
+        "conflictWith",
+        "inverse",
+        "symmetric",
+        "itemRequiresStatement",
+        "valueRequiresStatement",
+        "oneOf",
+        "single",
+        "type",
+        "valueType",
+        "distinct",
+    }
+)
+
+
+class ValidationOutcome(str, Enum):
+    SATISFIED = "satisfied"
+    VIOLATED = "violated"
+    UNKNOWN = "unknown"
 
 
 def normalize_token(raw: str | None) -> str | None:
@@ -18,9 +58,11 @@ def normalize_token(raw: str | None) -> str | None:
         value = value[1:].strip()
     if value.startswith("<") and value.endswith(">"):
         value = value[1:-1].strip()
-    if value.startswith("http://www.wikidata.org/prop/direct/"):
-        value = value.replace("http://www.wikidata.org/prop/direct/", "http://www.wikidata.org/entity/")
-    if value.startswith("http://www.wikidata.org/entity/"):
+    direct = "http://www.wikidata.org/prop/direct/"
+    entity = "http://www.wikidata.org/entity/"
+    if value.startswith(direct):
+        value = entity + value[len(direct) :]
+    if value.startswith(entity):
         return value.rsplit("/", 1)[-1]
     return value
 
@@ -28,6 +70,13 @@ def normalize_token(raw: str | None) -> str | None:
 def normalize_property_id(raw: str | None) -> str | None:
     token = normalize_token(raw)
     if token and token.startswith("P") and token[1:].isdigit():
+        return token
+    return None
+
+
+def normalize_item_id(raw: str | None) -> str | None:
+    token = normalize_token(raw)
+    if token and token.startswith("Q") and token[1:].isdigit():
         return token
     return None
 
@@ -49,18 +98,20 @@ class EvidenceState:
         return entity_id in self.facts_by_entity
 
     def property_complete(self, entity_id: int, predicate_id: int) -> bool:
+        if self.edit_unknown(entity_id, predicate_id):
+            return False
         if self.assume_complete:
             return self.entity_in_scope(entity_id)
         return predicate_id in self.predicates_present.get(entity_id, set())
 
     def has_property(self, entity_id: int, predicate_id: int) -> bool:
-        return len(self.facts_by_entity.get(entity_id, {}).get(predicate_id, set())) > 0
+        return bool(self.facts_by_entity.get(entity_id, {}).get(predicate_id, set()))
 
     def values_for(self, entity_id: int, predicate_id: int) -> Set[int]:
         return self.facts_by_entity.get(entity_id, {}).get(predicate_id, set())
 
     def has_statement(self, entity_id: int, predicate_id: int, object_id: int) -> bool:
-        return object_id in self.facts_by_entity.get(entity_id, {}).get(predicate_id, set())
+        return object_id in self.values_for(entity_id, predicate_id)
 
     def edit_unknown(self, entity_id: int, predicate_id: int) -> bool:
         return (entity_id, predicate_id) in self.missing_edits
@@ -71,6 +122,8 @@ class EvidenceState:
 
 @dataclass(frozen=True)
 class ConstraintInstance:
+    """Resolved constraint definition shared by every validator consumer."""
+
     constraint_id: int
     constraint_type: str
     constraint_type_id: int
@@ -81,455 +134,391 @@ class ConstraintInstance:
     relation_predicates: List[int]
     inverse_properties: List[int]
     conflict_properties: Set[int]
+    selector: str | None = None
+    exceptions: frozenset[int] = frozenset()
+    value_restrictions: frozenset[int] = frozenset()
+    definition_valid: bool = True
+    invalid_reason: str | None = None
+    p31_predicate: int = 0
+    p279_predicate: int = 0
 
 
-def _needs_edit_guard(state: EvidenceState, entity_id: int, predicate_id: int) -> bool:
-    return state.edit_unknown(entity_id, predicate_id)
+def _invalid(instance: ConstraintInstance, reason: str) -> ConstraintInstance:
+    values = dict(instance.__dict__)
+    values["definition_valid"] = False
+    values["invalid_reason"] = reason
+    return ConstraintInstance(**values)
 
 
-def is_checkable_conflict_with(
+def parse_constraint_instance(
+    *,
+    constraint_id: int,
+    constraint_type: str,
+    constraint_type_id: int,
+    constrained_property_raw: str,
+    param_predicates_raw: Sequence[str],
+    param_objects_raw: Sequence[str],
+    resolve_id: Callable[[str | None], int],
+    p31_predicate: int = 0,
+    p279_predicate: int = 0,
+) -> ConstraintInstance:
+    """Parse one registry definition according to Wikidata parameter roles."""
+
+    base = ConstraintInstance(
+        constraint_id=constraint_id,
+        constraint_type=constraint_type,
+        constraint_type_id=constraint_type_id,
+        constrained_property=resolve_id(constrained_property_raw),
+        required_properties=set(),
+        allowed_items=set(),
+        allowed_classes=set(),
+        relation_predicates=[],
+        inverse_properties=[],
+        conflict_properties=set(),
+        p31_predicate=p31_predicate,
+        p279_predicate=p279_predicate,
+    )
+    if len(param_predicates_raw) != len(param_objects_raw):
+        return _invalid(base, "parameter predicate/object length mismatch")
+    if not base.constrained_property:
+        return _invalid(base, "missing or unrepresentable constrained property")
+
+    raw_values: dict[str, list[str]] = {}
+    for predicate_raw, object_raw in zip(param_predicates_raw, param_objects_raw):
+        predicate = normalize_property_id(predicate_raw)
+        obj = normalize_token(object_raw)
+        if predicate is None or obj is None:
+            return _invalid(base, "malformed parameter")
+        raw_values.setdefault(predicate, []).append(obj)
+
+    scopes = raw_values.get(P4680, [])
+    if scopes and any(scope not in MAIN_VALUE_SCOPE_ITEMS for scope in scopes):
+        return _invalid(base, "constraint scope is not representable by main-value triples")
+
+    def resolved_items(
+        parameter: str,
+        *,
+        property_values: bool = False,
+        unresolved_is_error: bool = True,
+    ) -> tuple[set[int], str | None]:
+        resolved: set[int] = set()
+        for raw in raw_values.get(parameter, []):
+            if property_values and normalize_property_id(raw) is None:
+                return set(), f"{parameter} requires a property value"
+            if not property_values and normalize_item_id(raw) is None:
+                return set(), f"{parameter} requires an item value"
+            value = resolve_id(raw)
+            if not value:
+                if unresolved_is_error:
+                    return set(), f"{parameter} value is outside the fixed representation"
+                continue
+            resolved.add(value)
+        return resolved, None
+
+    properties, error = resolved_items(P2306, property_values=True)
+    if error:
+        return _invalid(base, error)
+    # P2305 is optional for conflicts/requires constraints, but when it is
+    # present it changes the meaning of the definition.  Dropping an
+    # out-of-vocabulary value would silently turn a value-qualified rule into
+    # an unqualified property rule, so fail the whole definition closed.
+    values, error = resolved_items(P2305)
+    if error:
+        return _invalid(base, error)
+    classes, error = resolved_items(P2308)
+    if error:
+        return _invalid(base, error)
+    exceptions, error = resolved_items(P2303, unresolved_is_error=False)
+    if error:
+        return _invalid(base, error)
+
+    selector_values = raw_values.get(P2309, [])
+    selector: str | None = None
+    if selector_values:
+        if len(selector_values) != 1:
+            return _invalid(base, "P2309 is singular")
+        selector = SELECTOR_BY_ITEM.get(selector_values[0])
+        if selector is None:
+            return _invalid(base, "unsupported P2309 selector")
+
+    instance = ConstraintInstance(
+        constraint_id=constraint_id,
+        constraint_type=constraint_type,
+        constraint_type_id=constraint_type_id,
+        constrained_property=base.constrained_property,
+        required_properties=set(properties),
+        allowed_items=set(values),
+        allowed_classes=set(classes),
+        relation_predicates=(
+            [p31_predicate]
+            if selector == "instance" and p31_predicate
+            else [p279_predicate]
+            if selector == "subclass" and p279_predicate
+            else [value for value in (p31_predicate, p279_predicate) if value]
+            if selector == "either"
+            else []
+        ),
+        inverse_properties=list(properties),
+        conflict_properties=set(properties),
+        selector=selector,
+        exceptions=frozenset(exceptions),
+        value_restrictions=frozenset(values),
+        p31_predicate=p31_predicate,
+        p279_predicate=p279_predicate,
+    )
+
+    singular_property_families = {
+        "conflictWith",
+        "itemRequiresStatement",
+        "valueRequiresStatement",
+        "inverse",
+    }
+    if constraint_type in singular_property_families and len(raw_values.get(P2306, [])) != 1:
+        return _invalid(instance, f"{constraint_type} requires exactly one P2306 value")
+    if constraint_type in {"type", "valueType"}:
+        if not classes:
+            return _invalid(instance, f"{constraint_type} requires P2308")
+        if len(selector_values) != 1:
+            return _invalid(instance, f"{constraint_type} requires exactly one P2309 selector")
+        if not p279_predicate or (selector in {"instance", "either"} and not p31_predicate):
+            return _invalid(instance, "type selector predicates are not representable")
+    if constraint_type == "oneOf" and not values:
+        return _invalid(instance, "oneOf requires at least one P2305 value")
+    if constraint_type in {"single", "distinct"} and raw_values.get(P4155):
+        return _invalid(instance, "P4155 separators are not retained by the triple abstraction")
+    if constraint_type not in SUPPORTED_FAMILIES:
+        return _invalid(instance, "unsupported constraint family")
+    return instance
+
+
+class ClassHierarchyProtocol:
+    def reachable(self, child: int, ancestors: Set[int]) -> ValidationOutcome:  # pragma: no cover
+        raise NotImplementedError
+
+
+def _aggregate(results: Iterable[ValidationOutcome]) -> ValidationOutcome:
+    values = list(results)
+    if not values:
+        return ValidationOutcome.UNKNOWN
+    if ValidationOutcome.VIOLATED in values:
+        return ValidationOutcome.VIOLATED
+    if all(value == ValidationOutcome.SATISFIED for value in values):
+        return ValidationOutcome.SATISFIED
+    return ValidationOutcome.UNKNOWN
+
+
+def _subjects_with_property(state: EvidenceState, predicate: int) -> list[int]:
+    return sorted(entity for entity, facts in state.facts_by_entity.items() if facts.get(predicate))
+
+
+def _occurrences(state: EvidenceState, predicate: int) -> list[tuple[int, int]]:
+    return sorted(
+        (entity, value)
+        for entity, facts in state.facts_by_entity.items()
+        for value in facts.get(predicate, set())
+    )
+
+
+def _required_statement(
+    state: EvidenceState,
+    entity: int,
+    predicate: int,
+    allowed_values: frozenset[int],
+) -> ValidationOutcome:
+    if state.edit_unknown(entity, predicate) or not state.entity_in_scope(entity):
+        return ValidationOutcome.UNKNOWN
+    values = state.values_for(entity, predicate)
+    if (values & allowed_values) if allowed_values else bool(values):
+        return ValidationOutcome.SATISFIED
+    return ValidationOutcome.VIOLATED if state.property_complete(entity, predicate) else ValidationOutcome.UNKNOWN
+
+
+def _type_relation(
+    state: EvidenceState,
+    entity: int,
+    constraint: ConstraintInstance,
+    hierarchy: ClassHierarchyProtocol | None,
+) -> ValidationOutcome:
+    selector = constraint.selector
+    allowed = set(constraint.allowed_classes)
+    if selector is None or not allowed:
+        return ValidationOutcome.UNKNOWN
+
+    checks: list[ValidationOutcome] = []
+    if selector in {"subclass", "either"}:
+        if entity in allowed:
+            return ValidationOutcome.SATISFIED
+        checks.append(hierarchy.reachable(entity, allowed) if hierarchy is not None else ValidationOutcome.UNKNOWN)
+    if selector in {"instance", "either"}:
+        p31 = constraint.p31_predicate
+        if not p31 or state.edit_unknown(entity, p31) or not state.entity_in_scope(entity):
+            checks.append(ValidationOutcome.UNKNOWN)
+        else:
+            classes = state.values_for(entity, p31)
+            if not classes:
+                checks.append(
+                    ValidationOutcome.VIOLATED
+                    if state.property_complete(entity, p31)
+                    else ValidationOutcome.UNKNOWN
+                )
+            else:
+                class_checks: list[ValidationOutcome] = []
+                for cls in classes:
+                    if cls in allowed:
+                        return ValidationOutcome.SATISFIED
+                    class_checks.append(
+                        hierarchy.reachable(cls, allowed) if hierarchy is not None else ValidationOutcome.UNKNOWN
+                    )
+                if any(value == ValidationOutcome.SATISFIED for value in class_checks):
+                    return ValidationOutcome.SATISFIED
+                checks.append(
+                    ValidationOutcome.VIOLATED
+                    if class_checks and all(value == ValidationOutcome.VIOLATED for value in class_checks)
+                    else ValidationOutcome.UNKNOWN
+                )
+    if any(value == ValidationOutcome.SATISFIED for value in checks):
+        return ValidationOutcome.SATISFIED
+    if checks and all(value == ValidationOutcome.VIOLATED for value in checks):
+        return ValidationOutcome.VIOLATED
+    return ValidationOutcome.UNKNOWN
+
+
+def evaluate_constraint_outcome(
     state: EvidenceState,
     constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    subject = state.focus_subject
-    if subject == 0 or constraint.constrained_property == 0:
-        return False
-    if _needs_edit_guard(state, subject, constraint.constrained_property):
-        return False
-    if constraint.constrained_property not in p_local:
-        return False
+    p_local: Set[int] | None = None,
+    *,
+    hierarchy: ClassHierarchyProtocol | None = None,
+    primary: bool = True,
+) -> ValidationOutcome:
+    """Evaluate a definition over its correctly bound local anchors."""
 
-    conflict_props = set(constraint.conflict_properties)
-    if not conflict_props and state.other_predicate:
-        conflict_props.add(state.other_predicate)
-    if not conflict_props:
-        return False
-
-    if not state.entity_in_scope(subject):
-        return False
-
-    for prop in conflict_props:
-        if prop == 0:
-            continue
-        if prop not in p_local:
-            return False
-        if _needs_edit_guard(state, subject, prop):
-            return False
-        if not state.property_complete(subject, prop) and not state.has_property(subject, prop):
-            return False
-
-    if not state.property_complete(subject, constraint.constrained_property) and not state.has_property(
-        subject, constraint.constrained_property
-    ):
-        return False
-    return True
-
-
-def is_satisfied_conflict_with(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    subject = state.focus_subject
-    if subject == 0:
-        return True
-    has_p = state.has_property(subject, constraint.constrained_property)
-    if not has_p:
-        return True
-    conflict_props = set(constraint.conflict_properties)
-    if not conflict_props and state.other_predicate:
-        conflict_props.add(state.other_predicate)
-    has_q = False
-    for prop in conflict_props:
-        if prop == 0:
-            continue
-        if state.has_property(subject, prop):
-            has_q = True
-    return not (has_p and has_q)
-
-
-def is_checkable_inverse(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    subject = state.focus_subject
-    predicate = state.focus_predicate
-    obj = state.focus_object
-    if subject == 0 or predicate == 0:
-        return False
-    if predicate != constraint.constrained_property:
-        return False
-    if _needs_edit_guard(state, subject, constraint.constrained_property):
-        return False
-    has_trigger = state.focus_statement_present()
-    if not has_trigger:
-        return state.property_complete(subject, constraint.constrained_property)
-    if obj == 0:
-        return False
-    if not state.entity_in_scope(obj):
-        return False
-    inverse_props = constraint.inverse_properties or [constraint.constrained_property]
-    for inv_prop in inverse_props:
-        if inv_prop == 0:
-            return False
-        if inv_prop not in p_local:
-            return False
-        if _needs_edit_guard(state, obj, inv_prop):
-            return False
-        if not state.property_complete(obj, inv_prop) and not state.has_property(obj, inv_prop):
-            return False
-    return True
-
-
-def is_satisfied_inverse(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    subject = state.focus_subject
-    obj = state.focus_object
-    if not state.focus_statement_present():
-        return True
-    inverse_props = constraint.inverse_properties or [constraint.constrained_property]
-    for inv_prop in inverse_props:
-        if state.has_statement(obj, inv_prop, subject):
-            return True
-    return False
-
-
-def is_checkable_item_requires_statement(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    subject = state.focus_subject
-    if subject == 0:
-        return False
-    if not constraint.required_properties:
-        return False
-    if constraint.constrained_property == 0:
-        return False
-    if constraint.constrained_property not in p_local:
-        return False
-    if _needs_edit_guard(state, subject, constraint.constrained_property):
-        return False
-    if not state.entity_in_scope(subject):
-        return False
-    has_trigger = state.has_property(subject, constraint.constrained_property)
-    if not has_trigger:
-        return state.property_complete(subject, constraint.constrained_property)
-    for req_prop in constraint.required_properties:
-        if req_prop == 0:
-            return False
-        if req_prop not in p_local:
-            return False
-        if _needs_edit_guard(state, subject, req_prop):
-            return False
-        if not state.property_complete(subject, req_prop) and not state.has_property(subject, req_prop):
-            return False
-    return True
-
-
-def is_satisfied_item_requires_statement(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    subject = state.focus_subject
-    if not state.has_property(subject, constraint.constrained_property):
-        return True
-    for req_prop in constraint.required_properties:
-        if not state.has_property(subject, req_prop):
-            return False
-    return True
-
-
-def is_checkable_value_requires_statement(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    subject = state.focus_subject
-    obj = state.focus_object
-    if constraint.constrained_property == 0:
-        return False
-    if state.focus_predicate != constraint.constrained_property:
-        return False
-    if _needs_edit_guard(state, subject, constraint.constrained_property):
-        return False
-    has_trigger = state.focus_statement_present()
-    if not has_trigger:
-        return state.property_complete(subject, constraint.constrained_property)
-    if obj == 0:
-        return False
-    if not constraint.required_properties:
-        return False
-    if not state.entity_in_scope(obj):
-        return False
-    for req_prop in constraint.required_properties:
-        if req_prop == 0:
-            return False
-        if req_prop not in p_local:
-            return False
-        if _needs_edit_guard(state, obj, req_prop):
-            return False
-        if not state.property_complete(obj, req_prop) and not state.has_property(obj, req_prop):
-            return False
-    return True
-
-
-def is_satisfied_value_requires_statement(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    obj = state.focus_object
-    if not state.focus_statement_present():
-        return True
-    for req_prop in constraint.required_properties:
-        if not state.has_property(obj, req_prop):
-            return False
-    return True
-
-
-def is_checkable_one_of(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    if not constraint.allowed_items:
-        return False
-    if state.focus_predicate != constraint.constrained_property:
-        return False
-    if constraint.constrained_property not in p_local:
-        return False
-    if _needs_edit_guard(state, state.focus_subject, constraint.constrained_property):
-        return False
-    has_trigger = state.focus_statement_present()
-    if not has_trigger:
-        return state.property_complete(state.focus_subject, constraint.constrained_property)
-    if state.focus_object == 0:
-        return False
-    return True
-
-
-def is_satisfied_one_of(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    if not state.focus_statement_present():
-        return True
-    return state.focus_object in constraint.allowed_items
-
-
-def is_checkable_single(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    subject = state.focus_subject
+    del p_local
+    if not constraint.definition_valid or not constraint.constrained_property:
+        return ValidationOutcome.UNKNOWN
+    family = constraint.constraint_type
     prop = constraint.constrained_property
-    if subject == 0 or prop == 0:
-        return False
-    if prop not in p_local:
-        return False
-    if _needs_edit_guard(state, subject, prop):
-        return False
-    if not state.entity_in_scope(subject):
-        return False
-    if not state.property_complete(subject, prop):
-        return False
-    return True
+    if family in {"conflictWith", "itemRequiresStatement", "valueRequiresStatement", "inverse"}:
+        relevant = constraint.conflict_properties if family == "conflictWith" else constraint.required_properties
+        if family == "inverse":
+            relevant = set(constraint.inverse_properties)
+        if len(relevant) != 1:
+            return ValidationOutcome.UNKNOWN
+    subject_families = {"conflictWith", "itemRequiresStatement", "single", "type"}
+    occurrence_families = {
+        "inverse",
+        "symmetric",
+        "valueRequiresStatement",
+        "oneOf",
+        "valueType",
+        "distinct",
+    }
+    if family not in subject_families | occurrence_families:
+        return ValidationOutcome.UNKNOWN
+    if primary and state.focus_predicate != prop:
+        return ValidationOutcome.UNKNOWN
 
+    if family in subject_families:
+        anchors = [state.focus_subject] if primary else _subjects_with_property(state, prop)
+        anchors = [entity for entity in anchors if entity and entity not in constraint.exceptions]
+        if not anchors:
+            return ValidationOutcome.UNKNOWN
+        results: list[ValidationOutcome] = []
+        for entity in anchors:
+            if state.edit_unknown(entity, prop) or not state.entity_in_scope(entity):
+                results.append(ValidationOutcome.UNKNOWN)
+                continue
+            if not state.has_property(entity, prop):
+                results.append(
+                    ValidationOutcome.SATISFIED
+                    if primary and state.property_complete(entity, prop)
+                    else ValidationOutcome.UNKNOWN
+                )
+                continue
+            if family == "conflictWith":
+                conflict = next(iter(constraint.conflict_properties))
+                values = state.values_for(entity, conflict)
+                violation = bool(values & constraint.value_restrictions) if constraint.value_restrictions else bool(values)
+                if violation:
+                    results.append(ValidationOutcome.VIOLATED)
+                elif state.property_complete(entity, conflict):
+                    results.append(ValidationOutcome.SATISFIED)
+                else:
+                    results.append(ValidationOutcome.UNKNOWN)
+            elif family == "itemRequiresStatement":
+                required = next(iter(constraint.required_properties))
+                results.append(_required_statement(state, entity, required, constraint.value_restrictions))
+            elif family == "single":
+                results.append(
+                    ValidationOutcome.SATISFIED
+                    if len(state.values_for(entity, prop)) <= 1
+                    else ValidationOutcome.VIOLATED
+                )
+            else:
+                results.append(_type_relation(state, entity, constraint, hierarchy))
+        return _aggregate(results)
 
-def is_satisfied_single(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    subject = state.focus_subject
-    prop = constraint.constrained_property
-    return len(state.values_for(subject, prop)) <= 1
+    occurrences = _occurrences(state, prop)
+    if primary:
+        occurrences = [(s, o) for s, o in occurrences if s == state.focus_subject]
+        if not occurrences:
+            return (
+                ValidationOutcome.SATISFIED
+                if state.property_complete(state.focus_subject, prop)
+                else ValidationOutcome.UNKNOWN
+            )
+    occurrences = [(s, o) for s, o in occurrences if s not in constraint.exceptions]
+    if not occurrences:
+        return ValidationOutcome.UNKNOWN
 
+    results: list[ValidationOutcome] = []
+    if family == "distinct":
+        owners: dict[int, set[int]] = {}
+        for subject, value in _occurrences(state, prop):
+            if subject in constraint.exceptions:
+                continue
+            owners.setdefault(value, set()).add(subject)
+        return _aggregate(
+            ValidationOutcome.VIOLATED if len(owners.get(value, set())) > 1 else ValidationOutcome.SATISFIED
+            for _subject, value in occurrences
+        )
 
-def _type_relation_predicates(constraint: ConstraintInstance) -> List[int]:
-    return constraint.relation_predicates or []
-
-
-def is_checkable_type(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    subject = state.focus_subject
-    if subject == 0:
-        return False
-    if constraint.constrained_property == 0:
-        return False
-    if constraint.constrained_property not in p_local:
-        return False
-    if _needs_edit_guard(state, subject, constraint.constrained_property):
-        return False
-    if not constraint.allowed_classes:
-        return False
-    if not state.entity_in_scope(subject):
-        return False
-    has_trigger = state.has_property(subject, constraint.constrained_property)
-    if not has_trigger:
-        return state.property_complete(subject, constraint.constrained_property)
-    rel_preds = _type_relation_predicates(constraint)
-    if not rel_preds:
-        return False
-    for rel in rel_preds:
-        if rel not in p_local:
-            return False
-        if _needs_edit_guard(state, subject, rel):
-            return False
-        if not state.property_complete(subject, rel) and not state.has_property(subject, rel):
-            return False
-    if not any(state.has_property(subject, rel) for rel in rel_preds):
-        return False
-    return True
-
-
-def is_satisfied_type(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    subject = state.focus_subject
-    if not state.has_property(subject, constraint.constrained_property):
-        return True
-    rel_preds = _type_relation_predicates(constraint)
-    for rel in rel_preds:
-        if state.values_for(subject, rel) & constraint.allowed_classes:
-            return True
-    return False
-
-
-def is_checkable_value_type(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    obj = state.focus_object
-    if obj == 0:
-        return False
-    if constraint.constrained_property == 0:
-        return False
-    if constraint.constrained_property not in p_local:
-        return False
-    if _needs_edit_guard(state, state.focus_subject, constraint.constrained_property):
-        return False
-    if not constraint.allowed_classes:
-        return False
-    has_trigger = state.has_property(state.focus_subject, constraint.constrained_property)
-    if not has_trigger:
-        return state.property_complete(state.focus_subject, constraint.constrained_property)
-    if not state.entity_in_scope(obj):
-        return False
-    rel_preds = _type_relation_predicates(constraint)
-    if not rel_preds:
-        return False
-    for rel in rel_preds:
-        if rel not in p_local:
-            return False
-        if _needs_edit_guard(state, obj, rel):
-            return False
-        if not state.property_complete(obj, rel) and not state.has_property(obj, rel):
-            return False
-    if not any(state.has_property(obj, rel) for rel in rel_preds):
-        return False
-    return True
-
-
-def is_satisfied_value_type(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    obj = state.focus_object
-    if not state.has_property(state.focus_subject, constraint.constrained_property):
-        return True
-    rel_preds = _type_relation_predicates(constraint)
-    for rel in rel_preds:
-        if state.values_for(obj, rel) & constraint.allowed_classes:
-            return True
-    return False
-
-
-def is_checkable_distinct(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    subject = state.focus_subject
-    prop = constraint.constrained_property
-    if subject == 0 or prop == 0:
-        return False
-    if prop not in p_local:
-        return False
-    if _needs_edit_guard(state, subject, prop):
-        return False
-    has_trigger = state.focus_statement_present()
-    if not has_trigger:
-        return state.property_complete(subject, prop)
-    if state.other_subject == 0 or state.other_predicate == 0 or state.other_object == 0:
-        return False
-    if state.other_predicate != prop:
-        return False
-    if state.other_predicate not in p_local:
-        return False
-    return True
-
-
-def is_satisfied_distinct(
-    state: EvidenceState,
-    constraint: ConstraintInstance,
-    p_local: Set[int],
-) -> bool:
-    if not state.focus_statement_present():
-        return True
-    if state.other_subject == 0 or state.other_predicate == 0 or state.other_object == 0:
-        return True
-    if state.other_predicate != constraint.constrained_property:
-        return True
-    if state.other_object != state.focus_object:
-        return True
-    if state.other_subject == state.focus_subject:
-        return True
-    return False
-
-
-CHECKERS = {
-    "conflictWith": (is_checkable_conflict_with, is_satisfied_conflict_with),
-    "inverse": (is_checkable_inverse, is_satisfied_inverse),
-    "symmetric": (is_checkable_inverse, is_satisfied_inverse),
-    "itemRequiresStatement": (is_checkable_item_requires_statement, is_satisfied_item_requires_statement),
-    "valueRequiresStatement": (is_checkable_value_requires_statement, is_satisfied_value_requires_statement),
-    "oneOf": (is_checkable_one_of, is_satisfied_one_of),
-    "single": (is_checkable_single, is_satisfied_single),
-    "type": (is_checkable_type, is_satisfied_type),
-    "valueType": (is_checkable_value_type, is_satisfied_value_type),
-    "distinct": (is_checkable_distinct, is_satisfied_distinct),
-}
+    for subject, value in occurrences:
+        if state.edit_unknown(subject, prop):
+            results.append(ValidationOutcome.UNKNOWN)
+        elif family == "oneOf":
+            results.append(ValidationOutcome.SATISFIED if value in constraint.allowed_items else ValidationOutcome.VIOLATED)
+        elif family == "valueRequiresStatement":
+            required = next(iter(constraint.required_properties))
+            results.append(_required_statement(state, value, required, constraint.value_restrictions))
+        elif family in {"inverse", "symmetric"}:
+            inverse = prop if family == "symmetric" else next(iter(constraint.inverse_properties))
+            if state.has_statement(value, inverse, subject):
+                results.append(ValidationOutcome.SATISFIED)
+            elif state.property_complete(value, inverse):
+                results.append(ValidationOutcome.VIOLATED)
+            else:
+                results.append(ValidationOutcome.UNKNOWN)
+        else:
+            results.append(_type_relation(state, value, constraint, hierarchy))
+    return _aggregate(results)
 
 
 def evaluate_constraint(
     state: EvidenceState,
     constraint: ConstraintInstance,
-    p_local: Set[int],
+    p_local: Set[int] | None = None,
+    *,
+    hierarchy: ClassHierarchyProtocol | None = None,
+    primary: bool = True,
 ) -> Tuple[bool, int]:
-    """Return (checkable, satisfied) for a constraint instance."""
-    checker = CHECKERS.get(constraint.constraint_type)
-    if checker is None:
+    """Compatibility result: ``(checkable, satisfied)`` from v2 outcome."""
+
+    outcome = evaluate_constraint_outcome(state, constraint, p_local, hierarchy=hierarchy, primary=primary)
+    if outcome == ValidationOutcome.UNKNOWN:
         return False, 0
-    is_checkable, is_satisfied = checker
-    checkable = is_checkable(state, constraint, p_local)
-    if not checkable:
-        return False, 0
-    satisfied = is_satisfied(state, constraint, p_local)
-    return True, 1 if satisfied else 0
+    return True, int(outcome == ValidationOutcome.SATISFIED)
+
+
+# Kept only so old imports fail closed instead of dispatching to v1 semantics.
+CHECKERS: Mapping[str, tuple[Callable[..., bool], Callable[..., bool]]] = {}

@@ -1,76 +1,56 @@
 # Training and Evaluation Execution Plan
 
-This is the operational sequence for the reported single-seed experiment suite.
-The system-to-directory mapping is in the
-[models and evaluation matrix](00_models_and_evaluation_matrix.md).
+This is the operational sequence for the validator-v2, single-seed paper
+suite. The implementation and artifact contract are detailed in
+[Validator semantics v2 and experiment regeneration](12_validator_semantics_revision.md).
 
 ## Fixed policy
 
-- benchmark: `full_strat1m_minocc100`
-- encoding: `node_id`
-- constraint scope: local
-- seed: 42 for every learned system
-- proposal validation subset: 25,000 rows
-- one recorded factorized graph suite shared by all factor proposal systems
-- one passive graph suite used by Direct--Passive GNN
+- benchmark: `full_strat1m_minocc100`;
+- encoding: `node_id`;
+- constraint scope: `local`;
+- validator semantics: version 2;
+- class hierarchy cutoff: `2018-07-01T00:00:00Z`;
+- training seed: 42;
+- training population: every sampled training row; and
+- validator-dependent losses: masked only for `unknown` instances.
 
-The existing labeled Parquet and factorized graph artifacts define the training
-target for the reported runs. Do not relabel or regenerate them. The current
-labeler semantics apply to future datasets, while paper evaluation reconstructs
-symbolic states directly from benchmark rows.
+The immutable unlabelled Parquet rows, constraint registry, and encoder remain
+in place. Validator-derived labels, factorized graphs, learned checkpoints,
+predictions, metrics, and diagnostics must all be generated under one matching
+validator/hierarchy identity.
 
-## Required local artifacts
+## Generation order
 
-Before execution, restore:
-
-- `data/interim/full_strat1m_minocc100/`;
-- `data/interim/full_strat1m_minocc100_labeled/`;
-- factorized shards under `data/processed/full_strat1m_minocc100/`; and
-- the retained Direct--Factor checkpoint at its canonical model path.
-
-Data, graphs, and checkpoints are ignored by Git. Checked-in prediction
-manifests contain the expected sizes and checksums.
-
-If the passive graph suite is absent, generate it once:
+First build and verify the fixed hierarchy, then generate labels and both graph
+representations using the commands in the validator-v2 guide. Generate the
+five canonical configurations only after the new labels and graph manifests
+exist:
 
 ```bash
-uv run src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-representation eswc_passive --registry-dataset full --shard-size 10000 --use-torch-save --persistence-profile research_safe --overwrite atomic
+uv run python scripts/make_experiment_configs.py \
+  --variant full_strat1m_minocc100 --encoding node_id --models-root models
 ```
 
-## Generate configurations
+The generator derives active factor-family IDs from training and validation
+and fails if a type is present only in test. Candidate--C is fixed at
+`gamma_primary=0.2`; every learned configuration uses seed 42.
+
+## Learned and deterministic systems
+
+Inspect the work list without changing state:
 
 ```bash
-uv run scripts/make_experiment_configs.py --variant full_strat1m_minocc100 --encoding node_id --models-root models
+uv run python src/10_scheduler.py --paper-suite --dry-run
 ```
 
-This emits exactly the five learned paper configurations. Use
-`--include-experimental` only for work outside the reported suite. The generator
-derives active factor-family IDs from training and validation, and stops if an
-unseen family occurs only in the test split.
-
-## Evaluate deterministic baselines
+Run the complete suite:
 
 ```bash
-uv run src/09_eval.py --run-baselines --dataset full_strat1m --min-occurrence 100 --registry-dataset full --strict-global-metrics --per-constraint-csv --batch-size 256
+uv run python src/10_scheduler.py --paper-suite
 ```
 
-Outputs are stored under `models/baselines/full_strat1m/parquet/`.
-
-## Train and evaluate learned systems
-
-Review the exact work list first:
-
-```bash
-uv run src/10_scheduler.py --paper-suite --dry-run
-```
-
-Then execute it:
-
-```bash
-uv run src/10_scheduler.py --paper-suite
-```
-
-The scheduler uses this fixed order:
+The scheduler enforces this order:
 
 1. Direct--Passive GNN;
 2. Direct--Factor GNN;
@@ -78,64 +58,59 @@ The scheduler uses this fixed order:
 4. Candidate--DP; and
 5. Candidate--SR.
 
-For an existing checkpoint it runs evaluation without retraining. Otherwise it
-uses `src/07_train.py` for proposal models or `src/08_train_reranker.py` for the
-satisfaction reranker, then evaluates the result. The retained Direct--Factor
-checkpoint is never retrained; a missing copy stops the suite. `--only
-<substring>` filters this exact list without adding other model directories.
+Only the archived Direct--Passive checkpoint is reused, after checksum and
+architecture validation. The other four systems are trained from scratch;
+Candidate--SR cannot start before the new Direct--Factor checkpoint exists.
+Existing non-passive checkpoints are accepted on restart only when their
+training provenance has validator version 2 and the current hierarchy identity.
 
-Manual proposal training and evaluation use:
+After learned evaluation the scheduler refits and evaluates the four
+deterministic/statistical baselines from the unchanged rows. It then regenerates
+H2, candidate-oracle, Candidate--SR candidate-membership and deletion
+diagnostics, the label audit, the combined factor summary, and benchmark
+statistics. Finally it runs readiness and full-suite acceptance. Any failing
+step stops the paper suite.
 
-```bash
-uv run src/07_train.py --experiment-config models/<run-directory>/config.json
-uv run src/09_eval.py --run-directory models/<run-directory> --strict-global-metrics --per-constraint-csv --batch-size 256
-```
+## Individual execution
 
-Manual reranker training and evaluation use:
-
-```bash
-uv run src/08_train_reranker.py --experiment-config models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/config.json
-uv run src/09_eval.py --run-directory models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id --legacy-predictions-json models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/reranker_predictions.json --strict-global-metrics --per-constraint-csv --batch-size 256
-```
-
-The legacy-JSON option is a one-time conversion of the reranker's ordered output
-to the standard Parquet artifact; subsequent evaluation should use
-`--predictions`.
-
-## Supporting diagnostics
-
-H2 pressure masking and candidate-oracle analysis apply to Direct--Factor GNN,
-Candidate--C, and Candidate--DP. They are read-only with respect to the main
-evaluation outputs.
+Proposal training and strict evaluation:
 
 ```bash
-uv run src/09_eval.py --run-directory models/<factor-run-directory> --strict-global-metrics --h2-eval
-uv run scripts/analyze_candidate_oracle.py --run-directory models/<factor-run-directory> --strict-global-metrics --batch-size 256
+uv run python src/07_train.py --experiment-config models/<run-directory>/config.json
+uv run python src/09_eval.py --run-directory models/<run-directory> \
+  --strict-global-metrics --per-constraint-csv --batch-size 256
 ```
 
-For Candidate--C, pass `--use-chooser` to the H2 command. The normal diagnostic
-condition replays the validated predictions; counterfactual pressure variants
-are inferred from the checkpoint. Candidate-oracle analysis uses the same
-label-blind candidate builder and symbolic event definitions as evaluation.
-
-Regenerate the satisfaction-reranker deletion diagnostic with:
+Candidate--SR training creates an ordered internal prediction JSON, which the
+scheduler immediately converts to the schema-v3 Parquet artifact:
 
 ```bash
-uv run scripts/analyze_deletion_degeneracy.py --g0-run-directory models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id --predictions models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/evaluations/predictions.parquet --strict-global-metrics
+uv run python src/08_train_reranker.py \
+  --experiment-config models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/config.json
+uv run python src/09_eval.py \
+  --run-directory models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id \
+  --legacy-predictions-json models/g0_globalfix_reference_v2__full_strat1m_minocc100__node_id/reranker_predictions.json \
+  --strict-global-metrics --per-constraint-csv --batch-size 256
 ```
 
-The read-only label audit is documented in
-[symbolic evaluation and prediction artifacts](09_corrected_evaluation.md).
+Subsequent replay must use `--predictions .../evaluations/predictions.parquet`;
+schema-v2 and cross-semantics replay are rejected.
 
-## Final verification
+## Manuscript gate
+
+Do not edit paper values until the scheduler's acceptance step succeeds. After
+updating the manuscript from the machine-readable results, bind it to those
+results with:
 
 ```bash
-uv run scripts/check_corrected_paper_readiness.py --paper latex_paper/main.tex --verify-graph-checksums
-uv run pytest
-uv run python -m compileall -q src scripts
+uv run python scripts/check_corrected_paper_readiness.py \
+  --paper latex_paper/main.tex --verify-graph-checksums
+uv run python scripts/validate_regenerated_suite.py --require-paper
+uv run pytest -q
+uv run python -m compileall -q src scripts tests
 ```
 
-The readiness command checks exact configs and checkpoints, artifact provenance,
-prediction order, all aggregate and per-family metrics, supporting diagnostics,
-and the values displayed in the paper. Multiple seeds remain outside the scope
-of the reported experiment.
+The readiness check recomputes metric events from predictions and requires the
+LaTeX tables to match. `--require-paper` makes final acceptance fail unless that
+paper-bound readiness report is present. Multiple seeds and external release
+publication remain outside this experiment.

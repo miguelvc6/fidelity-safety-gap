@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -130,6 +131,24 @@ def test_graph_uses_filtered_factor_ids_and_registry_family() -> None:
             "constraint_family": "symmetric",
         }
     ) == "symmetric"
+
+
+def test_graph_resume_requires_an_exact_build_contract(tmp_path: Path) -> None:
+    output_path = tmp_path / "train_graph-node_id.pkl"
+    expected = {"schema_version": 1, "source": {"sha256": "abc"}}
+
+    with pytest.raises(RuntimeError, match="without a build contract"):
+        GRAPH._require_matching_build_contract(output_path, expected)
+
+    contract_path = GRAPH._build_contract_path_for_split(output_path)
+    GRAPH._write_json_atomic(contract_path, expected)
+    GRAPH._require_matching_build_contract(output_path, expected)
+
+    with pytest.raises(RuntimeError, match="build contract mismatch"):
+        GRAPH._require_matching_build_contract(
+            output_path,
+            {"schema_version": 1, "source": {"sha256": "different"}},
+        )
 
 
 if __name__ == "__main__":

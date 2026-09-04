@@ -446,10 +446,8 @@ def main() -> None:
         raise SystemExit(
             "No graph artifacts found under "
             f"{args.processed_root}.\n"
-            "Restore the paper graph artifacts, or build graphs for a new labeled dataset "
-            "as described in docs-technical/00_training_and_evaluation_execution_plan.md. "
-            "Do not relabel the released paper benchmark: its training labels are part of "
-            "the recorded experimental provenance."
+            "Build the validator-v2 factorized and passive graph suites as described in "
+            "docs-technical/12_validator_semantics_revision.md."
         )
 
     canonical_proposals: list[ProposalExperiment] = [

@@ -4799,6 +4799,7 @@
     "use_role_embeddings": true
   },
   "training_config": {
+    "seed": 42,
     "batch_size": 256,
     "chooser": {
       "beta_no_regression": 0.5,

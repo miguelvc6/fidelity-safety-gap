@@ -41,6 +41,7 @@ from modules.candidates import (
     score_candidates_from_logits_packed,
 )
 from modules.config import ModelConfig, TrainingConfig
+from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION
 from modules.data_encoders import (
     GlobalIntEncoder,
     GraphStreamDataset,
@@ -56,13 +57,14 @@ from modules.evaluation_artifacts import (
     EVALUATION_SCHEMA_VERSION,
     atomic_write_csv,
     atomic_write_json,
-    backup_schema_v1_once,
+    backup_previous_schema_once,
     build_predictions_frame,
     load_and_validate_predictions,
     write_prediction_artifacts,
 )
 from modules.repair_eval import (
     ConstraintRepairHeuristics,
+    PAPER_METRIC_KEYS,
     RepairSample,
     ViolationContext,
     evaluate_global_repair_samples,
@@ -444,6 +446,7 @@ def _maybe_prepare_global_support(
             assume_complete=True,
             constraint_scope=constraint_scope,
             use_encoded_ids=True,
+            require_hierarchy=True,
         )
     except Exception as exc:
         if strict:
@@ -924,7 +927,7 @@ def _run_and_save(
         logging.debug("Model selection block: %s", selection_block)
 
     if prediction_rows is None or artifact_context is None:
-        raise RuntimeError("Schema-v2 evaluation requires interim rows and artifact provenance.")
+        raise RuntimeError("Schema-v3 evaluation requires interim rows and artifact provenance.")
     metric_instances = (
         postprocess_state.get("paper_metric_instances", []) if postprocess_state else []
     )
@@ -943,9 +946,13 @@ def _run_and_save(
         graph_paths=artifact_context.get("graph_paths", []),
         dataset_variant=str(artifact_context["dataset_variant"]),
         source_predictions_path=artifact_context.get("source_predictions_path"),
+        hierarchy_identity=artifact_context.get("hierarchy_identity"),
     )
+    _write_historical_strata(frame, output_dir, hierarchy_identity=manifest["hierarchy"])
     payload = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
+        "validator_semantics_version": manifest["validator_semantics_version"],
+        "hierarchy": manifest["hierarchy"],
         "model_selection": selection_block,
         "prediction_artifacts": {
             "predictions": predictions_path.name,
@@ -954,10 +961,10 @@ def _run_and_save(
         },
         **metrics,
     }
-    backup_schema_v1_once(results_path)
+    backup_previous_schema_once(results_path)
     atomic_write_json(results_path, payload)
     if write_per_constraint_csv:
-        _write_per_constraint_csv(metrics, output_dir)
+        _write_per_constraint_csv(metrics, output_dir, hierarchy_identity=manifest["hierarchy"])
     return metrics
 
 
@@ -1160,7 +1167,12 @@ def compute_model_selection_block(
     return selection_block
 
 
-def _write_per_constraint_csv(metrics: dict[str, object], output_dir: Path) -> None:
+def _write_per_constraint_csv(
+    metrics: dict[str, object],
+    output_dir: Path,
+    *,
+    hierarchy_identity: dict[str, object],
+) -> None:
     per_type_metrics = metrics.get("per_constraint_type") or {}
     support_counts = metrics.get("support_per_constraint_type") or {}
     paper_per_type = metrics.get("paper_metrics_per_constraint_type") or {}
@@ -1171,6 +1183,8 @@ def _write_per_constraint_csv(metrics: dict[str, object], output_dir: Path) -> N
         paper_metrics = paper_per_type.get(constraint_type, {})
         row = {
             "schema_version": EVALUATION_SCHEMA_VERSION,
+            "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+            "hierarchy_content_sha256": hierarchy_identity["content_sha256"],
             "constraint_type": constraint_type,
             "support": int(support_counts.get(constraint_type, 0)),
             "fidelity_micro_f1": float(micro.get("f1", 0.0)),
@@ -1186,8 +1200,36 @@ def _write_per_constraint_csv(metrics: dict[str, object], output_dir: Path) -> N
 
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / "per_constraint.csv"
-    backup_schema_v1_once(out_path)
+    backup_previous_schema_once(out_path)
     atomic_write_csv(out_path, pd.DataFrame(rows))
+
+
+def _write_historical_strata(
+    frame: pd.DataFrame,
+    output_dir: Path,
+    *,
+    hierarchy_identity: dict[str, object],
+) -> None:
+    rows: list[dict[str, object]] = []
+    for (stratum, family), subset in frame.groupby(
+        ["historical_stratum", "constraint_type"], sort=True, dropna=False
+    ):
+        record: dict[str, object] = {
+            "schema_version": EVALUATION_SCHEMA_VERSION,
+            "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+            "hierarchy_content_sha256": hierarchy_identity["content_sha256"],
+            "stratum": str(stratum),
+            "constraint_type": str(family),
+            "support": len(subset),
+        }
+        for metric in PAPER_METRIC_KEYS:
+            numerator = int(subset[f"metric_{metric}_numerator"].sum())
+            denominator = int(subset[f"metric_{metric}_denominator"].sum())
+            record[f"{metric}_numerator"] = numerator
+            record[f"{metric}_denominator"] = denominator
+            record[f"{metric}_value"] = float(numerator) / denominator if denominator else 0.0
+        rows.append(record)
+    atomic_write_csv(output_dir / "historical_strata.csv", pd.DataFrame(rows))
 
 
 def _smoke_check_global_metrics(
@@ -1522,7 +1564,7 @@ def parse_args():
         dest="predictions",
         type=Path,
         help=(
-            "Replay schema-v2 Parquet predictions without a model forward pass. "
+            "Replay schema-v3 Parquet predictions without a model forward pass. "
             "--reranker-predictions is retained as an alias."
         ),
     )
@@ -1531,7 +1573,7 @@ def parse_args():
         type=Path,
         help=(
             "One-time migration of legacy index-ordered JSON/JSONL/PT predictions into a "
-            "fully evaluated schema-v2 artifact. The source checksum and canonical dataset "
+            "fully evaluated schema-v3 artifact. The source checksum and canonical dataset "
             "identity are recorded; future replay must use --predictions."
         ),
     )
@@ -1814,7 +1856,7 @@ def main():
         global_support = None
         if args.no_global_metrics:
             raise RuntimeError(
-                "Schema-v2 evaluation always computes paper metrics from interim rows; "
+                "Schema-v3 evaluation always computes paper metrics from interim rows; "
                 "--no-global-metrics is no longer supported for trained models."
             )
         global_metrics_enabled = True
@@ -1878,11 +1920,12 @@ def main():
                     dataset_path=global_support.dataset_path,
                     graph_paths=graph_paths,
                     dataset_variant=variant,
+                    hierarchy_identity=global_support.evaluator.hierarchy_identity,
                 )
-                logging.info("H2 normal predictions loaded from validated schema-v2 replay: %s", predictions_path)
+                logging.info("H2 normal predictions loaded from validated schema-v3 replay: %s", predictions_path)
             else:
                 logging.warning(
-                    "H2 schema-v2 predictions not found at %s; normal predictions will be recomputed.",
+                    "H2 schema-v3 predictions not found at %s; normal predictions will be recomputed.",
                     predictions_path,
                 )
             report = write_h2_report(
@@ -1928,8 +1971,9 @@ def main():
                 dataset_path=global_support.dataset_path,
                 graph_paths=graph_paths,
                 dataset_variant=variant,
+                hierarchy_identity=global_support.evaluator.hierarchy_identity,
             )
-            logging.info("Loaded and validated schema-v2 predictions from %s", args.predictions)
+            logging.info("Loaded and validated schema-v3 predictions from %s", args.predictions)
         elif args.legacy_predictions_json:
             if global_support is None or global_support.dataset_path is None:
                 raise RuntimeError("Legacy prediction migration requires corrected symbolic evaluation rows.")
@@ -1943,7 +1987,7 @@ def main():
             logging.warning(
                 "Importing legacy predictions in canonical test-row order from %s. "
                 "The source format has no row identities; its checksum will be recorded and "
-                "all future replay must use the generated schema-v2 Parquet artifact.",
+                "all future replay must use the generated schema-v3 Parquet artifact.",
                 source_predictions_path,
             )
 
@@ -1973,6 +2017,7 @@ def main():
                     ],
                     "dataset_variant": variant,
                     "source_predictions_path": source_predictions_path,
+                    "hierarchy_identity": global_support.evaluator.hierarchy_identity,
                 }
                 if global_support is not None and global_support.dataset_path is not None
                 else None
@@ -2031,6 +2076,20 @@ def main():
                     )
                 logging.warning("Global metrics requested but could not be prepared; skipping.")
 
+        inverse_by_constraint: dict[int, int] = {}
+        if global_support is not None:
+            for graph in test_data:
+                if _safe_constraint_type(getattr(graph, "constraint_type", "")) != "inverse":
+                    continue
+                constraint_id = int(getattr(graph, "shape_id", -1))
+                instance = global_support.evaluator.constraint_instance(constraint_id)
+                if (
+                    instance is not None
+                    and instance.definition_valid
+                    and len(instance.inverse_properties) == 1
+                ):
+                    inverse_by_constraint[constraint_id] = int(instance.inverse_properties[0])
+
         repair_builder = None
         if repair_support or global_support:
 
@@ -2086,7 +2145,7 @@ def main():
                 disruption_field=args.score_disruption_field,
             )
             if global_support is None or global_support.dataset_path is None or state is None:
-                raise RuntimeError("Schema-v2 baseline evaluation requires paper-metric support.")
+                raise RuntimeError("Schema-v3 baseline evaluation requires paper-metric support.")
             artifact_dir = output_root / name
             frame = build_predictions_frame(
                 prediction_state["predictions"],
@@ -2102,9 +2161,17 @@ def main():
                 dataset_path=global_support.dataset_path,
                 graph_paths=[],
                 dataset_variant=variant,
+                hierarchy_identity=global_support.evaluator.hierarchy_identity,
+            )
+            _write_historical_strata(
+                frame,
+                artifact_dir,
+                hierarchy_identity=manifest["hierarchy"],
             )
             payload = {
                 "schema_version": EVALUATION_SCHEMA_VERSION,
+                "validator_semantics_version": manifest["validator_semantics_version"],
+                "hierarchy": manifest["hierarchy"],
                 "model_selection": selection_block,
                 "prediction_artifacts": {
                     "predictions": str(Path(name) / "predictions.parquet"),
@@ -2113,10 +2180,14 @@ def main():
                 },
                 **metrics,
             }
-            backup_schema_v1_once(output_path)
+            backup_previous_schema_once(output_path)
             atomic_write_json(output_path, payload)
             if strict_global or args.per_constraint_csv or global_metrics_enabled:
-                _write_per_constraint_csv(metrics, output_root / name)
+                _write_per_constraint_csv(
+                    metrics,
+                    output_root / name,
+                    hierarchy_identity=manifest["hierarchy"],
+                )
             return metrics
 
         evaluate_baselines(
@@ -2134,6 +2205,7 @@ def main():
             save_run=save_run,
             results_dir=None,
             placeholders=placeholder_ids,
+            inverse_by_constraint=inverse_by_constraint,
         )
 
 

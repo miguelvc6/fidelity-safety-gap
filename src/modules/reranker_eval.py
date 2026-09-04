@@ -2,19 +2,22 @@
 
 from dataclasses import dataclass
 import json
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Set, Tuple
 
 import pandas as pd
 import numpy as np
 
 from modules.constraint_checkers import (
-    CHECKERS,
+    VALIDATOR_SEMANTICS_VERSION,
     ConstraintInstance,
     EvidenceState,
     evaluate_constraint,
     normalize_property_id,
     normalize_token,
+    parse_constraint_instance,
 )
+from modules.class_hierarchy import ClassHierarchy, HIERARCHY_CUTOFF
 from modules.data_encoders import GlobalIntEncoder
 from modules.evidence_state import (
     apply_evidence_edits as _shared_apply_evidence_edits,
@@ -56,6 +59,7 @@ class RegistryEntry:
 @dataclass
 class CandidateMetrics:
     primary_satisfied: int
+    primary_checkable: int
     global_satisfied_fraction: float
     secondary_regressions: int
     secondary_regressions_denom: int
@@ -113,6 +117,8 @@ class _ReusableEvidenceState:
         return entity_id in self.facts_by_entity
 
     def property_complete(self, entity_id: int, predicate_id: int) -> bool:
+        if self.edit_unknown(entity_id, predicate_id):
+            return False
         if self.assume_complete:
             return self.entity_in_scope(entity_id)
         return predicate_id in self.predicates_present.get(entity_id, set())
@@ -603,89 +609,19 @@ def _build_constraint_instance(
     constraint_type_id: int,
     default_relation_predicates: List[int],
 ) -> ConstraintInstance:
-    constrained_property_id = _resolve_registry_id(registry_entry.constrained_property_raw, encoder)
-
-    param_predicates = registry_entry.param_predicates_raw
-    param_objects = registry_entry.param_objects_raw
-    param_pairs = list(zip(param_predicates, param_objects))
-
-    required_properties: Set[int] = set()
-    allowed_items: Set[int] = set()
-    allowed_classes: Set[int] = set()
-    relation_predicates: List[int] = []
-    inverse_properties: List[int] = []
-    conflict_properties: Set[int] = set()
-
-    for pred_raw, obj_raw in param_pairs:
-        pred_norm = normalize_token(pred_raw)
-        obj_norm = normalize_token(obj_raw)
-        pred_key = pred_norm or pred_raw
-        obj_key = obj_norm or obj_raw
-        obj_id = _resolve_registry_id(obj_raw, encoder) if encoder else 0
-
-        if pred_key == PARAM_P2306:
-            if normalize_property_id(obj_key):
-                if obj_id:
-                    required_properties.add(obj_id)
-        elif pred_key == PARAM_P2305:
-            if obj_id:
-                allowed_items.add(obj_id)
-        elif pred_key == PARAM_P2308:
-            if obj_id:
-                allowed_classes.add(obj_id)
-        elif pred_key == PARAM_P2309:
-            if normalize_property_id(obj_key) and obj_id:
-                relation_predicates.append(obj_id)
-        elif pred_key == PARAM_P1696:
-            if normalize_property_id(obj_key) and obj_id:
-                inverse_properties.append(obj_id)
-
-        if normalize_property_id(obj_key) and obj_id:
-            conflict_properties.add(obj_id)
-
-    if not relation_predicates:
-        relation_predicates = list(default_relation_predicates)
-    if not inverse_properties and constrained_property_id:
-        inverse_properties = [constrained_property_id]
-
-    return ConstraintInstance(
+    p31 = default_relation_predicates[0] if default_relation_predicates else 0
+    p279 = default_relation_predicates[1] if len(default_relation_predicates) > 1 else 0
+    return parse_constraint_instance(
         constraint_id=constraint_id,
         constraint_type=constraint_type_name,
         constraint_type_id=constraint_type_id,
-        constrained_property=constrained_property_id,
-        required_properties=required_properties,
-        allowed_items=allowed_items,
-        allowed_classes=allowed_classes,
-        relation_predicates=relation_predicates,
-        inverse_properties=inverse_properties,
-        conflict_properties=conflict_properties,
+        constrained_property_raw=registry_entry.constrained_property_raw,
+        param_predicates_raw=registry_entry.param_predicates_raw,
+        param_objects_raw=registry_entry.param_objects_raw,
+        resolve_id=lambda raw: _resolve_registry_id(raw, encoder),
+        p31_predicate=p31,
+        p279_predicate=p279,
     )
-
-
-def _prebind_constraint_checker(
-    instance: ConstraintInstance | None,
-) -> tuple[Any, Any, ConstraintInstance] | None:
-    if instance is None:
-        return None
-    checker = CHECKERS.get(instance.constraint_type)
-    if checker is None:
-        return None
-    is_checkable, is_satisfied = checker
-    return is_checkable, is_satisfied, instance
-
-
-def _evaluate_constraint_prebound(
-    state: EvidenceState,
-    checker_tuple: tuple[Any, Any, ConstraintInstance] | None,
-    p_local: Set[Any],
-) -> tuple[bool, int]:
-    if checker_tuple is None:
-        return False, 0
-    is_checkable, is_satisfied, instance = checker_tuple
-    checkable = bool(is_checkable(state, instance, p_local))
-    if not checkable:
-        return False, 0
-    return True, 1 if bool(is_satisfied(state, instance, p_local)) else 0
 
 
 class CandidateConstraintEvaluator:
@@ -697,6 +633,8 @@ class CandidateConstraintEvaluator:
         assume_complete: bool,
         constraint_scope: str,
         use_encoded_ids: bool,
+        hierarchy_path: str | Path | None = "data/static/wikidata-p279-2018-07-01.v1.json",
+        require_hierarchy: bool = False,
     ) -> None:
         registry_raw = _load_registry(registry_path)
         self._registry_by_id = _resolve_registry_mapping(
@@ -709,6 +647,22 @@ class CandidateConstraintEvaluator:
         self._default_relations = _resolve_default_relations(encoder)
         self._placeholder_token_ids = _resolve_placeholder_token_ids(encoder)
         self._constraint_cache: Dict[str, ConstraintInstance] = {}
+        self.validator_semantics_version = VALIDATOR_SEMANTICS_VERSION
+        self._hierarchy: ClassHierarchy | None = None
+        if hierarchy_path is not None and Path(hierarchy_path).exists():
+            self._hierarchy = ClassHierarchy.from_artifact(
+                Path(hierarchy_path),
+                resolve_id=lambda raw: _resolve_registry_id(raw, encoder),
+                expected_cutoff=HIERARCHY_CUTOFF,
+            )
+        elif require_hierarchy:
+            raise FileNotFoundError(f"Validator semantics v2 requires hierarchy artifact {hierarchy_path}")
+
+    @property
+    def hierarchy_identity(self) -> dict[str, object] | None:
+        if self._hierarchy is None or self._hierarchy.identity is None:
+            return None
+        return dict(self._hierarchy.identity.__dict__)
 
     def _get_constraint_instance(self, constraint_id: Any) -> ConstraintInstance | None:
         entry = _lookup_registry_entry(
@@ -732,6 +686,11 @@ class CandidateConstraintEvaluator:
         )
         self._constraint_cache[cache_key] = instance
         return instance
+
+    def constraint_instance(self, constraint_id: Any) -> ConstraintInstance | None:
+        """Return the shared-parser definition used by every evaluator path."""
+
+        return self._get_constraint_instance(constraint_id)
 
     def evaluate(
         self,
@@ -803,9 +762,6 @@ class CandidateConstraintEvaluator:
         constraint_instances: List[ConstraintInstance | None] = [
             self._get_constraint_instance(cid) for cid in local_constraint_ids
         ]
-        constraint_checkers: List[tuple[Any, Any, ConstraintInstance] | None] = [
-            _prebind_constraint_checker(instance) for instance in constraint_instances
-        ]
         resolved_primary_index = -1
         if primary_factor_index is not None and 0 <= primary_factor_index < len(local_constraint_ids):
             resolved_primary_index = int(primary_factor_index)
@@ -816,9 +772,9 @@ class CandidateConstraintEvaluator:
             except ValueError:
                 resolved_primary_index = -1
 
-        primary_checker = (
-            constraint_checkers[resolved_primary_index]
-            if 0 <= resolved_primary_index < len(constraint_checkers)
+        primary_instance = (
+            constraint_instances[resolved_primary_index]
+            if 0 <= resolved_primary_index < len(constraint_instances)
             else None
         )
 
@@ -837,7 +793,7 @@ class CandidateConstraintEvaluator:
             other_object=other_object,
         )
 
-        tracked_checkers: List[tuple[Any, Any, ConstraintInstance]] = []
+        tracked_instances: List[ConstraintInstance] = []
         if need_regression:
             gold_facts, gold_predicates, gold_missing = _build_post_state_for_candidate(
                 facts_by_entity,
@@ -850,26 +806,26 @@ class CandidateConstraintEvaluator:
             state.facts_by_entity = gold_facts
             state.predicates_present = gold_predicates
             state.missing_edits = gold_missing
-            for idx, checker_tuple in enumerate(constraint_checkers):
-                if idx == resolved_primary_index or checker_tuple is None:
+            for idx, instance in enumerate(constraint_instances):
+                if idx == resolved_primary_index or instance is None:
                     continue
-                is_checkable, is_satisfied, instance = checker_tuple
-                checkable_post = bool(is_checkable(state, instance, p_local_set))
+                checkable_post, satisfied_post = evaluate_constraint(
+                    state,
+                    instance,
+                    p_local_set,
+                    hierarchy=self._hierarchy,
+                    primary=False,
+                )
                 if not checkable_post:
                     continue
-                if bool(is_satisfied(state, instance, p_local_set)):
-                    tracked_checkers.append(checker_tuple)
-            if not tracked_checkers and not need_primary:
+                if satisfied_post:
+                    tracked_instances.append(instance)
+            if not tracked_instances and not need_primary:
                 return [0.0] * candidate_count, None
 
-        if need_primary and primary_checker is None and not need_regression:
+        if need_primary and primary_instance is None and not need_regression:
             zeros = [0.0] * candidate_count
             return zeros, list(zeros)
-        primary_is_checkable = None
-        primary_is_satisfied = None
-        primary_instance: ConstraintInstance | None = None
-        if primary_checker is not None:
-            primary_is_checkable, primary_is_satisfied, primary_instance = primary_checker
 
         regression_rates: List[float] = []
         primary_flags: List[float] | None = [] if need_primary else None
@@ -890,12 +846,18 @@ class CandidateConstraintEvaluator:
             if need_regression:
                 regress = 0
                 denom = 0
-                for is_checkable, is_satisfied, instance in tracked_checkers:
-                    checkable_post = bool(is_checkable(state, instance, p_local_set))
+                for instance in tracked_instances:
+                    checkable_post, satisfied_post = evaluate_constraint(
+                        state,
+                        instance,
+                        p_local_set,
+                        hierarchy=self._hierarchy,
+                        primary=False,
+                    )
                     if not checkable_post:
                         continue
                     denom += 1
-                    if not bool(is_satisfied(state, instance, p_local_set)):
+                    if not satisfied_post:
                         regress += 1
                 regression_rates.append(float(regress) / float(denom) if denom else 0.0)
             else:
@@ -903,14 +865,16 @@ class CandidateConstraintEvaluator:
 
             if need_primary and primary_flags is not None:
                 primary_value = 0.0
-                if (
-                    primary_is_checkable is not None
-                    and primary_is_satisfied is not None
-                    and primary_instance is not None
-                ):
-                    checkable_post = bool(primary_is_checkable(state, primary_instance, p_local_set))
+                if primary_instance is not None:
+                    checkable_post, satisfied_post = evaluate_constraint(
+                        state,
+                        primary_instance,
+                        p_local_set,
+                        hierarchy=self._hierarchy,
+                        primary=True,
+                    )
                     if checkable_post:
-                        primary_value = float(bool(primary_is_satisfied(state, primary_instance, p_local_set)))
+                        primary_value = float(bool(satisfied_post))
                 primary_flags.append(primary_value)
 
         return regression_rates, primary_flags
@@ -1023,21 +987,6 @@ class CandidateConstraintEvaluator:
         post_checkable: List[bool] = []
         post_satisfied: List[int] = []
 
-        for constraint_id in local_constraint_ids:
-            instance = self._get_constraint_instance(constraint_id)
-            if instance is None:
-                pre_checkable.append(False)
-                pre_satisfied.append(0)
-                post_checkable.append(False)
-                post_satisfied.append(0)
-                continue
-            checkable_pre, satisfied_pre = evaluate_constraint(pre_state, instance, p_local_set)
-            checkable_post, satisfied_post = evaluate_constraint(post_state, instance, p_local_set)
-            pre_checkable.append(bool(checkable_pre))
-            pre_satisfied.append(int(satisfied_pre))
-            post_checkable.append(bool(checkable_post))
-            post_satisfied.append(int(satisfied_post))
-
         resolved_primary_index = -1
         if primary_factor_index is not None and 0 <= primary_factor_index < len(local_constraint_ids):
             resolved_primary_index = int(primary_factor_index)
@@ -1047,6 +996,26 @@ class CandidateConstraintEvaluator:
                 resolved_primary_index = local_constraint_ids.index(constraint_id)
             except ValueError:
                 resolved_primary_index = -1
+
+        for index, constraint_id in enumerate(local_constraint_ids):
+            instance = self._get_constraint_instance(constraint_id)
+            if instance is None:
+                pre_checkable.append(False)
+                pre_satisfied.append(0)
+                post_checkable.append(False)
+                post_satisfied.append(0)
+                continue
+            is_primary = index == resolved_primary_index
+            checkable_pre, satisfied_pre = evaluate_constraint(
+                pre_state, instance, p_local_set, hierarchy=self._hierarchy, primary=is_primary
+            )
+            checkable_post, satisfied_post = evaluate_constraint(
+                post_state, instance, p_local_set, hierarchy=self._hierarchy, primary=is_primary
+            )
+            pre_checkable.append(bool(checkable_pre))
+            pre_satisfied.append(int(satisfied_pre))
+            post_checkable.append(bool(checkable_post))
+            post_satisfied.append(int(satisfied_post))
 
         primary_satisfied = 0
         if 0 <= resolved_primary_index < len(post_satisfied):
@@ -1219,17 +1188,6 @@ class CandidateConstraintEvaluator:
         constraint_instances: List[ConstraintInstance | None] = [
             self._get_constraint_instance(cid) for cid in local_constraint_ids
         ]
-        pre_checkable: List[bool] = []
-        pre_satisfied: List[int] = []
-        for instance in constraint_instances:
-            if instance is None:
-                pre_checkable.append(False)
-                pre_satisfied.append(0)
-            else:
-                checkable_pre, satisfied_pre = evaluate_constraint(pre_state, instance, p_local_set)
-                pre_checkable.append(bool(checkable_pre))
-                pre_satisfied.append(int(satisfied_pre))
-
         resolved_primary_index = -1
         if primary_factor_index is not None and 0 <= primary_factor_index < len(local_constraint_ids):
             resolved_primary_index = int(primary_factor_index)
@@ -1239,6 +1197,22 @@ class CandidateConstraintEvaluator:
                 resolved_primary_index = local_constraint_ids.index(constraint_id)
             except ValueError:
                 resolved_primary_index = -1
+        pre_checkable: List[bool] = []
+        pre_satisfied: List[int] = []
+        for index, instance in enumerate(constraint_instances):
+            if instance is None:
+                pre_checkable.append(False)
+                pre_satisfied.append(0)
+            else:
+                checkable_pre, satisfied_pre = evaluate_constraint(
+                    pre_state,
+                    instance,
+                    p_local_set,
+                    hierarchy=self._hierarchy,
+                    primary=index == resolved_primary_index,
+                )
+                pre_checkable.append(bool(checkable_pre))
+                pre_satisfied.append(int(satisfied_pre))
 
         results: List[Dict[str, Any]] = []
 
@@ -1266,12 +1240,18 @@ class CandidateConstraintEvaluator:
 
             post_checkable: List[bool] = []
             post_satisfied: List[int] = []
-            for instance in constraint_instances:
+            for index, instance in enumerate(constraint_instances):
                 if instance is None:
                     post_checkable.append(False)
                     post_satisfied.append(0)
                 else:
-                    checkable_post, satisfied_post = evaluate_constraint(post_state, instance, p_local_set)
+                    checkable_post, satisfied_post = evaluate_constraint(
+                        post_state,
+                        instance,
+                        p_local_set,
+                        hierarchy=self._hierarchy,
+                        primary=index == resolved_primary_index,
+                    )
                     post_checkable.append(bool(checkable_post))
                     post_satisfied.append(int(satisfied_post))
 
@@ -1363,8 +1343,14 @@ class CandidateConstraintEvaluator:
 
 
 def _metrics_from_details(details: Dict[str, Any]) -> CandidateMetrics:
+    primary_index = int(details.get("primary_factor_index", -1))
+    post_checkable = details.get("post_checkable") or []
+    primary_checkable = int(
+        0 <= primary_index < len(post_checkable) and bool(post_checkable[primary_index])
+    )
     return CandidateMetrics(
         primary_satisfied=int(details.get("primary_satisfied", 0)),
+        primary_checkable=primary_checkable,
         global_satisfied_fraction=float(details.get("global_satisfied_fraction", 0.0)),
         secondary_regressions=int(details.get("secondary_regressions", 0)),
         secondary_regressions_denom=int(details.get("secondary_regressions_denom", 0)),

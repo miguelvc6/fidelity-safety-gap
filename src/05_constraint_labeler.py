@@ -8,6 +8,7 @@ without rebuilding graphs.
 
 import argparse
 import json
+import subprocess
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,12 +18,15 @@ import numpy as np
 import pandas as pd
 
 from modules.constraint_checkers import (
+    VALIDATOR_SEMANTICS_VERSION,
     ConstraintInstance,
     EvidenceState,
     evaluate_constraint,
     normalize_property_id,
     normalize_token,
+    parse_constraint_instance,
 )
+from modules.class_hierarchy import ClassHierarchy, HIERARCHY_CUTOFF, sha256_file
 from modules.data_encoders import GlobalIntEncoder
 from modules.evidence_state import (
     apply_evidence_edits as _shared_apply_evidence_edits,
@@ -35,6 +39,7 @@ PARAM_P2309 = "P2309"
 PARAM_P2308 = "P2308"
 PARAM_P2305 = "P2305"
 PARAM_P1696 = "P1696"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 
 @dataclass(frozen=True)
@@ -267,62 +272,18 @@ def _build_constraint_instance(
     constraint_type_id: int,
     default_relation_predicates: List[int],
 ) -> ConstraintInstance:
-    constrained_property_id = _resolve_registry_id(registry_entry.constrained_property_raw, encoder)
-
-    param_predicates = registry_entry.param_predicates_raw
-    param_objects = registry_entry.param_objects_raw
-    param_pairs = list(zip(param_predicates, param_objects))
-
-    required_properties: Set[int] = set()
-    allowed_items: Set[int] = set()
-    allowed_classes: Set[int] = set()
-    relation_predicates: List[int] = []
-    inverse_properties: List[int] = []
-    conflict_properties: Set[int] = set()
-
-    for pred_raw, obj_raw in param_pairs:
-        pred_norm = normalize_token(pred_raw)
-        obj_norm = normalize_token(obj_raw)
-        pred_key = pred_norm or pred_raw
-        obj_key = obj_norm or obj_raw
-        obj_id = _resolve_registry_id(obj_raw, encoder) if encoder else 0
-
-        if pred_key == PARAM_P2306:
-            if normalize_property_id(obj_key):
-                if obj_id:
-                    required_properties.add(obj_id)
-        elif pred_key == PARAM_P2305:
-            if obj_id:
-                allowed_items.add(obj_id)
-        elif pred_key == PARAM_P2308:
-            if obj_id:
-                allowed_classes.add(obj_id)
-        elif pred_key == PARAM_P2309:
-            if normalize_property_id(obj_key) and obj_id:
-                relation_predicates.append(obj_id)
-        elif pred_key == PARAM_P1696:
-            if normalize_property_id(obj_key) and obj_id:
-                inverse_properties.append(obj_id)
-
-        if normalize_property_id(obj_key) and obj_id:
-            conflict_properties.add(obj_id)
-
-    if not relation_predicates:
-        relation_predicates = list(default_relation_predicates)
-    if not inverse_properties and constrained_property_id:
-        inverse_properties = [constrained_property_id]
-
-    return ConstraintInstance(
+    p31 = default_relation_predicates[0] if default_relation_predicates else 0
+    p279 = default_relation_predicates[1] if len(default_relation_predicates) > 1 else 0
+    return parse_constraint_instance(
         constraint_id=constraint_id,
         constraint_type=constraint_type_name,
         constraint_type_id=constraint_type_id,
-        constrained_property=constrained_property_id,
-        required_properties=required_properties,
-        allowed_items=allowed_items,
-        allowed_classes=allowed_classes,
-        relation_predicates=relation_predicates,
-        inverse_properties=inverse_properties,
-        conflict_properties=conflict_properties,
+        constrained_property_raw=registry_entry.constrained_property_raw,
+        param_predicates_raw=registry_entry.param_predicates_raw,
+        param_objects_raw=registry_entry.param_objects_raw,
+        resolve_id=lambda raw: _resolve_registry_id(raw, encoder),
+        p31_predicate=p31,
+        p279_predicate=p279,
     )
 
 
@@ -404,6 +365,7 @@ def _process_dataframe(
     use_encoded_ids: bool,
     constraint_scope: str,
     factor_family_policy: str,
+    hierarchy: ClassHierarchy | None = None,
 ) -> Tuple[pd.DataFrame, Dict[str, Counter[str]], Counter[str]]:
     default_relation_predicates = _resolve_default_relations(encoder)
     constraint_cache: Dict[str, ConstraintInstance] = {}
@@ -537,8 +499,20 @@ def _process_dataframe(
                 satisfied_post = 0
             else:
                 filter_stats["supported_retained"] += 1
-                checkable_pre, satisfied_pre = evaluate_constraint(pre_state, constraint_instance, p_local)
-                checkable_post, satisfied_post = evaluate_constraint(post_state, constraint_instance, p_local)
+                checkable_pre, satisfied_pre = evaluate_constraint(
+                    pre_state,
+                    constraint_instance,
+                    p_local,
+                    hierarchy=hierarchy,
+                    primary=is_primary,
+                )
+                checkable_post, satisfied_post = evaluate_constraint(
+                    post_state,
+                    constraint_instance,
+                    p_local,
+                    hierarchy=hierarchy,
+                    primary=is_primary,
+                )
 
             retained_constraint_ids.append(int(constraint_id))
             checkable_pre_row.append(bool(checkable_pre))
@@ -553,6 +527,12 @@ def _process_dataframe(
             coverage[ctype]["checkable_post"] += int(checkable_post)
             coverage[ctype]["satisfied_pre"] += int(satisfied_pre) if checkable_pre else 0
             coverage[ctype]["satisfied_post"] += int(satisfied_post) if checkable_post else 0
+            if is_primary:
+                coverage[ctype]["primary_total"] += 1
+                coverage[ctype]["primary_checkable_pre"] += int(checkable_pre)
+                coverage[ctype]["primary_checkable_post"] += int(checkable_post)
+                coverage[ctype]["primary_satisfied_pre"] += int(satisfied_pre) if checkable_pre else 0
+                coverage[ctype]["primary_satisfied_post"] += int(satisfied_post) if checkable_post else 0
 
         filter_stats["raw_factor_total"] += len(local_constraint_ids)
         filter_stats["retained_factor_total"] += len(retained_constraint_ids)
@@ -582,6 +562,9 @@ def _process_dataframe(
     df["coverage_pre"] = coverage_pre
     df["num_checkable_factors_post_gold"] = num_checkable_post
     df["coverage_post_gold"] = coverage_post
+    df["validator_semantics_version"] = VALIDATOR_SEMANTICS_VERSION
+    if hierarchy is not None and hierarchy.identity is not None:
+        df["hierarchy_content_sha256"] = hierarchy.identity.content_sha256
 
     return df, coverage, filter_stats
 
@@ -844,6 +827,12 @@ def main() -> None:
         help="Dataset variant to label, e.g. full or full_strat1m.",
     )
     parser.add_argument(
+        "--hierarchy",
+        type=Path,
+        default=Path("data/static/wikidata-p279-2018-07-01.v1.json"),
+        help="Checksummed historical P279 artifact fixed at 2018-07-01.",
+    )
+    parser.add_argument(
         "--registry-dataset",
         default=None,
         help="Raw dataset name for constraint_registry_<dataset>.parquet. Defaults to --dataset.",
@@ -915,11 +904,21 @@ def main() -> None:
     use_encoded_ids = pd.api.types.is_integer_dtype(first_df["constraint_id"])
     if use_encoded_ids and encoder is None:
         raise SystemExit("Encoder is required to resolve registry ids for encoded parquet data.")
+    if not args.hierarchy.exists():
+        raise FileNotFoundError(
+            f"Validator semantics v2 requires the fixed hierarchy artifact: {args.hierarchy}"
+        )
+    hierarchy = ClassHierarchy.from_artifact(
+        args.hierarchy,
+        resolve_id=lambda raw: _resolve_registry_id(raw, encoder),
+        expected_cutoff=HIERARCHY_CUTOFF,
+    )
     registry_by_id = _resolve_registry_mapping(registry_raw, encoder=encoder, use_encoded_ids=use_encoded_ids)
     output_root.mkdir(parents=True, exist_ok=True)
 
     combined_coverage: Dict[str, Counter[str]] = defaultdict(Counter)
     combined_filter_stats: Counter[str] = Counter()
+    split_manifest: Dict[str, Any] = {}
 
     for parquet_path in parquet_paths:
         df = pd.read_parquet(parquet_path)
@@ -936,6 +935,7 @@ def main() -> None:
             use_encoded_ids=use_encoded_ids,
             constraint_scope=args.constraint_scope,
             factor_family_policy=args.factor_family_policy,
+            hierarchy=hierarchy,
         )
         for ctype, stats in coverage.items():
             combined_coverage[ctype].update(stats)
@@ -945,6 +945,22 @@ def main() -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         labeled_df.to_parquet(output_path)
         print(f"Wrote labeled parquet to {output_path}")
+        split_manifest[parquet_path.stem.removeprefix("df_")] = {
+            "source": {
+                "path": str(parquet_path.resolve()),
+                "size_bytes": parquet_path.stat().st_size,
+                "sha256": sha256_file(parquet_path),
+            },
+            "output": {
+                "path": str(output_path.resolve()),
+                "size_bytes": output_path.stat().st_size,
+                "sha256": sha256_file(output_path),
+            },
+            "row_count": len(labeled_df),
+            "family_outcomes": {
+                family: dict(sorted(stats.items())) for family, stats in sorted(coverage.items())
+            },
+        }
 
     _print_coverage(combined_coverage)
     _print_coverage_table(combined_coverage)
@@ -954,6 +970,60 @@ def main() -> None:
         output_root,
         args.constraint_scope,
         args.factor_family_policy,
+    )
+    code_version = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=REPOSITORY_ROOT, text=True
+    ).strip()
+    label_manifest = {
+        "schema_version": 1,
+        "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+        "hierarchy": hierarchy.identity.__dict__ if hierarchy.identity is not None else None,
+        "constraint_scope": args.constraint_scope,
+        "factor_family_policy": args.factor_family_policy,
+        "assume_complete_entity_facts": args.assume_complete_entity_facts,
+        "code_version": code_version,
+        "registry": {
+            "path": str(registry_path.resolve()),
+            "size_bytes": registry_path.stat().st_size,
+            "sha256": sha256_file(registry_path),
+        },
+        "encoder": {
+            "path": str(encoder_path.resolve()),
+            "size_bytes": encoder_path.stat().st_size,
+            "sha256": sha256_file(encoder_path),
+        },
+        "splits": split_manifest,
+    }
+    (output_root / "label_manifest.json").write_text(
+        json.dumps(label_manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    historical_satisfaction = {
+        "schema_version": 1,
+        "diagnostic_only": True,
+        "acceptance_threshold": None,
+        "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+        "hierarchy_content_sha256": hierarchy.identity.content_sha256,
+        "splits": {
+            split: {
+                family: {
+                    "satisfied": int(stats.get("primary_satisfied_post", 0)),
+                    "checkable": int(stats.get("primary_checkable_post", 0)),
+                    "percentage": (
+                        100.0 * int(stats.get("primary_satisfied_post", 0))
+                        / int(stats.get("primary_checkable_post", 0))
+                        if int(stats.get("primary_checkable_post", 0))
+                        else None
+                    ),
+                }
+                for family, stats in details["family_outcomes"].items()
+            }
+            for split, details in split_manifest.items()
+        },
+    }
+    (output_root / "historical_primary_satisfaction.json").write_text(
+        json.dumps(historical_satisfaction, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
     )
 
 

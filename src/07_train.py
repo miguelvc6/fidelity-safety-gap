@@ -42,6 +42,7 @@ from modules.evaluation_artifacts import (
 from modules.models import BaseGraphModel, build_model
 from modules.repair_eval import ConstraintRepairHeuristics, ViolationContext, load_violation_contexts
 from modules.reranker_eval import CandidateConstraintEvaluator
+from modules.semantics_provenance import validate_graph_semantics
 from modules.policy import POLICY_NAMES, derive_policy_label
 from modules.training_utils import (
     ConstraintMetricsAccumulator,
@@ -110,6 +111,21 @@ def _max_abs_value(tensor: torch.Tensor | None) -> float:
     if tensor is None or tensor.numel() == 0:
         return 0.0
     return float(torch.nan_to_num(tensor.detach(), nan=0.0, posinf=float("inf"), neginf=float("-inf")).abs().max().item())
+
+
+def _masked_candidate_mean(
+    probs: torch.Tensor,
+    values: torch.Tensor,
+    eligible: torch.Tensor,
+) -> torch.Tensor:
+    """Probability-weighted mean over definitely checkable candidates only."""
+
+    mask = eligible.to(device=probs.device, dtype=probs.dtype)
+    weighted = probs * mask
+    mass = weighted.sum()
+    if not bool(mask.any().item()):
+        return probs.sum() * 0.0
+    return torch.sum(weighted * values) / mass.clamp_min(torch.finfo(probs.dtype).eps)
 
 
 def _file_identity(path: Path) -> dict[str, object]:
@@ -1678,9 +1694,19 @@ def train(
                                 device=graph_loss.device,
                             )
                             gold_regression = regression_tensor[gold_index]
-                            reg_penalty = torch.sum(
-                                probs * torch.clamp(regression_tensor - gold_regression, min=0.0)
+                            regression_eligible = torch.tensor(
+                                [m.secondary_regressions_denom > 0 for m in metrics_summary],
+                                dtype=torch.bool,
+                                device=graph_loss.device,
                             )
+                            if metrics_summary[gold_index].secondary_regressions_denom > 0:
+                                reg_penalty = _masked_candidate_mean(
+                                    probs,
+                                    torch.clamp(regression_tensor - gold_regression, min=0.0),
+                                    regression_eligible,
+                                )
+                            else:
+                                reg_penalty = probs.sum() * 0.0
                             chooser_loss = chooser_loss + chooser_cfg.beta_no_regression * reg_penalty
                             chooser_eval_math_s += (time.perf_counter() - math_t0) if timing_enabled else 0.0
                         if chooser_need_primary and metrics_summary:
@@ -1690,7 +1716,16 @@ def train(
                                 dtype=graph_loss.dtype,
                                 device=graph_loss.device,
                             )
-                            primary_penalty = torch.sum(probs * (1.0 - primary_tensor))
+                            primary_eligible = torch.tensor(
+                                [bool(m.primary_checkable) for m in metrics_summary],
+                                dtype=torch.bool,
+                                device=graph_loss.device,
+                            )
+                            primary_penalty = _masked_candidate_mean(
+                                probs,
+                                1.0 - primary_tensor,
+                                primary_eligible,
+                            )
                             chooser_loss = chooser_loss + chooser_cfg.gamma_primary * primary_penalty
                             chooser_eval_math_s += (time.perf_counter() - math_t0) if timing_enabled else 0.0
                     chooser_losses[idx] = chooser_loss
@@ -1793,8 +1828,26 @@ def train(
                         dtype=graph_loss.dtype,
                         device=graph_loss.device,
                     )
-                    primary_penalty = torch.sum(probs * (1.0 - primary_tensor))
-                    secondary_penalty = torch.sum(probs * secondary_tensor)
+                    primary_eligible = torch.tensor(
+                        [bool(m.primary_checkable) for m in metrics_summary],
+                        dtype=torch.bool,
+                        device=graph_loss.device,
+                    )
+                    secondary_eligible = torch.tensor(
+                        [m.secondary_regressions_denom > 0 for m in metrics_summary],
+                        dtype=torch.bool,
+                        device=graph_loss.device,
+                    )
+                    primary_penalty = _masked_candidate_mean(
+                        probs,
+                        1.0 - primary_tensor,
+                        primary_eligible,
+                    )
+                    secondary_penalty = _masked_candidate_mean(
+                        probs,
+                        secondary_tensor,
+                        secondary_eligible,
+                    )
                     direct_safety_losses[idx] = (
                         direct_safety_cfg.alpha_primary * primary_penalty
                         + direct_safety_cfg.beta_secondary * secondary_penalty
@@ -2528,9 +2581,19 @@ def train(
                                     device=graph_loss.device,
                                 )
                                 gold_regression = regression_tensor[gold_index]
-                                reg_penalty = torch.sum(
-                                    probs * torch.clamp(regression_tensor - gold_regression, min=0.0)
+                                regression_eligible = torch.tensor(
+                                    [m.secondary_regressions_denom > 0 for m in metrics_summary],
+                                    dtype=torch.bool,
+                                    device=graph_loss.device,
                                 )
+                                if metrics_summary[gold_index].secondary_regressions_denom > 0:
+                                    reg_penalty = _masked_candidate_mean(
+                                        probs,
+                                        torch.clamp(regression_tensor - gold_regression, min=0.0),
+                                        regression_eligible,
+                                    )
+                                else:
+                                    reg_penalty = probs.sum() * 0.0
                                 chooser_loss = chooser_loss + chooser_cfg.beta_no_regression * reg_penalty
                                 chooser_eval_math_s += (time.perf_counter() - math_t0) if timing_enabled else 0.0
                             if chooser_need_primary and metrics_summary:
@@ -2540,7 +2603,16 @@ def train(
                                     dtype=graph_loss.dtype,
                                     device=graph_loss.device,
                                 )
-                                primary_penalty = torch.sum(probs * (1.0 - primary_tensor))
+                                primary_eligible = torch.tensor(
+                                    [bool(m.primary_checkable) for m in metrics_summary],
+                                    dtype=torch.bool,
+                                    device=graph_loss.device,
+                                )
+                                primary_penalty = _masked_candidate_mean(
+                                    probs,
+                                    1.0 - primary_tensor,
+                                    primary_eligible,
+                                )
                                 chooser_loss = chooser_loss + chooser_cfg.gamma_primary * primary_penalty
                                 chooser_eval_math_s += (time.perf_counter() - math_t0) if timing_enabled else 0.0
                         chooser_losses[idx] = chooser_loss
@@ -2643,8 +2715,26 @@ def train(
                             dtype=graph_loss.dtype,
                             device=graph_loss.device,
                         )
-                        primary_penalty = torch.sum(probs * (1.0 - primary_tensor))
-                        secondary_penalty = torch.sum(probs * secondary_tensor)
+                        primary_eligible = torch.tensor(
+                            [bool(m.primary_checkable) for m in metrics_summary],
+                            dtype=torch.bool,
+                            device=graph_loss.device,
+                        )
+                        secondary_eligible = torch.tensor(
+                            [m.secondary_regressions_denom > 0 for m in metrics_summary],
+                            dtype=torch.bool,
+                            device=graph_loss.device,
+                        )
+                        primary_penalty = _masked_candidate_mean(
+                            probs,
+                            1.0 - primary_tensor,
+                            primary_eligible,
+                        )
+                        secondary_penalty = _masked_candidate_mean(
+                            probs,
+                            secondary_tensor,
+                            secondary_eligible,
+                        )
                         direct_safety_losses[idx] = (
                             direct_safety_cfg.alpha_primary * primary_penalty
                             + direct_safety_cfg.beta_secondary * secondary_penalty
@@ -3145,6 +3235,7 @@ def main():
         model_cfg.encoding,
         constraint_representation=model_cfg.constraint_representation,
     )
+    semantics_provenance = validate_graph_semantics([train_data_path, val_data_path])
     train_data = load_graph_dataset(train_data_path)
     val_data = load_graph_dataset(val_data_path)
 
@@ -3346,6 +3437,7 @@ def main():
             assume_complete=True,
             constraint_scope="local",
             use_encoded_ids=True,
+            require_hierarchy=True,
         )
         candidate_cfg = CandidateConfig(
             topk_candidates=chooser_cfg.topk_candidates,
@@ -3417,6 +3509,7 @@ def main():
             assume_complete=True,
             constraint_scope="local",
             use_encoded_ids=True,
+            require_hierarchy=True,
         )
         candidate_cfg = CandidateConfig(
             topk_candidates=direct_safety_cfg.topk_candidates,
@@ -3572,12 +3665,13 @@ def main():
 
     config_identity = _file_identity(config_path)
     training_provenance = {
-        "schema_version": 2,
+        "schema_version": 3,
         "seed": training_cfg.seed,
         "config": config_identity,
         "initialization_checkpoint": initialization_identity,
         "train_graph": repository_relative_path(train_data_path),
         "validation_graph": repository_relative_path(val_data_path),
+        **semantics_provenance,
     }
     history["training_provenance"] = training_provenance
 

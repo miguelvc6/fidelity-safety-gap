@@ -28,6 +28,8 @@ from modules.evaluation_artifacts import (  # noqa: E402
     sha256_file,
 )
 from modules.repair_eval import PAPER_METRIC_KEYS  # noqa: E402
+from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION  # noqa: E402
+from modules.class_hierarchy import load_hierarchy_artifact  # noqa: E402
 
 EXPECTED_ROWS = 143_316
 LEGACY_FIELDS = {
@@ -371,7 +373,9 @@ def _check_evaluation(
     model_path, artifact_dir = _evaluation_paths(system)
     model = _load(model_path)
     if model.get("schema_version") != EVALUATION_SCHEMA_VERSION:
-        raise ValueError(f"{system}: model schema is not v2")
+        raise ValueError(f"{system}: model schema is not v3")
+    if model.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
+        raise ValueError(f"{system}: model uses incompatible validator semantics")
     legacy = _legacy_fields(model)
     if legacy:
         raise ValueError(f"{system}: legacy metric fields remain: {sorted(legacy)}")
@@ -380,7 +384,12 @@ def _check_evaluation(
     manifest_path = artifact_dir / "predictions.manifest.json"
     manifest = _load(manifest_path)
     if manifest.get("schema_version") != EVALUATION_SCHEMA_VERSION:
-        raise ValueError(f"{system}: prediction manifest schema is not v2")
+        raise ValueError(f"{system}: prediction manifest schema is not v3")
+    if manifest.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
+        raise ValueError(f"{system}: prediction manifest uses incompatible validator semantics")
+    hierarchy = manifest.get("hierarchy") or {}
+    if not hierarchy.get("content_sha256") or hierarchy != model.get("hierarchy"):
+        raise ValueError(f"{system}: hierarchy provenance is absent or inconsistent")
     if int(manifest.get("row_count", -1)) != EXPECTED_ROWS:
         raise ValueError(f"{system}: expected {EXPECTED_ROWS} predictions")
     predictions = manifest.get("predictions") or {}
@@ -463,8 +472,6 @@ def _check_evaluation(
                     f"{system}: training config {key}={training_config.get(key)!r}, "
                     f"expected {expected!r}"
                 )
-        # A1 predates the explicit seed field; its training entry point hard-coded
-        # 42. New configurations record the same value directly.
         if training_config.get("seed", 42) != 42:
             raise ValueError(f"{system}: training seed is not 42")
         if (
@@ -541,14 +548,6 @@ def _check_evaluation(
             "best_epoch": best_epoch_index + 1,
             "best_validation_loss": float(val_loss[best_epoch_index]),
         }
-        if system == "M1D" and not (
-            len(val_loss) == 3
-            and best_epoch_index == 0
-            and math.isclose(float(val_loss[0]), 1.48208, abs_tol=1e-12)
-            and math.isclose(float(val_loss[1]), 46_378.4448, abs_tol=1e-8)
-            and math.isclose(float(val_loss[2]), 1_016_081_888.0512, abs_tol=1e-4)
-        ):
-            raise ValueError("M1D: training instability record differs from the paper")
     else:
         if manifest.get("config") is not None or manifest.get("checkpoint") is not None:
             raise ValueError(f"{system}: deterministic baseline has learned-model provenance")
@@ -571,6 +570,7 @@ def _check_evaluation(
         "dataset_sha256": artifact.get("sha256"),
         "row_identity_sha256": dataset.get("row_identity_sha256"),
         "row_count": manifest["row_count"],
+        "hierarchy_content_sha256": hierarchy["content_sha256"],
         "graph_checksums_verified": bool(verify_graph_checksums and system in RUNS),
         "training": training_summary,
         "fidelity": fidelity,
@@ -588,6 +588,13 @@ def _check_sidecars(system: str) -> dict[str, Any]:
         raise ValueError(f"{system}: legacy metric fields remain in H2: {sorted(legacy)}")
     if h2.get("status") not in {"ok", "partial"} or not h2.get("overall"):
         raise ValueError(f"{system}: incomplete H2 report")
+    model = _load(evaluation_dir / "model.json")
+    if h2.get("schema_version") != EVALUATION_SCHEMA_VERSION:
+        raise ValueError(f"{system}: H2 schema is not v3")
+    if h2.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
+        raise ValueError(f"{system}: H2 validator semantics mismatch")
+    if h2.get("hierarchy") != model.get("hierarchy"):
+        raise ValueError(f"{system}: H2 hierarchy mismatch")
     if h2.get("selection_mode") != EXPECTED_H2_SELECTION[system]:
         raise ValueError(
             f"{system}: H2 selection mode is {h2.get('selection_mode')!r}, "
@@ -617,7 +624,7 @@ def _check_sidecars(system: str) -> dict[str, Any]:
             "numerator": normal.get(f"{name}_numerator"),
             "denominator": normal.get(f"{name}_denominator"),
         }
-        exact_replay = h2.get("normal_prediction_source") == "validated_schema_v2_replay"
+        exact_replay = h2.get("normal_prediction_source") == "validated_schema_v3_replay"
         matches = observed == metric if exact_replay else _metric_within_selector_tolerance(observed, metric)
         if not matches:
             mode = "validated replay" if exact_replay else "selector rerun tolerance"
@@ -628,7 +635,11 @@ def _check_sidecars(system: str) -> dict[str, Any]:
     if legacy:
         raise ValueError(f"{system}: legacy metric fields remain in oracle: {sorted(legacy)}")
     if oracle.get("schema_version") != EVALUATION_SCHEMA_VERSION:
-        raise ValueError(f"{system}: oracle schema is not v2")
+        raise ValueError(f"{system}: oracle schema is not v3")
+    if oracle.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
+        raise ValueError(f"{system}: oracle validator semantics mismatch")
+    if oracle.get("hierarchy") != model.get("hierarchy"):
+        raise ValueError(f"{system}: oracle hierarchy mismatch")
     expected_candidate_config = {
         "heuristic_max_candidates": 30,
         "heuristic_max_values": 3,
@@ -651,7 +662,7 @@ def _check_sidecars(system: str) -> dict[str, Any]:
         _check_paper_metrics(system, overall.get(key), context=key)
     selected_metrics = overall["selected_paper_metrics"]
     selected_source = oracle.get("selected_prediction_source") or {}
-    exact_selected_replay = selected_source.get("mode") == "validated_schema_v2_replay"
+    exact_selected_replay = selected_source.get("mode") == "validated_schema_v3_replay"
     model_manifest = _load(evaluation_dir / "predictions.manifest.json")
     expected_prediction_sha = (model_manifest.get("predictions") or {}).get("sha256")
     if not exact_selected_replay or selected_source.get("sha256") != expected_prediction_sha:
@@ -824,6 +835,9 @@ def main() -> None:
         for system in PAPER_ROW_NAMES
     }
     reference = systems["A1"]
+    _hierarchy_payload, hierarchy_identity = load_hierarchy_artifact(
+        ROOT / "data" / "static" / "wikidata-p279-2018-07-01.v1.json"
+    )
     for system, report in systems.items():
         if report["row_count"] != reference["row_count"]:
             raise ValueError(f"{system}: row count differs from A1")
@@ -831,6 +845,8 @@ def main() -> None:
             raise ValueError(f"{system}: dataset differs from A1")
         if report["row_identity_sha256"] != reference["row_identity_sha256"]:
             raise ValueError(f"{system}: row identity differs from A1")
+        if report["hierarchy_content_sha256"] != hierarchy_identity.content_sha256:
+            raise ValueError(f"{system}: hierarchy differs from the fixed artifact")
     dfb_metrics = systems["DFB"]["paper_metrics"]
     for metric_name, expected in (
         ("base_deletion_rate", 1.0),
