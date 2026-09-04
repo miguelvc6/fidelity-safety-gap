@@ -368,6 +368,7 @@ def test_config_generator_is_non_overwriting_and_keeps_training_config(
     assert generated["training_config"] == source_payload["training_config"]
     assert generated["model_config"]["active_factor_type_ids"] == [0, 3]
     assert generated["model_config"]["factor_executor_impl"] == "per_type_grouped_v2"
+    assert generated["model_config"]["allow_experimental_grouped_mm"] is False
     assert generated["model_config"]["gold_edit_embedding_mode"] == "compact"
     assert json.loads(source.read_text(encoding="utf-8")) == source_payload
 
@@ -408,7 +409,12 @@ def test_grouped_executor_uses_bf16_grouped_mm_on_sm80_cuda() -> None:
     major, _minor = torch.cuda.get_device_capability()
     if major < 8:
         pytest.skip("grouped_mm requires SM80 or newer")
-    executor = GroupedFactorTypeExecutor(2, 13, 8).cuda()
+    executor = GroupedFactorTypeExecutor(
+        2,
+        13,
+        8,
+        allow_experimental_grouped_mm=True,
+    ).cuda()
     inputs = torch.randn(9, 13, device="cuda")
     compact_types = torch.tensor([1, 0, 1, 0, 0, 1, 1, 1, 0], device="cuda")
     dispatch = build_grouped_dispatch(compact_types, num_types=2)
@@ -417,4 +423,18 @@ def test_grouped_executor_uses_bf16_grouped_mm_on_sm80_cuda() -> None:
         loss = states.float().square().mean() + logits.float().square().mean()
     loss.backward()
     assert executor.last_backend == "grouped_mm_bf16"
+    assert executor.input_layer.weight.grad is not None
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_grouped_executor_defaults_to_stable_segmented_cuda_backend() -> None:
+    executor = GroupedFactorTypeExecutor(2, 13, 8).cuda()
+    inputs = torch.randn(9, 13, device="cuda")
+    compact_types = torch.tensor([1, 0, 1, 0, 0, 1, 1, 1, 0], device="cuda")
+    dispatch = build_grouped_dispatch(compact_types, num_types=2)
+    with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        states, logits = executor(inputs, dispatch)
+        loss = states.float().square().mean() + logits.float().square().mean()
+    loss.backward()
+    assert executor.last_backend == "segmented_linear"
     assert executor.input_layer.weight.grad is not None

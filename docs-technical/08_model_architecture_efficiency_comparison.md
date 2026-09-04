@@ -158,11 +158,12 @@ This storage change does not itself alter parameter count beyond active-type com
 
 The implementation has three execution modes:
 
-- BF16 CUDA on SM80 or newer uses `torch.nn.functional.grouped_mm` when the output width is a multiple of eight;
+- the stable default uses segmented `F.linear` calls on CUDA and CPU;
+- an explicit `allow_experimental_grouped_mm=true` opt-in permits BF16 CUDA `torch.nn.functional.grouped_mm` on SM80 or newer when the output width is a multiple of eight;
 - scalar heads use a vectorized selected-weight dot product; and
-- CPU, unsupported CUDA, and full-precision execution use a segmented `F.linear` fallback.
+- unsupported and full-precision execution also use segmented `F.linear`.
 
-The grouped path can replace repeated boolean masks, scatters, and small per-type launches with grouped matrix operations. The same dispatch is reused by the precondition executor and post-edit head. Per-type pressure banks use the same mechanism when pressure is not shared.
+The grouped path can replace repeated boolean masks, scatters, and small per-type launches with grouped matrix operations. The same dispatch is reused by the precondition executor and post-edit head. Per-type pressure banks use the same mechanism when pressure is not shared. It is not enabled in paper runs: during the 2026-09-04 full regeneration, a valid production batch left the experimental CUDA kernel running without completing for more than three hours. The scheduler was stopped before any checkpoint was written, and the paper configs now record the stable setting explicitly.
 
 Important limitations:
 

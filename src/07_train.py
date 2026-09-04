@@ -80,6 +80,7 @@ _INITIALIZATION_MODEL_KEYS = (
     "head_hidden",
     "num_factor_types",
     "factor_executor_impl",
+    "allow_experimental_grouped_mm",
     "gold_edit_embedding_mode",
     "pressure_module_sharing",
     "active_factor_type_ids",

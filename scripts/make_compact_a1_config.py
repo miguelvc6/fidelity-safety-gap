@@ -101,6 +101,7 @@ def build_compact_a1_config(
         {
             "active_factor_type_ids": list(active_ids),
             "factor_executor_impl": "per_type_grouped_v2",
+            "allow_experimental_grouped_mm": False,
             "gold_edit_embedding_mode": "compact",
             "pressure_module_sharing": "per_type",
         }

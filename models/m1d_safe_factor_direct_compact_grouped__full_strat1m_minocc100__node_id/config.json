@@ -12,6 +12,7 @@
       15,
       16
     ],
+    "allow_experimental_grouped_mm": false,
     "constraint_representation": "factorized",
     "dataset_variant": "full_strat1m_minocc100",
     "dropout": 0.17,

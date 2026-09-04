@@ -277,6 +277,7 @@ def _proposal_config_payload(
         model_config.update(
             {
                 "factor_executor_impl": "per_type_grouped_v2",
+                "allow_experimental_grouped_mm": False,
                 "gold_edit_embedding_mode": "compact",
                 "pressure_module_sharing": exp.pressure_module_sharing,
                 "active_factor_type_ids": list(active_factor_type_ids),

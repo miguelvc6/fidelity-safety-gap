@@ -60,13 +60,27 @@ def build_grouped_dispatch(
 
 
 class GroupedLinearBank(nn.Module):
-    """A bank of independent linear layers evaluated as a ragged grouped GEMM."""
+    """A bank of independent linear layers evaluated over sorted type segments.
 
-    def __init__(self, num_types: int, input_dim: int, output_dim: int):
+    ``torch.nn.functional.grouped_mm`` is still experimental and has exhibited
+    non-terminating CUDA kernels for valid, production-sized dispatches. It is
+    therefore an explicit opt-in; the reproducible paper suite uses the stable
+    segmented ``F.linear`` implementation.
+    """
+
+    def __init__(
+        self,
+        num_types: int,
+        input_dim: int,
+        output_dim: int,
+        *,
+        allow_experimental_grouped_mm: bool = False,
+    ):
         super().__init__()
         self.num_types = int(num_types)
         self.input_dim = int(input_dim)
         self.output_dim = int(output_dim)
+        self.allow_experimental_grouped_mm = bool(allow_experimental_grouped_mm)
         self.weight = nn.Parameter(torch.empty(self.num_types, self.output_dim, self.input_dim))
         self.bias = nn.Parameter(torch.empty(self.num_types, self.output_dim))
         self.reset_parameters()
@@ -89,7 +103,11 @@ class GroupedLinearBank(nn.Module):
         )
 
     def _grouped_cuda_supported(self, inputs: torch.Tensor) -> bool:
-        return self.output_dim % 8 == 0 and self._bf16_cuda_supported(inputs)
+        return (
+            self.allow_experimental_grouped_mm
+            and self.output_dim % 8 == 0
+            and self._bf16_cuda_supported(inputs)
+        )
 
     def forward_sorted(
         self,

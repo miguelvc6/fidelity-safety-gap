@@ -393,6 +393,8 @@ class ModelConfig:
     """Graph representation regime: factorized or eswc_passive."""
     factor_executor_impl: str = "per_type_v1"
     """Factor executor implementation: per_type_v1, per_type_grouped_v2, or legacy_shared."""
+    allow_experimental_grouped_mm: bool = False
+    """Opt in to experimental CUDA grouped_mm; paper runs use the stable fallback."""
     gold_edit_embedding_mode: str = "full"
     """Gold-edit embedding storage: full or compact."""
 
@@ -480,6 +482,13 @@ class ModelConfig:
                     "or 'legacy_shared'"
                 )
             filtered["factor_executor_impl"] = value
+        if (
+            "allow_experimental_grouped_mm" in filtered
+            and filtered["allow_experimental_grouped_mm"] is not None
+        ):
+            filtered["allow_experimental_grouped_mm"] = bool(
+                filtered["allow_experimental_grouped_mm"]
+            )
         if "gold_edit_embedding_mode" in filtered and filtered["gold_edit_embedding_mode"] is not None:
             value = str(filtered["gold_edit_embedding_mode"]).lower()
             if value not in {"full", "compact"}:

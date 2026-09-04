@@ -78,10 +78,27 @@ class FactorPostEditHead(nn.Module):
 class GroupedFactorTypeExecutor(nn.Module):
     """Independent per-type executors stored in compact packed banks."""
 
-    def __init__(self, num_types: int, input_dim: int, state_dim: int):
+    def __init__(
+        self,
+        num_types: int,
+        input_dim: int,
+        state_dim: int,
+        *,
+        allow_experimental_grouped_mm: bool = False,
+    ):
         super().__init__()
-        self.input_layer = GroupedLinearBank(num_types, input_dim, state_dim)
-        self.state_layer = GroupedLinearBank(num_types, state_dim, state_dim)
+        self.input_layer = GroupedLinearBank(
+            num_types,
+            input_dim,
+            state_dim,
+            allow_experimental_grouped_mm=allow_experimental_grouped_mm,
+        )
+        self.state_layer = GroupedLinearBank(
+            num_types,
+            state_dim,
+            state_dim,
+            allow_experimental_grouped_mm=allow_experimental_grouped_mm,
+        )
         self.pre_head = GroupedLinearBank(num_types, state_dim, 1)
 
     def forward(
@@ -106,9 +123,21 @@ class GroupedFactorTypeExecutor(nn.Module):
 class GroupedFactorPostEditHead(nn.Module):
     """Independent per-type post-edit heads stored in compact packed banks."""
 
-    def __init__(self, num_types: int, state_dim: int, edit_dim: int):
+    def __init__(
+        self,
+        num_types: int,
+        state_dim: int,
+        edit_dim: int,
+        *,
+        allow_experimental_grouped_mm: bool = False,
+    ):
         super().__init__()
-        self.hidden = GroupedLinearBank(num_types, state_dim + edit_dim, state_dim)
+        self.hidden = GroupedLinearBank(
+            num_types,
+            state_dim + edit_dim,
+            state_dim,
+            allow_experimental_grouped_mm=allow_experimental_grouped_mm,
+        )
         self.output = GroupedLinearBank(num_types, state_dim, 1)
 
     def forward(
@@ -126,10 +155,27 @@ class GroupedFactorPostEditHead(nn.Module):
 class GroupedPressureRole(nn.Module):
     """Independent per-type pressure MLPs stored in compact packed banks."""
 
-    def __init__(self, num_types: int, input_dim: int, hidden_dim: int):
+    def __init__(
+        self,
+        num_types: int,
+        input_dim: int,
+        hidden_dim: int,
+        *,
+        allow_experimental_grouped_mm: bool = False,
+    ):
         super().__init__()
-        self.hidden = GroupedLinearBank(num_types, input_dim, hidden_dim)
-        self.output = GroupedLinearBank(num_types, hidden_dim, hidden_dim)
+        self.hidden = GroupedLinearBank(
+            num_types,
+            input_dim,
+            hidden_dim,
+            allow_experimental_grouped_mm=allow_experimental_grouped_mm,
+        )
+        self.output = GroupedLinearBank(
+            num_types,
+            hidden_dim,
+            hidden_dim,
+            allow_experimental_grouped_mm=allow_experimental_grouped_mm,
+        )
 
     def forward(self, inputs: torch.Tensor, dispatch: GroupedDispatch) -> torch.Tensor:
         sorted_inputs = inputs.index_select(0, dispatch.order)
@@ -418,6 +464,7 @@ class BaseGraphModel(nn.Module, ABC):
         active_factor_type_ids: Sequence[int] | torch.Tensor | None = None,
         factor_type_embedding_dim: int = 8,
         factor_executor_impl: str = "per_type_v1",
+        allow_experimental_grouped_mm: bool = False,
         gold_edit_embedding_mode: str = "full",
         constraint_representation: str = "factorized",
         pressure_enabled: bool = False,
@@ -540,6 +587,7 @@ class BaseGraphModel(nn.Module, ABC):
         self._num_factor_types = int(num_factor_types)
         self._factor_type_embedding_dim = int(factor_type_embedding_dim)
         self._factor_executor_impl = str(factor_executor_impl).lower()
+        self._allow_experimental_grouped_mm = bool(allow_experimental_grouped_mm)
         if self._factor_executor_impl not in {
             "per_type_v1",
             "per_type_grouped_v2",
@@ -662,11 +710,13 @@ class BaseGraphModel(nn.Module, ABC):
                 self._num_factor_executor_modules,
                 self._factor_scope_feature_dim,
                 self._factor_state_dim,
+                allow_experimental_grouped_mm=self._allow_experimental_grouped_mm,
             )
             self._factor_post_heads = GroupedFactorPostEditHead(
                 self._num_factor_executor_modules,
                 self._factor_state_dim,
                 self._factor_state_dim,
+                allow_experimental_grouped_mm=self._allow_experimental_grouped_mm,
             )
             gold_embedding_rows = (
                 int(gold_edit_class_ids.numel())
@@ -1342,6 +1392,7 @@ class RepairGINFactorPressure(BaseGraphModel):
                             pressure_modules_per_role,
                             pressure_input_dim,
                             self.hidden_channels,
+                            allow_experimental_grouped_mm=self._allow_experimental_grouped_mm,
                         )
                         for role_id in FACTOR_ROLE_IDS
                     }
@@ -1720,6 +1771,9 @@ def build_model(model_name: str, num_input_graph_nodes: int, config: ModelConfig
         active_factor_type_ids=getattr(config, "active_factor_type_ids", None),
         factor_type_embedding_dim=config.factor_type_embedding_dim,
         factor_executor_impl=getattr(config, "factor_executor_impl", "per_type_v1"),
+        allow_experimental_grouped_mm=getattr(
+            config, "allow_experimental_grouped_mm", False
+        ),
         gold_edit_embedding_mode=getattr(config, "gold_edit_embedding_mode", "full"),
         constraint_representation=getattr(config, "constraint_representation", "factorized"),
         pressure_enabled=config.pressure_enabled,
