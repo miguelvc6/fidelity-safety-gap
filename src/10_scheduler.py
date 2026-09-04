@@ -167,6 +167,7 @@ def run_command(cmd: List[str], log_path: Path) -> int:
             line = raw_line.rstrip("\n")
             timestamp = datetime.now(UTC).isoformat() + "Z"
             log_file.write(f"{timestamp} {line}\n")
+            log_file.flush()
         return_code = process.wait()
         elapsed = time.monotonic() - start
         log_file.write(f"# Finished: {datetime.now(UTC).isoformat()}Z\n")

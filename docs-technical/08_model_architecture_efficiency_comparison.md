@@ -163,7 +163,7 @@ The implementation has three execution modes:
 - scalar heads use a vectorized selected-weight dot product; and
 - unsupported and full-precision execution also use segmented `F.linear`.
 
-The grouped path can replace repeated boolean masks, scatters, and small per-type launches with grouped matrix operations. The same dispatch is reused by the precondition executor and post-edit head. Per-type pressure banks use the same mechanism when pressure is not shared. It is not enabled in paper runs: during the 2026-09-04 full regeneration, a valid production batch left the experimental CUDA kernel running without completing for more than three hours. The scheduler was stopped before any checkpoint was written, and the paper configs now record the stable setting explicitly.
+The grouped path can replace repeated boolean masks, scatters, and small per-type launches with grouped matrix operations. The same dispatch is reused by the precondition executor and post-edit head. Per-type pressure banks use the same mechanism when pressure is not shared. It is not enabled in paper runs: the 2026-09-04 full-regeneration smoke measurement reached batch 131 in about 11 minutes with the stable segmented backend, including roughly four minutes of first-shard loading, and its steady-state batches were faster than the experimental path on the available A30. The paper configs record the stable setting explicitly.
 
 Important limitations:
 
