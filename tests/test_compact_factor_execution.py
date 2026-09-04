@@ -438,3 +438,15 @@ def test_grouped_executor_defaults_to_stable_segmented_cuda_backend() -> None:
     loss.backward()
     assert executor.last_backend == "segmented_linear"
     assert executor.input_layer.weight.grad is not None
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_compact_pressure_model_supports_stable_backend_under_bf16_autocast() -> None:
+    model = _compact_model().cuda().train()
+    graph = _factor_graph(0).cuda()
+    with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        outputs = model(graph)
+        loss = outputs["edit_logits"].float().square().mean()
+        loss = loss + outputs["factor_logits_pre"].float().square().mean()
+    loss.backward()
+    assert model.factor_dispatch_backend == "segmented_linear"

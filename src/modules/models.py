@@ -1483,6 +1483,7 @@ class RepairGINFactorPressure(BaseGraphModel):
                         per_edge_messages[mask] = role_module[int(type_id)](
                             message_input[mask]
                         )
+                per_edge_messages = per_edge_messages.to(dtype=aggregated.dtype)
                 aggregated.index_add_(0, dst_index, per_edge_messages)
 
             _apply_role(FACTOR_ROLE_PREDICATE, runtime.predicate_factor_pos, runtime.predicate_dst_index)
