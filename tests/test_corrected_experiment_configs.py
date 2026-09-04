@@ -109,6 +109,8 @@ def test_canonical_bundle_defines_the_five_paper_systems(tmp_path) -> None:
         original["model_config"]["num_layers"],
     ) == (128, 2)
     assert original["model_config"]["dropout"] == 0.5
+    assert original["model_config"]["num_embedding_size"] == 128
+    assert original["model_config"]["use_node_embeddings"] is True
     assert a1["expected_trainable_parameters"] == 50_072_465
 
     for payload in (a1, m1c, m1d):

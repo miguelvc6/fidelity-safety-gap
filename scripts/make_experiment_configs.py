@@ -237,6 +237,12 @@ def _proposal_config_payload(
         "model": exp.model_name,
         "constraint_representation": exp.constraint_representation,
         "factor_executor_impl": exp.factor_executor_impl,
+        # Keep the node-embedding architecture explicit in every generated
+        # config.  This is part of the checkpoint shape, and in particular
+        # must remain identical for the archived Direct--Passive checkpoint
+        # that the corrected paper suite intentionally reuses.
+        "num_embedding_size": 128,
+        "use_node_embeddings": True,
         "use_edge_attributes": True,
         "use_edge_subtraction": False,
         "use_role_embeddings": True,
