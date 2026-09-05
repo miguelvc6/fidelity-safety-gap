@@ -421,7 +421,7 @@ def main() -> None:
         post_facts = {ent: {pred: set(values) for pred, values in facts.items()} for ent, facts in facts_by_entity.items()}
         post_predicates = {ent: set(preds) for ent, preds in predicates_present.items()}
         placeholder_map = _build_placeholder_map(encoder, row)
-        missing_edits = _apply_edit(
+        post_state = _apply_edit(
             post_facts,
             post_predicates,
             p_local,
@@ -429,18 +429,6 @@ def main() -> None:
             placeholder_map=placeholder_map,
             assume_complete=assume_complete,
             cast_int=use_encoded_ids,
-        )
-        post_state = EvidenceState(
-            facts_by_entity=post_facts,
-            predicates_present=post_predicates,
-            assume_complete=assume_complete,
-            missing_edits=missing_edits,
-            focus_subject=subject,
-            focus_predicate=predicate,
-            focus_object=obj,
-            other_subject=other_subject,
-            other_predicate=other_predicate,
-            other_object=other_object,
         )
         return pre_state, post_state, p_local
 

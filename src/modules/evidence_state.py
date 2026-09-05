@@ -13,7 +13,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 
-from modules.constraint_checkers import EvidenceState, UnresolvedEdit
+from modules.constraint_checkers import EvidenceEditEvent, EvidenceState, UnresolvedEdit
 
 
 EMPTY_VALUES = (None, "", 0)
@@ -265,6 +265,7 @@ def apply_evidence_edits(
     local_predicates = set(p_local)
     missing_edits: set[tuple[Any, Any]] = set()
     unresolved_edits: list[UnresolvedEdit] = []
+    edit_events: list[EvidenceEditEvent] = []
     applied_additions = set(getattr(pre_state, "applied_additions", frozenset()))
     applied_deletions = set(getattr(pre_state, "applied_deletions", frozenset()))
     resolved = {
@@ -294,46 +295,44 @@ def apply_evidence_edits(
         subject, predicate, obj = values
         if subject not in EMPTY_VALUES and predicate not in EMPTY_VALUES:
             missing_edits.add((subject, predicate))
-        unresolved_edits.append(
-            UnresolvedEdit(
-                kind=kind,
-                subject=subject,
-                predicate=predicate,
-                object=obj,
-                reason="invalid_or_partial_operation",
-            )
+        unresolved = UnresolvedEdit(
+            kind=kind,
+            subject=subject,
+            predicate=predicate,
+            object=obj,
+            reason="invalid_or_partial_operation",
+        )
+        unresolved_edits.append(unresolved)
+        edit_events.append(
+            EvidenceEditEvent(kind, subject, predicate, obj, False, unresolved.reason)
         )
 
-    if resolved["del"] is None:
-        _partial_unresolved("del", delete)
-    if resolved["add"] is None:
-        _partial_unresolved("add", add)
+    def _record_unresolved(
+        kind: str,
+        triple: tuple[Any, Any, Any],
+        reason: str,
+    ) -> None:
+        subject, predicate, obj = triple
+        missing_edits.add((subject, predicate))
+        unresolved_edits.append(UnresolvedEdit(kind, subject, predicate, obj, reason))
+        edit_events.append(EvidenceEditEvent(kind, subject, predicate, obj, False, reason))
 
     def _apply(kind: str, triple: tuple[Any, Any, Any] | None) -> None:
         if triple is None:
             return
         subject, predicate, obj = triple
         if subject not in facts:
-            missing_edits.add((subject, predicate))
-            unresolved_edits.append(
-                UnresolvedEdit(kind, subject, predicate, obj, "subject_outside_bounded_scope")
-            )
+            _record_unresolved(kind, triple, "subject_outside_bounded_scope")
             return
         if kind == "del" and predicate not in local_predicates:
-            missing_edits.add((subject, predicate))
-            unresolved_edits.append(
-                UnresolvedEdit(kind, subject, predicate, obj, "predicate_outside_bounded_scope")
-            )
+            _record_unresolved(kind, triple, "predicate_outside_bounded_scope")
             return
         if (
             kind == "del"
             and not pre_state.assume_complete
             and predicate not in pre_state.predicates_present.get(subject, set())
         ):
-            missing_edits.add((subject, predicate))
-            unresolved_edits.append(
-                UnresolvedEdit(kind, subject, predicate, obj, "predicate_adjacency_incomplete")
-            )
+            _record_unresolved(kind, triple, "predicate_adjacency_incomplete")
             return
         entity_facts = facts[subject]
         concrete = (subject, predicate, obj)
@@ -347,9 +346,14 @@ def apply_evidence_edits(
             local_predicates.add(predicate)
             applied_additions.add(concrete)
             applied_deletions.discard(concrete)
+        edit_events.append(EvidenceEditEvent(kind, subject, predicate, obj, True))
 
-    _apply("del", resolved["del"])
-    _apply("add", resolved["add"])
+    for kind, raw in (("del", delete), ("add", add)):
+        triple = resolved[kind]
+        if triple is None:
+            _partial_unresolved(kind, raw)
+        else:
+            _apply(kind, triple)
 
     post_state = EvidenceState(
         facts_by_entity=facts,
@@ -365,6 +369,8 @@ def apply_evidence_edits(
         unresolved_edits=tuple(unresolved_edits),
         applied_additions=frozenset(applied_additions),
         applied_deletions=frozenset(applied_deletions),
+        edit_events=tuple(edit_events),
+        edit_base_state=pre_state,
     )
     return post_state, resolved
 

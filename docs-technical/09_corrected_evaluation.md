@@ -15,6 +15,13 @@ Deleting and re-adding the same statement preserves it. The primary definition
 is bound to the focus subject/property, while secondary definitions are bound
 to represented occurrences of their own constrained property.
 
+Final symbolic metrics consume the original six prediction slots. Partial slot
+groups remain unresolved operations; they are not dropped by the complete-
+triple adapter used for fidelity and operation-count metrics. Ordered event
+replay always starts from the pre-edit state, so an unresolved deletion cannot
+be applied after a later successful addition. Prediction persistence and replay
+retain the same raw slots.
+
 The validator returns `satisfied`, `violated`, or `unknown`. Boolean
 `factor_checkable_*` columns are only the storage projection of this result:
 `unknown` is not checkable; the other two states are checkable.

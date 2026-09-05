@@ -251,33 +251,15 @@ def _resolve_placeholder(value: Any, placeholder_map: Dict[Any, Any]) -> Any:
 
 
 def _build_post_state_for_candidate(
-    base_facts_by_entity: Dict[Any, Dict[Any, Set[Any]]],
-    base_predicates_present: Dict[Any, Set[Any]],
+    pre_state: EvidenceState,
     p_local: Set[Any],
     *,
     candidate_slots: Sequence[int],
     placeholder_map: Dict[Any, Any],
     assume_complete: bool,
-) -> Tuple[
-    Dict[Any, Dict[Any, Set[Any]]],
-    Dict[Any, Set[Any]],
-    Set[Tuple[Any, Any]],
-    tuple,
-    frozenset,
-    frozenset,
-]:
-    pre_state = EvidenceState(
-        facts_by_entity=base_facts_by_entity,
-        predicates_present=base_predicates_present,
-        assume_complete=assume_complete,
-        missing_edits=set(),
-        focus_subject=0,
-        focus_predicate=0,
-        focus_object=0,
-        other_subject=0,
-        other_predicate=0,
-        other_object=0,
-    )
+) -> EvidenceState:
+    if pre_state.assume_complete != assume_complete:
+        raise ValueError("Candidate evidence completeness disagrees with the pre-state")
     post_state, _ = _shared_apply_evidence_edits(
         pre_state,
         p_local=p_local,
@@ -285,14 +267,7 @@ def _build_post_state_for_candidate(
         add=candidate_slots[0:3],
         resolver=lambda value: _resolve_placeholder(int(value), placeholder_map),
     )
-    return (
-        post_state.facts_by_entity,
-        post_state.predicates_present,
-        post_state.missing_edits,
-        post_state.unresolved_edits,
-        post_state.applied_additions,
-        post_state.applied_deletions,
-    )
+    return post_state
 
 
 def _local_satisfied_fraction(checkable: Sequence[bool], satisfied: Sequence[int]) -> float:
@@ -575,35 +550,12 @@ class CandidateConstraintEvaluator:
             raise AssertionError("Corrected evaluation pre-state is missing its base statement")
 
         placeholder_map = _build_placeholder_map(self._encoder, row, self._placeholder_token_ids)
-        (
-            post_facts,
-            post_predicates,
-            missing_edits,
-            unresolved_edits,
-            applied_additions,
-            applied_deletions,
-        ) = _build_post_state_for_candidate(
-            facts_by_entity,
-            predicates_present,
+        post_state = _build_post_state_for_candidate(
+            pre_state,
             p_local,
             candidate_slots=candidate_slots,
             placeholder_map=placeholder_map,
             assume_complete=self._assume_complete,
-        )
-        post_state = EvidenceState(
-            facts_by_entity=post_facts,
-            predicates_present=post_predicates,
-            assume_complete=self._assume_complete,
-            missing_edits=missing_edits,
-            focus_subject=subject,
-            focus_predicate=predicate,
-            focus_object=obj,
-            other_subject=other_subject,
-            other_predicate=other_predicate,
-            other_object=other_object,
-            unresolved_edits=unresolved_edits,
-            applied_additions=applied_additions,
-            applied_deletions=applied_deletions,
         )
 
         coerce_id = lambda value: _coerce_value(value, cast_int=self._use_encoded_ids)
@@ -726,8 +678,8 @@ class CandidateConstraintEvaluator:
             "post_applicable": post_applicable,
             "pre_unknown_reasons": pre_unknown_reasons,
             "post_unknown_reasons": post_unknown_reasons,
-            "edit_applicable": not bool(unresolved_edits),
-            "unresolved_edits": [edit.__dict__ for edit in unresolved_edits],
+            "edit_applicable": not bool(post_state.unresolved_edits),
+            "unresolved_edits": [edit.__dict__ for edit in post_state.unresolved_edits],
             "primary_satisfied": primary_satisfied,
             "primary_pre_violated": int(
                 pre_outcomes[resolved_primary_index] == "violated"

@@ -675,6 +675,8 @@ class RepairSample:
     constraint_type: str
     predicted: dict[str, tuple[int, int, int] | None]
     gold: dict[str, tuple[int, int, int] | None]
+    predicted_slots: tuple[int, int, int, int, int, int] | None = None
+    gold_slots: tuple[int, int, int, int, int, int] | None = None
 
 
 def evaluate_repair_samples(
@@ -758,6 +760,12 @@ def _coerce_factor_sequence(value: object) -> list[int] | list[bool] | None:
 
 
 def _candidate_slots_from_sample(sample: RepairSample, none_class: int) -> tuple[int, int, int, int, int, int]:
+    if sample.predicted_slots is not None:
+        if len(sample.predicted_slots) != 6:
+            raise ValueError(
+                f"RepairSample.predicted_slots must contain six values, got {len(sample.predicted_slots)}"
+            )
+        return tuple(int(value) for value in sample.predicted_slots)  # type: ignore[return-value]
     add = sample.predicted.get("add")
     delete = sample.predicted.get("del")
     if add is None:
@@ -862,10 +870,9 @@ def evaluate_paper_metric_instance(
             if post_satisfied[i]:
                 sir_num += 1
 
-    # A slot group is an operation only when all three components resolve.
-    # This matches `_triples_from_indices` and the resolved operations written
-    # to schema-v3 prediction artifacts. Partially populated slot groups do not
-    # mutate the symbolic state and therefore do not count as disruption.
+    # Complete-triple projection is used only for operation-count/fidelity
+    # metrics. Symbolic evaluation above consumes the raw six slots, where a
+    # partially populated group is retained as explicit uncertainty.
     add_count = int(all(value != none_class for value in slots[:3]))
     del_count = int(all(value != none_class for value in slots[3:]))
     pre_base_present = int(details.get("pre_focus_present", 0))

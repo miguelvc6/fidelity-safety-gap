@@ -105,6 +105,28 @@ def test_parquet_replay_provenance_and_direct_equality(tmp_path) -> None:
     assert manifest["semantic_contracts"] == expected_semantic_contracts()
 
 
+def test_partial_slot_groups_roundtrip_without_complete_triple_projection(tmp_path) -> None:
+    direct = torch.tensor(
+        [[1, 20, 0, 1, 20, 30], [2, 0, 40, 0, 20, 31]],
+        dtype=torch.long,
+    )
+    (predictions_path, _manifest_path, _manifest), sources, _ = _write(
+        tmp_path,
+        predictions=direct,
+    )
+    _config, _checkpoint, dataset, graph = sources
+
+    replayed, _ = load_and_validate_predictions(
+        predictions_path,
+        rows=_rows(),
+        dataset_path=dataset,
+        graph_paths=[graph],
+        dataset_variant="toy_minocc100",
+    )
+
+    torch.testing.assert_close(replayed, direct)
+
+
 def test_replay_rejects_schema_v2_and_cross_semantics_provenance(tmp_path) -> None:
     (predictions_path, manifest_path, manifest), sources, _ = _write(tmp_path)
     _config, _checkpoint, dataset, graph = sources

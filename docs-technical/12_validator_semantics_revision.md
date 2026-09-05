@@ -102,15 +102,37 @@ absent all-zero operation. Successful additions and deletions are also retained
 for effective-hierarchy precedence.
 
 The validator considers only unresolved edits relevant to the selected
-definition. For the benchmark's at-most-one-add/one-delete language it evaluates
-the projected state and every success/failure combination of relevant complete
-operations. It returns a Boolean outcome only when all worlds agree. This makes
-an unresolved competing distinct owner or new secondary one-of anchor unknown,
-while preserving an unaffected definite violation and ignoring unrelated
-failed edits. Legacy pair-only `missing_edits` metadata fails closed unless an
-unaffected violation can be established without the uncertain pair. Detailed
-results expose applicability and unknown reasons; labeled rows persist edit
-applicability and unresolved-operation JSON.
+definition. The canonical state retains the pre-edit state and an ordered event
+trace. For the benchmark's at-most-one-add/one-delete language it replays every
+success/failure combination from that pre-state in deletion-then-addition order;
+already-applied events occur in every world. This prevents an uncertain deletion
+from being incorrectly replayed after a later successful addition. It returns a
+Boolean outcome only when all final worlds agree.
+
+Partial operations retain every known component. Relevance is decided from the
+known subject and property before returning `unknown`: for example, an addition
+to a known different subject cannot affect a primary single-value or one-of
+anchor, but it can affect distinct-values or introduce an anchor for a selected
+secondary definition. This makes an unresolved competing distinct owner or new
+secondary one-of anchor unknown while preserving independent definite results.
+Legacy pair-only `missing_edits` metadata fails closed unless an unaffected
+violation can be established without the uncertain pair. Detailed results expose
+applicability and unknown reasons; labeled rows persist edit applicability and
+unresolved-operation JSON.
+
+## Raw prediction slots and final metrics
+
+Symbolic evaluation consumes the original six prediction slots. A partially
+populated add or delete group is therefore preserved as unresolved evidence all
+the way through model evaluation, H2 diagnostics, prediction persistence, and
+schema-v3 replay. `RepairSample` retains those raw slots separately from its
+complete-triple projection.
+
+The complete-triple projection remains appropriate for exact historical
+fidelity, alternative-repair classification, and operation-count metrics. It is
+never converted back into symbolic candidate slots. Consequently, replay of an
+identical prediction produces the same symbolic result as direct candidate
+evaluation even when only one or two components of an operation are populated.
 
 ## Primary identity contract
 

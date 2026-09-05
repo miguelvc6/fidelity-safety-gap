@@ -199,6 +199,8 @@ def _repair_samples_from_predictions(
                 constraint_type=kind,
                 predicted=_single_triple_by_action(pred_triples),
                 gold=_single_triple_by_action(gold_triples),
+                predicted_slots=tuple(int(value) for value in predictions[idx].reshape(-1).tolist()),
+                gold_slots=tuple(int(value) for value in targets[idx].reshape(-1).tolist()),
             )
         )
     return samples

@@ -153,3 +153,58 @@ def test_single_value_deletion_cardinality_controls(remaining: int, expected: O)
     pre = _state({1: {10: values}})
     post, _ = apply_evidence_edits(pre, p_local={10}, delete=(1, 10, 5), add=None)
     assert evaluate_constraint_outcome(post, _constraint("single")) == expected
+
+
+@pytest.mark.parametrize(
+    ("family", "prop", "selector", "edited_predicate", "primary", "expected"),
+    [
+        ("itemRequiresStatement", 10, None, 20, True, O.SATISFIED),
+        ("conflictWith", 10, None, 20, True, O.VIOLATED),
+        ("type", 10, "subclass", 279, True, O.SATISFIED),
+        ("type", 10, "instance", 31, True, O.SATISFIED),
+        ("oneOf", 20, None, 20, False, O.SATISFIED),
+    ],
+)
+def test_unresolved_delete_is_replayed_before_successful_addition(
+    family: str,
+    prop: int,
+    selector: str | None,
+    edited_predicate: int,
+    primary: bool,
+    expected: O,
+) -> None:
+    pre = _state({1: {10: {6}}})
+    triple = (1, edited_predicate, 5)
+    post, _ = apply_evidence_edits(pre, p_local={10}, delete=triple, add=triple)
+    hierarchy = ClassHierarchy(parents={1: set(), 5: set()}, complete={1: True, 5: True})
+
+    assert [(event.kind, event.applied) for event in post.edit_events] == [
+        ("del", False),
+        ("add", True),
+    ]
+    assert post.has_statement(*triple)
+    assert evaluate_constraint_outcome(
+        post,
+        _constraint(family, prop=prop, selector=selector),
+        hierarchy=hierarchy,
+        primary=primary,
+    ) == expected
+
+
+@pytest.mark.parametrize(
+    ("family", "values", "expected"),
+    [
+        ("single", {5}, O.SATISFIED),
+        ("oneOf", {5}, O.SATISFIED),
+        ("oneOf", {6}, O.VIOLATED),
+    ],
+)
+def test_partial_add_on_known_other_subject_is_irrelevant_to_primary(
+    family: str,
+    values: set[int],
+    expected: O,
+) -> None:
+    pre = _state({1: {10: values}})
+    post, _ = apply_evidence_edits(pre, p_local={10}, delete=None, add=(2, 10, 0))
+
+    assert evaluate_constraint_outcome(post, _constraint(family)) == expected

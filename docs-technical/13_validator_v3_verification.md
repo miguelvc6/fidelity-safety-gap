@@ -16,12 +16,22 @@ and work intentionally deferred to full regeneration.
 | Item accepted as constrained property | reproduced and fixed | shared parser | resolvable `Q`-ID rejection test |
 | Conditional loss collapses below epsilon | reproduced and fixed | production loss helpers | extreme logits, BF16, finite gradient, eligible/ineligible tests |
 | Candidate primary term masks post unknowns | deliberate objective change | Candidate--C/DP train and validation paths | proven-fix monotonicity and pre-eligibility tests |
+| Final metric adapter erases partial operations | reproduced and fixed | `09_eval.py`, `RepairSample`, paper/H2 evaluation | raw-slot callback, artifact round-trip, supplied full-entry-point test |
+| Unresolved deletion replayed after successful addition | reproduced and fixed | canonical evidence events and detailed validator | five-family ordered-world regressions and labeler/candidate parity |
+| Partial-edit relevance uses only the property | reproduced and fixed | `_edit_may_affect` | primary single/one-of controls plus conservative distinct/secondary controls |
 
 No applicable finding was left unresolved. The distinct-values disagreement is
 not implemented as the original audit expectation: the checked anchor is
 exempted, while another exempt subject's statement remains competing evidence,
 matching the separately inspected reference implementation revision cited in
 the semantics guide.
+
+The independent review of commit `e5cd092` subsequently reproduced ten cases
+across the final three rows above, plus one full metric-callback failure. The
+fix retains raw prediction slots for symbolic evaluation, records requested
+operations in source order, and replays uncertain operations from the pre-edit
+state. These are corrections to the not-yet-generated v3 artifact contract;
+no v3 labels, graphs, checkpoints, or results existed to migrate.
 
 ## Executed commands
 
@@ -47,8 +57,17 @@ PYTHONPATH="$PWD/src" uv run python -m pytest -q "$AUDIT_DIR/tests"
 PYTHONPATH="$PWD/src" uv run python tests/smoke_validator_v2_pipeline.py
 # validator-v3 smoke pipeline: PASS (legacy filename retained for automation)
 
-uv run python -m pytest -q
-# 175 passed, 3 third-party deprecation warnings, 0 skipped
+AUDIT_DIR=audit/extracted/fidelity_safety_gap_v3_review_e5cd092/fsg_v3_audit
+FSG_REPO="$PWD" PYTHONPATH="$PWD/src" uv run python -m pytest -q \
+  "$AUDIT_DIR/tests" --tb=short
+# before: 10 failed, 90 passed; after: 100 passed
+
+FSG_REPO="$PWD" PYTHONPATH="$PWD/src" uv run python -m pytest -q \
+  "$AUDIT_DIR/integration_only" --tb=short
+# before: 1 failed; after: 1 passed
+
+uv run python -m pytest -q -ra
+# 186 passed, 3 third-party deprecation warnings, 0 skipped
 
 uv run python -m compileall -q src scripts tests
 # exit 0
@@ -64,7 +83,10 @@ definitions are filtered.
 Ruff is not installed in the locked environment (`uv run ruff` fails to
 spawn), so no Ruff result is claimed. The three pytest warnings come from
 PyTorch Geometric's deprecated distributed import and PyTorch's deprecated
-`torch.jit.script`; they are not validator failures.
+`torch.jit.script`; they are not validator failures. The zero-skip result is
+expected: the approved test environment exposed one NVIDIA A30 and ran the
+three CUDA-only compact-factor tests. A separate sandboxed `nvidia-smi` failure
+was not evidence that those tests were skipped.
 
 The immutable-input verification recomputed size and SHA-256 for all 38 paths
 recorded in
@@ -87,6 +109,22 @@ from its filtered `factor_constraint_ids` position in 2,924 of 3,000 rows
 (train 975, validation 976, test 973). This quantifies exposure to positional
 transfer, not the number of wrong historical predictions and not a v3 label
 result. The v3 full-scan diagnostic must be run only after labels regenerate.
+
+## Bounded edit-edge-case observation
+
+A read-only prefix scan inspected 1,000 unchanged historical edits from each
+split. None contained a partial operation or an unresolved deletion followed
+by a successful addition. This is only a 3,000-row gold-edit observation.
+
+A separate scan inspected the first 1,000 predictions from each of ten archived
+paper-system artifacts (10,000 rows total). It found 56 partial additions and
+four partial deletions: A1 had 19/3, B0 had 28/1, the definition-majority
+baseline had 6/0, and M1D had 3/0; the other six artifacts had none in their
+prefixes. One A1 prediction contained an unresolved partial deletion followed
+by a successful addition on a different triple; no identical-triple overlap occurred in the
+bounded prefixes. These stale v2 predictions are prevalence evidence only, not
+v3 metrics. Their partial-operation frequency confirms that retaining raw slots
+in final symbolic evaluation is operationally relevant.
 
 ## Deferred checks
 

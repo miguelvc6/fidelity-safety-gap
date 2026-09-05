@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Callable, Dict, Iterable, List, Mapping, Sequence, Set, Tuple
 
@@ -93,6 +93,18 @@ class UnresolvedEdit:
 
 
 @dataclass(frozen=True)
+class EvidenceEditEvent:
+    """One requested operation in canonical delete-then-add order."""
+
+    kind: str
+    subject: int
+    predicate: int
+    object: int
+    applied: bool
+    reason: str = ""
+
+
+@dataclass(frozen=True)
 class EvidenceState:
     facts_by_entity: Dict[int, Dict[int, Set[int]]]
     predicates_present: Dict[int, Set[int]]
@@ -107,6 +119,8 @@ class EvidenceState:
     unresolved_edits: Tuple[UnresolvedEdit, ...] = ()
     applied_additions: frozenset[Tuple[int, int, int]] = frozenset()
     applied_deletions: frozenset[Tuple[int, int, int]] = frozenset()
+    edit_events: Tuple[EvidenceEditEvent, ...] = ()
+    edit_base_state: "EvidenceState | None" = field(default=None, compare=False, repr=False)
 
     def entity_in_scope(self, entity_id: int) -> bool:
         return entity_id in self.facts_by_entity
@@ -575,7 +589,67 @@ def _relevant_predicates(constraint: ConstraintInstance) -> set[int]:
     return {value for value in predicates if value}
 
 
-def _force_edit(state: EvidenceState, edit: UnresolvedEdit) -> EvidenceState:
+def _edit_may_affect(
+    state: EvidenceState,
+    constraint: ConstraintInstance,
+    edit: UnresolvedEdit | EvidenceEditEvent,
+    *,
+    primary: bool,
+) -> bool:
+    """Use every known component before treating an edit as relevant.
+
+    Secondary definitions may acquire anchors on another subject, and
+    distinct-values may acquire a competing owner, so those paths remain
+    deliberately conservative. Primary subject/occurrence checks can exclude
+    a known different subject when no relation traversal can lead back to the
+    focus anchor.
+    """
+
+    relevant_predicates = _relevant_predicates(constraint)
+    if edit.predicate and edit.predicate not in relevant_predicates:
+        return False
+    if not primary:
+        return True
+
+    family = constraint.constraint_type
+    subject = edit.subject
+    prop = constraint.constrained_property
+    focus = state.focus_subject
+    if family in {"single", "oneOf"}:
+        return (not subject or subject == focus) and (not edit.predicate or edit.predicate == prop)
+    if family in {"conflictWith", "itemRequiresStatement"}:
+        return not subject or subject == focus
+    if family == "distinct":
+        return True
+    if family == "type":
+        if not edit.predicate or edit.predicate == constraint.p279_predicate:
+            return True
+        return not subject or subject == focus
+
+    focus_values = state.values_for(focus, prop)
+    if family == "symmetric":
+        return not subject or subject == focus or subject in focus_values
+    if family == "inverse":
+        if edit.predicate == prop:
+            return not subject or subject == focus
+        return not subject or subject in focus_values
+    if family == "valueRequiresStatement":
+        if edit.predicate == prop:
+            return not subject or subject == focus
+        return not subject or subject in focus_values
+    if family == "valueType":
+        if not edit.predicate or edit.predicate == constraint.p279_predicate:
+            return True
+        if edit.predicate == prop:
+            return not subject or subject == focus
+        return not subject or subject in focus_values
+    return True
+
+
+def _force_edit(
+    state: EvidenceState,
+    edit: UnresolvedEdit | EvidenceEditEvent,
+) -> EvidenceState:
     """Return one possible world in which an unresolved operation succeeded."""
 
     facts = {
@@ -603,7 +677,55 @@ def _force_edit(state: EvidenceState, edit: UnresolvedEdit) -> EvidenceState:
         unresolved_edits=(),
         applied_additions=frozenset(additions),
         applied_deletions=frozenset(deletions),
+        edit_events=(),
+        edit_base_state=None,
     )
+
+
+def _ordered_edit_worlds(
+    state: EvidenceState,
+    constraint: ConstraintInstance,
+    *,
+    primary: bool,
+) -> tuple[list[EvidenceState] | None, tuple[UnresolvedEdit, ...]]:
+    """Replay requested operations from the pre-edit state in source order.
+
+    Applied events occur in every world. A complete unresolved event branches
+    into failed and successful worlds. A relevant partial event cannot be
+    enumerated because one or more components are unknown, so ``None`` asks
+    the caller to return ``unknown``. Irrelevant unresolved events are skipped.
+    """
+
+    relevant_unresolved = tuple(
+        edit
+        for edit in state.unresolved_edits
+        if _edit_may_affect(state, constraint, edit, primary=primary)
+    )
+    if not relevant_unresolved:
+        return [], ()
+    if any(not edit.subject or not edit.predicate or not edit.object for edit in relevant_unresolved):
+        return None, relevant_unresolved
+    if state.edit_base_state is None or not state.edit_events:
+        return [], relevant_unresolved
+
+    base = replace(
+        state.edit_base_state,
+        missing_edits=set(),
+        unresolved_edits=(),
+        edit_events=(),
+        edit_base_state=None,
+    )
+    worlds = [base]
+    for event in state.edit_events:
+        if event.applied:
+            worlds = [_force_edit(world, event) for world in worlds]
+            continue
+        if not _edit_may_affect(state, constraint, event, primary=primary):
+            continue
+        if not event.subject or not event.predicate or not event.object:
+            return None, relevant_unresolved
+        worlds += [_force_edit(world, event) for world in list(worlds)]
+    return worlds, relevant_unresolved
 
 
 def _applicable(state: EvidenceState, constraint: ConstraintInstance, *, primary: bool) -> bool:
@@ -728,13 +850,13 @@ def evaluate_constraint_detailed(
         return ValidationResult(ValidationOutcome.UNKNOWN, False, ("primary anchor is exempt",))
 
     outcome = _evaluate_without_unresolved(state, constraint, hierarchy=hierarchy, primary=primary)
-    relevant_predicates = _relevant_predicates(constraint)
     detailed = tuple(
         edit
         for edit in getattr(state, "unresolved_edits", ())
-        if not edit.predicate or edit.predicate in relevant_predicates
+        if _edit_may_affect(state, constraint, edit, primary=primary)
     )
     described_pairs = {(edit.subject, edit.predicate) for edit in getattr(state, "unresolved_edits", ())}
+    relevant_predicates = _relevant_predicates(constraint)
     legacy_relevant = {
         pair
         for pair in state.missing_edits
@@ -755,33 +877,34 @@ def evaluate_constraint_detailed(
         )
 
     if detailed:
-        if any(not edit.subject or not edit.predicate or not edit.object for edit in detailed):
+        ordered_worlds, detailed = _ordered_edit_worlds(
+            state,
+            constraint,
+            primary=primary,
+        )
+        if ordered_worlds is None:
             return ValidationResult(
                 ValidationOutcome.UNKNOWN,
                 applicable,
                 ("relevant unresolved edit is malformed or partial",),
             )
-        clean_state = replace(
-            state,
-            missing_edits=set(state.missing_edits) - described_pairs,
-            unresolved_edits=(),
-        )
-        outcome = _evaluate_without_unresolved(
-            clean_state,
-            constraint,
-            hierarchy=hierarchy,
-            primary=primary,
-        )
-        possible = {outcome}
-        # A benchmark candidate has at most one add and one delete.  Enumerate
-        # every success/failure combination without mutating the shared state.
-        worlds = [clean_state]
-        for edit in detailed:
-            worlds += [_force_edit(world, edit) for world in list(worlds)]
-        possible.update(
+        if ordered_worlds:
+            worlds = ordered_worlds
+        else:
+            # Backward-compatible fallback for callers that supply detailed
+            # unresolved edits without the canonical ordered-event metadata.
+            clean_state = replace(
+                state,
+                missing_edits=set(state.missing_edits) - described_pairs,
+                unresolved_edits=(),
+            )
+            worlds = [clean_state]
+            for edit in detailed:
+                worlds += [_force_edit(world, edit) for world in list(worlds)]
+        possible = {
             _evaluate_without_unresolved(world, constraint, hierarchy=hierarchy, primary=primary)
             for world in worlds
-        )
+        }
         if len(possible) != 1:
             reasons = tuple(
                 sorted({f"unresolved {edit.kind} affects {edit.predicate}: {edit.reason}" for edit in detailed})

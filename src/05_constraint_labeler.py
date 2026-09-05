@@ -218,7 +218,7 @@ def _apply_edit(
     placeholder_map: Dict[Any, Any],
     assume_complete: bool,
     cast_int: bool,
-) -> tuple[Set[Tuple[int, int]], tuple, frozenset, frozenset]:
+) -> EvidenceState:
     pre_state = EvidenceState(
         facts_by_entity=facts_by_entity,
         predicates_present=predicates_present,
@@ -252,16 +252,7 @@ def _apply_edit(
         ),
         resolver=resolver,
     )
-    facts_by_entity.clear()
-    facts_by_entity.update(post_state.facts_by_entity)
-    predicates_present.clear()
-    predicates_present.update(post_state.predicates_present)
-    return (
-        post_state.missing_edits,
-        post_state.unresolved_edits,
-        post_state.applied_additions,
-        post_state.applied_deletions,
-    )
+    return post_state
 
 
 def _build_constraint_instance(
@@ -424,7 +415,7 @@ def _process_dataframe(
         }
         post_predicates = {ent: set(preds) for ent, preds in predicates_present.items()}
         placeholder_map = _build_placeholder_map(encoder, row)
-        missing_edits, unresolved_edits, applied_additions, applied_deletions = _apply_edit(
+        post_state = _apply_edit(
             post_facts,
             post_predicates,
             p_local,
@@ -432,21 +423,6 @@ def _process_dataframe(
             placeholder_map=placeholder_map,
             assume_complete=assume_complete,
             cast_int=use_encoded_ids,
-        )
-        post_state = EvidenceState(
-            facts_by_entity=post_facts,
-            predicates_present=post_predicates,
-            assume_complete=assume_complete,
-            missing_edits=missing_edits,
-            focus_subject=subject,
-            focus_predicate=predicate,
-            focus_object=obj,
-            other_subject=other_subject,
-            other_predicate=other_predicate,
-            other_object=other_object,
-            unresolved_edits=unresolved_edits,
-            applied_additions=applied_additions,
-            applied_deletions=applied_deletions,
         )
 
         if constraint_scope == "focus":
@@ -608,9 +584,9 @@ def _process_dataframe(
         factor_applicable_post.append(applicable_post_row)
         factor_unknown_reason_pre.append(reason_pre_row)
         factor_unknown_reason_post.append(reason_post_row)
-        edit_applicable.append(not bool(unresolved_edits))
+        edit_applicable.append(not bool(post_state.unresolved_edits))
         unresolved_edit_diagnostics.append(
-            json.dumps([edit.__dict__ for edit in unresolved_edits], sort_keys=True)
+            json.dumps([edit.__dict__ for edit in post_state.unresolved_edits], sort_keys=True)
         )
 
         total = len(retained_constraint_ids)
