@@ -1,15 +1,18 @@
 # Training and Evaluation Execution Plan
 
-This is the operational sequence for the validator-v2, single-seed paper
+This is the operational sequence for the validator-v3, single-seed paper
 suite. The implementation and artifact contract are detailed in
-[Validator semantics v2 and experiment regeneration](12_validator_semantics_revision.md).
+[Validator semantics v3 and regeneration](12_validator_semantics_revision.md).
 
 ## Fixed policy
 
 - benchmark: `full_strat1m_minocc100`;
 - encoding: `node_id`;
 - constraint scope: `local`;
-- validator semantics: version 2;
+- validator semantics: version 3;
+- hierarchy/parser/cache contracts: version 2;
+- effective-hierarchy policy: version 1;
+- candidate objective: version 2;
 - class hierarchy cutoff: `2018-07-01T00:00:00Z`;
 - training seed: 42;
 - training population: every sampled training row; and
@@ -23,7 +26,7 @@ validator/hierarchy identity.
 ## Generation order
 
 First build and verify the fixed hierarchy, then generate labels and both graph
-representations using the commands in the validator-v2 guide. Generate the
+representations using the commands in the validator-v3 guide. Generate the
 five canonical configurations only after the new labels and graph manifests
 exist:
 
@@ -62,7 +65,8 @@ Only the archived Direct--Passive checkpoint is reused, after checksum and
 architecture validation. The other four systems are trained from scratch;
 Candidate--SR cannot start before the new Direct--Factor checkpoint exists.
 Existing non-passive checkpoints are accepted on restart only when their
-training provenance has validator version 2 and the current hierarchy identity.
+training provenance has validator version 3, every current semantic-contract
+version, and the current hierarchy identity.
 
 After learned evaluation the scheduler refits and evaluates the four
 deterministic/statistical baselines from the unchanged rows. It then regenerates

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the resumable 2018-07-01 P279 hierarchy used by validator v2."""
+"""Build the resumable 2018-07-01 P279 hierarchy used by validator v3."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import random
+import shutil
 import time
 from collections import deque
 from datetime import UTC, datetime
@@ -17,14 +18,20 @@ import networkx as nx
 import pandas as pd
 import requests
 
-from modules.class_hierarchy import HIERARCHY_CUTOFF, HIERARCHY_SCHEMA_VERSION, canonical_sha256
+from modules.class_hierarchy import (
+    HIERARCHY_CACHE_SCHEMA_VERSION,
+    HIERARCHY_CUTOFF,
+    HIERARCHY_PARSER_VERSION,
+    HIERARCHY_SCHEMA_VERSION,
+    canonical_sha256,
+)
 from modules.constraint_checkers import normalize_item_id, normalize_property_id
 from modules.data_encoders import GlobalIntEncoder
 
 
 API_URL = "https://www.wikidata.org/w/api.php"
 USER_AGENT = (
-    "fidelity-safety-gap-historical-hierarchy/2.0 "
+    "fidelity-safety-gap-historical-hierarchy/3.0 "
     "(https://github.com/miguelvc6/fidelity-safety-gap)"
 )
 
@@ -112,6 +119,7 @@ class HistoricalRevisionClient:
         self._last_request_started: float | None = None
         self.session = requests.Session()
         self.session.headers["User-Agent"] = USER_AGENT
+        self._last_pages: dict[str, dict[str, Any]] = {}
 
     def _pace_request(self) -> None:
         if self._last_request_started is not None:
@@ -184,19 +192,80 @@ class HistoricalRevisionClient:
                 "status_reason": f"P279 payload is {type(claims).__name__}",
                 "parents": [],
             }
-        nondeprecated = [claim for claim in claims if claim.get("rank") != "deprecated"]
+        malformed_claim_shape = any(
+            not isinstance(claim, dict)
+            or claim.get("rank") not in {"deprecated", "normal", "preferred"}
+            for claim in claims
+        )
+        shaped_claims = [claim for claim in claims if isinstance(claim, dict)]
+        nondeprecated = [claim for claim in shaped_claims if claim.get("rank") != "deprecated"]
         preferred = [claim for claim in nondeprecated if claim.get("rank") == "preferred"]
         selected = preferred if preferred else [claim for claim in nondeprecated if claim.get("rank") == "normal"]
+        if nondeprecated and not selected:
+            malformed_claim_shape = True
         parents: set[str] = set()
+        adjacency_complete = not malformed_claim_shape
+        snak_counts = {"value": 0, "somevalue": 0, "novalue": 0, "malformed": 0}
         for claim in selected:
-            value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
-            raw = value.get("id") if isinstance(value, dict) else None
-            if (parent := normalize_item_id(raw)) is not None:
+            mainsnak = claim.get("mainsnak")
+            if not isinstance(mainsnak, dict):
+                adjacency_complete = False
+                snak_counts["malformed"] += 1
+                continue
+            snaktype = mainsnak.get("snaktype")
+            # Old revisions sometimes omit snaktype on ordinary value snaks.
+            if snaktype is None and "datavalue" in mainsnak:
+                snaktype = "value"
+            if snaktype == "novalue":
+                snak_counts["novalue"] += 1
+                continue
+            if snaktype == "somevalue":
+                adjacency_complete = False
+                snak_counts["somevalue"] += 1
+                continue
+            if snaktype != "value":
+                adjacency_complete = False
+                snak_counts["malformed"] += 1
+                continue
+            snak_counts["value"] += 1
+            datavalue = mainsnak.get("datavalue")
+            value = datavalue.get("value") if isinstance(datavalue, dict) else None
+            parent: str | None = None
+            datavalue_type_valid = (
+                isinstance(datavalue, dict)
+                and datavalue.get("type", "wikibase-entityid") == "wikibase-entityid"
+            )
+            if (
+                datavalue_type_valid
+                and isinstance(value, dict)
+                and value.get("entity-type", "item") == "item"
+            ):
+                has_explicit = "id" in value
+                explicit = normalize_item_id(value.get("id")) if has_explicit else None
+                has_numeric = "numeric-id" in value
+                numeric = value.get("numeric-id")
+                numeric_item = None
+                if has_numeric and isinstance(numeric, int) and not isinstance(numeric, bool) and numeric > 0:
+                    numeric_item = f"Q{numeric}"
+                if has_explicit and explicit is None:
+                    parent = None
+                elif has_numeric and numeric_item is None:
+                    parent = None
+                elif explicit is not None and numeric_item is not None and explicit != numeric_item:
+                    parent = None
+                else:
+                    parent = explicit or numeric_item
+            if parent is not None:
                 parents.add(parent)
+            else:
+                adjacency_complete = False
+                snak_counts["malformed"] += 1
         return {
             **provenance,
             "status": "ok",
             "parents": sorted(parents),
+            "direct_adjacency_complete": adjacency_complete,
+            "snak_counts": snak_counts,
             "rank_policy": "preferred_if_present_else_normal;deprecated_ignored",
         }
 
@@ -239,6 +308,7 @@ class HistoricalRevisionClient:
                 pages = payload["query"]["pages"]
                 if len(pages) != 1:
                     raise RuntimeError(f"MediaWiki response returned {len(pages)} pages for {entity_id}")
+                self._last_pages[entity_id] = pages[0]
                 return self._record_from_page(entity_id, pages[0])
             except (requests.RequestException, ValueError, KeyError, RuntimeError) as exc:
                 last_error = exc
@@ -279,17 +349,58 @@ def _load_or_fetch(
     path = _cache_path(cache_dir, entity_id)
     if path.exists():
         cached = json.loads(path.read_text(encoding="utf-8"))
-        if cached.get("cutoff") == cutoff:
-            record = cached["record"]
-            # Cache records written by an earlier downloader revision did not
-            # bind successful parses to the exact revision content. Refresh
-            # those entries rather than allowing mixed provenance into the
-            # versioned artifact.
-            if record.get("status") != "ok" or record.get("revision_content_sha256"):
-                return record
+        if (
+            cached.get("cache_schema_version") == HIERARCHY_CACHE_SCHEMA_VERSION
+            and cached.get("parser_version") == HIERARCHY_PARSER_VERSION
+            and cached.get("cutoff") == cutoff
+        ):
+            return cached["record"]
+        # A stale parse can only be migrated by reparsing retained raw source.
+        # A revision-content checksum proves source identity, not parser
+        # correctness.  Preserve the legacy entry before writing v2.
+        source_page = cached.get("source_page")
+        if cached.get("cutoff") == cutoff and isinstance(source_page, dict):
+            record = client._record_from_page(entity_id, source_page)
+            legacy = path.with_name(f"{path.stem}.pre-parser-v{HIERARCHY_PARSER_VERSION}{path.suffix}")
+            if not legacy.exists():
+                shutil.copy2(path, legacy)
+            temporary = path.with_suffix(".json.tmp")
+            temporary.write_text(
+                json.dumps(
+                    {
+                        "cache_schema_version": HIERARCHY_CACHE_SCHEMA_VERSION,
+                        "parser_version": HIERARCHY_PARSER_VERSION,
+                        "cutoff": cutoff,
+                        "source_page": source_page,
+                        "record": record,
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            temporary.replace(path)
+            return record
+        legacy = path.with_name(f"{path.stem}.pre-parser-v{HIERARCHY_PARSER_VERSION}{path.suffix}")
+        if not legacy.exists():
+            shutil.copy2(path, legacy)
     record = client.fetch(entity_id, cutoff)
+    source_page = client._last_pages.get(entity_id)
     temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps({"cutoff": cutoff, "record": record}, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.write_text(
+        json.dumps(
+            {
+                "cache_schema_version": HIERARCHY_CACHE_SCHEMA_VERSION,
+                "parser_version": HIERARCHY_PARSER_VERSION,
+                "cutoff": cutoff,
+                "source_page": source_page,
+                "record": record,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     temporary.replace(path)
     return record
 
@@ -317,7 +428,11 @@ def _closure_complete(node: str, records: dict[str, dict[str, Any]]) -> bool:
             continue
         visited.add(current)
         record = records.get(current)
-        if record is None or record.get("status") != "ok":
+        if (
+            record is None
+            or record.get("status") != "ok"
+            or not record.get("direct_adjacency_complete", False)
+        ):
             return False
         stack.extend(record.get("parents", []))
     return True
@@ -367,6 +482,8 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     edges = sorted((child, parent) for child, record in records.items() for parent in record.get("parents", []))
     payload: dict[str, Any] = {
         "schema_version": HIERARCHY_SCHEMA_VERSION,
+        "parser_version": HIERARCHY_PARSER_VERSION,
+        "cache_schema_version": HIERARCHY_CACHE_SCHEMA_VERSION,
         "artifact": "wikidata-p279-hierarchy",
         "cutoff": args.cutoff,
         "created_at_utc": datetime.now(UTC).isoformat(),
@@ -401,8 +518,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--registry", type=Path, default=Path("data/interim/constraint_registry_full.parquet"))
     parser.add_argument("--benchmark", type=Path, default=Path("data/interim/full_strat1m_minocc100"))
     parser.add_argument("--encoder", type=Path, default=Path("data/interim/full_strat1m_minocc100/globalintencoder.txt"))
-    parser.add_argument("--cache", type=Path, default=Path("data/interim/hierarchy_cache_2018-07-01"))
-    parser.add_argument("--output", type=Path, default=Path("data/static/wikidata-p279-2018-07-01.v1.json"))
+    parser.add_argument("--cache", type=Path, default=Path("data/interim/hierarchy_cache_2018-07-01.v2"))
+    parser.add_argument("--output", type=Path, default=Path("data/static/wikidata-p279-2018-07-01.v2.json"))
     parser.add_argument("--cutoff", default=HIERARCHY_CUTOFF)
     parser.add_argument("--expected-seed-count", type=int, default=3941)
     parser.add_argument("--timeout", type=float, default=30.0)

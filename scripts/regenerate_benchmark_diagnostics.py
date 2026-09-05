@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate benchmark statistics and validator-v2 provenance sidecars."""
+"""Regenerate benchmark statistics and validator-v3 provenance sidecars."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ from modules.evaluation_artifacts import (  # noqa: E402
     sha256_file,
 )
 from modules.evidence_state import build_pre_state  # noqa: E402
+from modules.semantics_provenance import expected_semantic_contracts  # noqa: E402
 from modules.training_utils import load_graph_dataset  # noqa: E402
 
 
@@ -84,7 +85,7 @@ def main() -> None:
         "test", "node_id", constraint_representation="factorized"
     )
     graph_manifest_path = graph_path.with_suffix(graph_path.suffix + ".manifest.json")
-    hierarchy_path = ROOT / "data" / "static" / "wikidata-p279-2018-07-01.v1.json"
+    hierarchy_path = ROOT / "data" / "static" / "wikidata-p279-2018-07-01.v2.json"
     _hierarchy_payload, hierarchy = load_hierarchy_artifact(hierarchy_path)
 
     test_frame = pd.read_parquet(test_path)
@@ -113,13 +114,24 @@ def main() -> None:
     label_manifest_path = labeled_dir / "label_manifest.json"
     label_manifest = json.loads(label_manifest_path.read_text(encoding="utf-8"))
     if int(label_manifest.get("validator_semantics_version", -1)) != VALIDATOR_SEMANTICS_VERSION:
-        raise ValueError("Label manifest is not validator semantics v2")
+        raise ValueError("Label manifest has incompatible validator semantics")
+    if label_manifest.get("semantic_contracts") != expected_semantic_contracts():
+        raise ValueError("Label manifest has incompatible semantic contracts")
     if (label_manifest.get("hierarchy") or {}).get("content_sha256") != hierarchy.content_sha256:
         raise ValueError("Label manifest and fixed hierarchy differ")
+    graph_manifest = json.loads(graph_manifest_path.read_text(encoding="utf-8"))
+    if int(graph_manifest.get("validator_semantics_version", -1)) != VALIDATOR_SEMANTICS_VERSION:
+        raise ValueError("Factor graph manifest has incompatible validator semantics")
+    graph_provenance = graph_manifest.get("validator_provenance") or {}
+    if graph_provenance.get("semantic_contracts") != expected_semantic_contracts():
+        raise ValueError("Factor graph manifest has incompatible semantic contracts")
+    if (graph_provenance.get("hierarchy") or {}).get("content_sha256") != hierarchy.content_sha256:
+        raise ValueError("Factor graph manifest and fixed hierarchy differ")
 
     payload = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
         "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+        "semantic_contracts": expected_semantic_contracts(),
         "created_at_utc": datetime.now(UTC).isoformat(),
         "dataset": archived_report["dataset"],
         # These source-corpus counts concern immutable raw inputs.  Preserve

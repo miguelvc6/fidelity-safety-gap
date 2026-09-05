@@ -20,7 +20,12 @@ config generators, and evaluation scripts all accept shard-only graph artifacts.
 - **Inputs:** Interim parquet splits from `data/interim/<variant>/` or, when present, `data/interim/<variant>_labeled/` (unless `--use-unlabeled-interim` is passed), `globalintencoder.txt`, the constraint registry (`data/interim/constraint_registry_{dataset}.parquet`), the fixed hierarchy artifact, the Wikidata cache (`data/interim/wikidata_text.parquet`), and CLI flags controlling encoding/sharding options.
 - **Outputs:** Graph artifacts in `data/processed/<variant>/` (`{split}_graph-<encoding>.pkl` for factorized runs, `{split}_graph_repr-eswc_passive-<encoding>.pkl` for passive runs, plus sharded `.pt/.pkl` variants), per-split manifests and deterministic build contracts, `target_vocabs.json`, plus optional visualisations like `graph_visualization.png`.
 
-Each split writes its build contract before the first shard. The contract pins the source Parquet checksum, registry, encoder, validator and hierarchy identity, graph-builder checksum, and build options. `--resume-partial-shards` and `--overwrite skip` reject missing or mismatched contracts, preventing shards from different generations from being combined.
+Each split writes its build contract before the first shard. The contract pins
+the source Parquet checksum, registry, encoder, validator/hierarchy/parser/cache,
+effective-policy and candidate-objective identities, graph-builder checksum,
+and build options. `--resume-partial-shards` and `--overwrite skip` reject
+missing or mismatched contracts, preventing shards from different generations
+from being combined.
 
 ## Workflow
 1. Parse CLI flags to select the dataset (`--dataset`), registry source for derived variants (`--registry-dataset`), node feature encoding (`--encoding {node_id,text_embedding}`), frequency variant (`--min-occurrence`), representation regime (`--constraint-representation {factorized,eswc_passive}`), optional Wikidata cache override (`--wikidata-cache-path`), sharding size, persistence format (`pickle` vs `torch.save`), persistence profile (`--persistence-profile {research_safe,full}`), overwrite policy (`--overwrite {atomic,unsafe,skip}`), optional visualization, constraint scope (`--constraint-scope`), and debugging (`--debug-factor-wiring`).
@@ -35,7 +40,7 @@ Each split writes its build contract before the first shard. The contract pins t
      - `skip`: reuse existing split artifacts.
    - A manifest is written for each split with graph counts, field profile,
      full payload checksums, label-manifest identity, validator version, and
-     hierarchy identity.
+     hierarchy and semantic-contract identities.
 4. After each split, the script records entity/predicate targets seen in the labels (`add_*` / `del_*`) so training can precompute class vocabularies and shard metadata.
 5. If `--show_graph` is enabled, `display_graph()` reads one of the stored graphs, converts it to NetworkX, and renders `graph_visualization.png` plus a non-flattened view to make edge labels inspectable.
 
@@ -59,7 +64,14 @@ Each split writes its build contract before the first shard. The contract pins t
 - Constraint factors are modeled explicitly: labeled instances use `factor_constraint_ids` from `05_constraint_labeler.py`; unlabeled instances fall back to `local_constraint_ids` or `local_constraint_ids_focus` depending on `--constraint-scope`. Each factor is represented by a node `constraint_factor::<id>` using the pre-seeded global ID from the encoder. For every factor, the registry supplies `param_predicates`/`param_objects`, yielding factor → predicate → object branches.
 - Factors also connect to the local data graph they constrain: for a factor’s `constrained_property`, every predicate node created for matching triples in the instance is linked from the factor, and the factor also links to the matching triples’ subject/object nodes. Primary subject constraints bind to the focus subject; primary value constraints bind to every represented value of the focus subject/property. Secondary subject/value anchors are derived from actual local occurrences of their constrained property. This uses per-triple predicate nodes (created with `force_create=True`) so factors “observe” the local statements they govern.
 - `edge_type` is emitted alongside `edge_index` to distinguish base statement edges, factor-definition edges, and factor-to-local-statement edges during message passing.
-- Factor metadata is stored on each graph: `factor_constraint_ids` (order preserved), `primary_factor_index` (which entry matches the row’s `constraint_id`), and optional debug fields (`factor_constraint_types`, `factor_wiring_debug`) when using `--persistence-profile full`. Factor wiring uses the registry's canonical `constraint_family`; `symmetric` constraints share the inverse-style mirror-property wiring.
+- Factor metadata is stored on each graph: `factor_constraint_ids` (order
+  preserved), `primary_factor_index` (validated to identify the row's unique
+  `constraint_id` in that exact vector), and optional debug fields
+  (`factor_constraint_types`, `factor_wiring_debug`) when using
+  `--persistence-profile full`. Missing, duplicate, or mismatched primary
+  identities fail graph construction. Factor wiring uses the registry's
+  canonical `constraint_family`; `symmetric` constraints share the inverse-style
+  mirror-property wiring.
 - `--persistence-profile research_safe` (default) drops debug-only fields (`x_names`, `factor_constraint_types`, `factor_wiring_debug`) while preserving all fields required by training/evaluation objectives.
 - `target_vocabs.json` records the global and per-split class IDs referenced by the graph labels so models can prebuild output vocabularies.
 - `collect_sample_for_check()` and `check_data_graph()` assist in QA by loading a tiny subset of the serialized graphs and verifying they batch cleanly before committing to long training jobs.

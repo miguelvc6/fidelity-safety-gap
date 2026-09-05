@@ -30,6 +30,7 @@ from modules.evaluation_artifacts import (  # noqa: E402
 from modules.repair_eval import PAPER_METRIC_KEYS  # noqa: E402
 from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION  # noqa: E402
 from modules.class_hierarchy import load_hierarchy_artifact  # noqa: E402
+from modules.semantics_provenance import expected_semantic_contracts  # noqa: E402
 
 EXPECTED_ROWS = 143_316
 LEGACY_FIELDS = {
@@ -370,12 +371,15 @@ def _check_evaluation(
     *,
     verify_graph_checksums: bool,
 ) -> dict[str, Any]:
+    expected_contracts = expected_semantic_contracts()
     model_path, artifact_dir = _evaluation_paths(system)
     model = _load(model_path)
     if model.get("schema_version") != EVALUATION_SCHEMA_VERSION:
         raise ValueError(f"{system}: model schema is not v3")
     if model.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
         raise ValueError(f"{system}: model uses incompatible validator semantics")
+    if model.get("semantic_contracts") != expected_contracts:
+        raise ValueError(f"{system}: model uses incompatible semantic contracts")
     legacy = _legacy_fields(model)
     if legacy:
         raise ValueError(f"{system}: legacy metric fields remain: {sorted(legacy)}")
@@ -387,6 +391,8 @@ def _check_evaluation(
         raise ValueError(f"{system}: prediction manifest schema is not v3")
     if manifest.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
         raise ValueError(f"{system}: prediction manifest uses incompatible validator semantics")
+    if manifest.get("semantic_contracts") != expected_contracts:
+        raise ValueError(f"{system}: prediction manifest uses incompatible semantic contracts")
     hierarchy = manifest.get("hierarchy") or {}
     if not hierarchy.get("content_sha256") or hierarchy != model.get("hierarchy"):
         raise ValueError(f"{system}: hierarchy provenance is absent or inconsistent")
@@ -399,6 +405,20 @@ def _check_evaluation(
     _assert_file_identity(system, "interim dataset", artifact)
     if dataset.get("variant") != "full_strat1m_minocc100" or dataset.get("split") != "test":
         raise ValueError(f"{system}: wrong dataset variant or split")
+
+    expected_contracts_json = json.dumps(expected_contracts, sort_keys=True)
+    for csv_name in ("per_constraint.csv", "historical_strata.csv"):
+        provenance_frame = pd.read_csv(artifact_dir / csv_name)
+        if set(provenance_frame.get("validator_semantics_version", [])) != {
+            VALIDATOR_SEMANTICS_VERSION
+        }:
+            raise ValueError(f"{system}: {csv_name} uses incompatible validator semantics")
+        if set(provenance_frame.get("semantic_contracts", [])) != {expected_contracts_json}:
+            raise ValueError(f"{system}: {csv_name} uses incompatible semantic contracts")
+        if set(provenance_frame.get("hierarchy_content_sha256", [])) != {
+            hierarchy["content_sha256"]
+        }:
+            raise ValueError(f"{system}: {csv_name} uses an incompatible hierarchy")
 
     frame = pd.read_parquet(predictions_path)
     required = set(IDENTITY_COLUMNS + PREDICTION_COLUMNS)
@@ -535,6 +555,20 @@ def _check_evaluation(
             raise ValueError(f"{system}: factorized run references passive graphs")
         history_path = expected_run / "training_history.json"
         history = _load(history_path)
+        if system != "B0":
+            training_provenance = history.get("training_provenance") or {}
+            if (
+                training_provenance.get("validator_semantics_version")
+                != VALIDATOR_SEMANTICS_VERSION
+            ):
+                raise ValueError(f"{system}: training history uses incompatible validator semantics")
+            if training_provenance.get("semantic_contracts") != expected_contracts:
+                raise ValueError(f"{system}: training history uses incompatible semantic contracts")
+            if (
+                (training_provenance.get("hierarchy") or {}).get("content_sha256")
+                != hierarchy["content_sha256"]
+            ):
+                raise ValueError(f"{system}: training history uses an incompatible hierarchy")
         val_loss = history.get("val_loss")
         if not isinstance(val_loss, list) or not val_loss:
             raise ValueError(f"{system}: validation-loss history is missing")
@@ -581,6 +615,7 @@ def _check_evaluation(
 
 
 def _check_sidecars(system: str) -> dict[str, Any]:
+    expected_contracts = expected_semantic_contracts()
     evaluation_dir = ROOT / "models" / RUNS[system] / "evaluations"
     h2 = _load(evaluation_dir / "h2" / "h2_report.json")
     legacy = _legacy_fields(h2)
@@ -593,6 +628,8 @@ def _check_sidecars(system: str) -> dict[str, Any]:
         raise ValueError(f"{system}: H2 schema is not v3")
     if h2.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
         raise ValueError(f"{system}: H2 validator semantics mismatch")
+    if h2.get("semantic_contracts") != expected_contracts:
+        raise ValueError(f"{system}: H2 semantic contracts mismatch")
     if h2.get("hierarchy") != model.get("hierarchy"):
         raise ValueError(f"{system}: H2 hierarchy mismatch")
     if h2.get("selection_mode") != EXPECTED_H2_SELECTION[system]:
@@ -638,6 +675,8 @@ def _check_sidecars(system: str) -> dict[str, Any]:
         raise ValueError(f"{system}: oracle schema is not v3")
     if oracle.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
         raise ValueError(f"{system}: oracle validator semantics mismatch")
+    if oracle.get("semantic_contracts") != expected_contracts:
+        raise ValueError(f"{system}: oracle semantic contracts mismatch")
     if oracle.get("hierarchy") != model.get("hierarchy"):
         raise ValueError(f"{system}: oracle hierarchy mismatch")
     expected_candidate_config = {
@@ -836,7 +875,7 @@ def main() -> None:
     }
     reference = systems["A1"]
     _hierarchy_payload, hierarchy_identity = load_hierarchy_artifact(
-        ROOT / "data" / "static" / "wikidata-p279-2018-07-01.v1.json"
+        ROOT / "data" / "static" / "wikidata-p279-2018-07-01.v2.json"
     )
     for system, report in systems.items():
         if report["row_count"] != reference["row_count"]:
@@ -861,6 +900,9 @@ def main() -> None:
     paper = _check_paper(args.paper.resolve(), systems) if args.paper else None
     report = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
+        "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+        "semantic_contracts": expected_semantic_contracts(),
+        "hierarchy": dict(hierarchy_identity.__dict__),
         "ready": True,
         "canonical_scope": {
             "learned_systems": list(RUNS),

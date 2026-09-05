@@ -17,6 +17,7 @@ from modules.evaluation_artifacts import (
     write_prediction_artifacts,
 )
 from modules.repair_eval import PAPER_METRIC_KEYS
+from modules.semantics_provenance import expected_semantic_contracts
 
 
 def _rows():
@@ -101,6 +102,7 @@ def test_parquet_replay_provenance_and_direct_equality(tmp_path) -> None:
     assert manifest["row_count"] == 2
     assert manifest["config"]["sha256"]
     assert manifest["checkpoint"]["sha256"]
+    assert manifest["semantic_contracts"] == expected_semantic_contracts()
 
 
 def test_replay_rejects_schema_v2_and_cross_semantics_provenance(tmp_path) -> None:
@@ -137,6 +139,21 @@ def test_replay_rejects_schema_v2_and_cross_semantics_provenance(tmp_path) -> No
             graph_paths=[graph],
             dataset_variant="toy_minocc100",
             hierarchy_identity={"content_sha256": "different"},
+        )
+
+    incompatible = dict(manifest)
+    incompatible["semantic_contracts"] = {
+        **expected_semantic_contracts(),
+        "candidate_objective_version": 999,
+    }
+    manifest_path.write_text(json.dumps(incompatible), encoding="utf-8")
+    with pytest.raises(ValueError, match="semantic contract"):
+        load_and_validate_predictions(
+            predictions_path,
+            rows=_rows(),
+            dataset_path=dataset,
+            graph_paths=[graph],
+            dataset_variant="toy_minocc100",
         )
 
 

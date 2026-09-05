@@ -8,6 +8,7 @@ from typing import Iterable, Sequence
 import pandas as pd
 
 from modules.data_encoders import GlobalIntEncoder
+from modules.constraint_identity import resolve_primary_index
 from modules.reranker_eval import CandidateConstraintEvaluator
 
 logger = logging.getLogger(__name__)
@@ -778,23 +779,11 @@ def _candidate_slots_from_sample(sample: RepairSample, none_class: int) -> tuple
 
 
 def _resolve_primary_index_from_row(row: object, local_constraint_ids: Sequence[int]) -> int:
-    value = getattr(row, "primary_factor_index", None)
-    if value is not None:
-        try:
-            idx = int(value)
-            if 0 <= idx < len(local_constraint_ids):
-                return idx
-        except (TypeError, ValueError):
-            pass
-    constraint_id = getattr(row, "constraint_id", None)
-    try:
-        constraint_id = int(constraint_id)
-    except (TypeError, ValueError):
-        return -1
-    try:
-        return list(local_constraint_ids).index(constraint_id)
-    except ValueError:
-        return -1
+    return resolve_primary_index(
+        row,
+        local_constraint_ids,
+        supplied_index=getattr(row, "primary_factor_index", None),
+    )
 
 
 def evaluate_paper_metric_instance(

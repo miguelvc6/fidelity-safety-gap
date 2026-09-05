@@ -49,6 +49,7 @@ from modules.evaluation_artifacts import (
 )
 from modules.model_store import config_copy_path, get_checkpoint_path
 from modules.repair_eval import PaperMetricsAccumulator, evaluate_paper_metric_instance
+from modules.semantics_provenance import expected_semantic_contracts
 from modules.training_utils import load_graph_dataset
 
 NONE_CLASS_INDEX = 0
@@ -651,6 +652,7 @@ def run_analysis(args: argparse.Namespace) -> None:
     summary = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
         "validator_semantics_version": selected_manifest["validator_semantics_version"],
+        "semantic_contracts": expected_semantic_contracts(),
         "hierarchy": selected_manifest["hierarchy"],
         "run_directory": repository_relative_path(run_directory),
         "config": {

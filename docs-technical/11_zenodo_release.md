@@ -12,7 +12,7 @@ The upload contains:
 - the exact labeled train, validation, and test rows used to materialize the
   training graphs;
 - the frozen global integer encoder, constraint registry, fixed 2018 hierarchy,
-  validator-v2 label manifest, graph manifests, and target vocabulary;
+  validator-v3 label manifest, graph manifests, and target vocabulary;
 - the selected checkpoints for Direct--Passive GNN, Direct--Factor GNN,
   Candidate--C, Candidate--DP, and Candidate--SR;
 - the tracked predictions, metric outputs, diagnostics, configurations, and
@@ -27,7 +27,7 @@ pre-schema-v3 backups, plots, logs, and exploratory runs, are also excluded.
 
 The published `v1.0.0` bundles are immutable historical artifacts. They must be
 verified in place with `sha256sum --check SHA256SUMS` and never overwritten by
-the validator-v2 regeneration. External publication of a new version is a
+the validator-v3 regeneration. External publication of a new version is a
 separate, out-of-scope release action.
 
 ## Build a candidate upload

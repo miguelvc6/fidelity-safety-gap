@@ -13,7 +13,7 @@ mapping is maintained in the
 Sections 9--11 retain the pre-validator-rewrite empirical pattern only as
 historical hypothesis context. Their numbers and conclusions must not supply
 the manuscript. Current evaluation-population decisions are in
-[Validator-v2 evaluation populations](10_validator_v2_evaluation_population.md),
+[Validator-v3 evaluation and objective decisions](11_validator_v3_evaluation_and_objective_decisions.md),
 and new empirical claims are added only after the regenerated suite passes its
 acceptance gate.
 

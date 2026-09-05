@@ -96,10 +96,12 @@ def test_supported_only_filters_unsupported_secondary_and_keeps_primary() -> Non
     assert list(labeled["factor_constraint_ids"].iloc[0]) == [1, 3]
     assert list(labeled["factor_types"].iloc[0]) == [0, 2]
     assert len(labeled["factor_checkable_pre"].iloc[0]) == 2
+    assert int(labeled["primary_factor_index"].iloc[0]) == 0
 
     assert list(labeled["factor_constraint_ids"].iloc[1]) == [2, 1]
     assert list(labeled["factor_types"].iloc[1]) == [1, 0]
     assert list(labeled["factor_checkable_pre"].iloc[1])[0] is False
+    assert int(labeled["primary_factor_index"].iloc[1]) == 0
 
     assert stats["raw_factor_total"] == 5
     assert stats["retained_factor_total"] == 4
@@ -115,6 +117,27 @@ def test_all_factor_policy_preserves_local_constraint_ids() -> None:
     assert stats["raw_factor_total"] == 5
     assert stats["retained_factor_total"] == 5
     assert stats["unsupported_filtered"] == 0
+
+
+def test_supported_filter_reindexes_primary_after_unsupported_prefix() -> None:
+    frame = pd.DataFrame([_row(1, [2, 1])])
+    registry = {
+        1: _registry_entry("single", True, 0),
+        2: _registry_entry("unsupported:QX", False, 1),
+    }
+    labeled, _, _ = LABELER._process_dataframe(
+        frame,
+        registry,
+        encoder=None,
+        assume_complete=True,
+        use_encoded_ids=True,
+        constraint_scope="local",
+        factor_family_policy="supported_only",
+    )
+    row = labeled.iloc[0].to_dict()
+    assert list(row["factor_constraint_ids"]) == [1]
+    assert int(row["primary_factor_index"]) == 0
+    assert GRAPH._factor_ids_for_graph(row, "local") == [1]
 
 
 def test_graph_uses_filtered_factor_ids_and_registry_family() -> None:

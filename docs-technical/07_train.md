@@ -27,6 +27,13 @@
      - candidate scoring is done in a packed/batched call (`score_candidates_packed`) rather than one scorer call per graph,
      - `fix1`-style chooser losses use `evaluate_candidate_metrics()` so the primary and secondary terms follow the same candidate evaluator as the other decision-level systems,
      - top-k candidate extraction can be restricted to valid entity/predicate class IDs per slot.
+     - Candidate--C and Candidate--DP share a fixed pre-edit primary eligibility
+       mask: only pre-edit violations contribute, and post-edit unknown or
+       violated candidates both cost one because neither is a proven fix.
+       Candidate--SR's global-satisfaction objective is intentionally unchanged.
+     - Remaining conditional secondary expectations use float32 softmax over
+       eligible logits directly; no epsilon-clamped globally normalized mass is
+       divided back out.
    - `torch.optim.Adam` drives the updates, `ReduceLROnPlateau` reduces LR when validation loss stalls, gradient clipping is optional, and early stopping is triggered after `training_config.early_stopping_rounds` epochs without improvement.
    - The trainer records stability diagnostics every epoch: learning rate, unclipped gradient norm mean/max, parameter norm/max absolute parameter value, edit-logit max magnitude, factor-logit max magnitude, and chooser-score max magnitude.
 8. **Validation** – Mirrors the training pass sans gradient steps, feeding results into the same metric accumulators for apples-to-apples comparisons. If `training_config.validation_subset_size` is set, each epoch validates on only the first N validation graphs. Streamed validation subsets force the validation loader to `num_workers=0` so the subset is one global prefix, not one prefix per worker.
@@ -45,6 +52,10 @@
 - CUDA batch prefetch (`TRAIN_CUDA_PREFETCH`) is available and enabled by default; on some hardware/data combinations it may not improve throughput, so treat it as a tunable runtime flag.
 - H2 ablation configs are appendix runs. Train them only into their generated `h2_a1_*` run directories; they should not replace the current canonical or hyperparameter-search checkpoints.
 - Compact execution validates every graph's stable factor ids against `active_factor_type_ids` and fails rather than silently routing an unknown type. Regenerate the compact config after regenerating labeled splits.
+- Validator-dependent checkpoints record validator, hierarchy, parser/cache,
+  effective-hierarchy-policy, and candidate-objective contract versions. The
+  scheduler rejects an otherwise shape-compatible checkpoint when any contract
+  differs.
 
 ## Compact/grouped A1 experiment
 

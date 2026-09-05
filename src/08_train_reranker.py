@@ -312,6 +312,8 @@ def _load_parquet_rows(interim_path: Path, split: str) -> list:
         "other_entity_objects",
         "local_constraint_ids",
         "local_constraint_ids_focus",
+        "factor_constraint_ids",
+        "primary_factor_index",
     ]
     df = pd.read_parquet(path)
     existing = [col for col in columns if col in df.columns]
@@ -740,10 +742,19 @@ def _run_epoch(
             log_probs = F.log_softmax(scores, dim=0)
             probs = log_probs.exp()
 
+            primary_attr = getattr(graph, "primary_factor_index", None)
+            if primary_attr is None:
+                raise ValueError("Reranker graph is missing primary_factor_index")
+            primary_tensor = torch.as_tensor(primary_attr).view(-1)
+            if primary_tensor.numel() != 1:
+                raise ValueError(
+                    "Reranker graph primary_factor_index must be scalar; "
+                    f"got {tuple(primary_tensor.shape)}"
+                )
             metrics_summary = evaluator.evaluate_candidate_metrics(
                 row,
                 candidates=candidates,
-                primary_factor_index=int(getattr(graph, "primary_factor_index", 0)),
+                primary_factor_index=int(primary_tensor.item()),
             )
 
             primary_oracle = max(m.primary_satisfied for m in metrics_summary)

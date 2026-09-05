@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Checksummed, recoverable archival of the pre-validator-v2 generation.
+"""Checksummed, recoverable archival of the preserved pre-rewrite generation.
 
 This command deliberately uses filesystem renames for large generated trees.
 It never deletes an artifact and refuses to overwrite an existing archive.
@@ -114,7 +114,7 @@ def main() -> int:
     archived_by_path = {record["path"]: record for record in archived_files}
 
     # Recreate only canonical active run skeletons. Factor-dependent checkpoints
-    # remain archived and must be retrained under validator semantics v2.
+    # remain archived and must be retrained under the current validator semantics.
     active_models = root / "models"
     active_models.mkdir()
     for run_name in PAPER_SYSTEMS.values():

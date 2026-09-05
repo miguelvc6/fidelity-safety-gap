@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Small label-to-factor-graph fixture for validator semantics v2."""
+"""Small cross-path pipeline fixture for validator semantics v3.
+
+The filename is retained so existing automation keeps finding the smoke entry
+point; the assertions require the current semantic contracts.
+"""
 
 from __future__ import annotations
 
@@ -27,9 +31,20 @@ def _run(command: list[str], cwd: Path) -> None:
 
 def main() -> int:
     sys.path.insert(0, str(ROOT / "src"))
-    from modules.class_hierarchy import HIERARCHY_CUTOFF, canonical_sha256
+    from modules.class_hierarchy import (
+        HIERARCHY_CACHE_SCHEMA_VERSION,
+        HIERARCHY_CUTOFF,
+        HIERARCHY_PARSER_VERSION,
+        HIERARCHY_SCHEMA_VERSION,
+        canonical_sha256,
+    )
+    from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION
+    from modules.data_encoders import GlobalIntEncoder, iter_stream
+    from modules.reranker_eval import CandidateConstraintEvaluator
+    from modules.semantics_provenance import expected_semantic_contracts
+    from torch_geometric.data import Batch
 
-    with tempfile.TemporaryDirectory(prefix="validator-v2-smoke-") as directory:
+    with tempfile.TemporaryDirectory(prefix="validator-v3-smoke-") as directory:
         work = Path(directory)
         interim = work / "data/interim"
         benchmark = interim / "full_strat1m_minocc100"
@@ -47,7 +62,9 @@ def main() -> int:
             pd.read_parquet(source).head(12).to_parquet(benchmark / source.name, index=False)
 
         hierarchy_payload = {
-            "schema_version": 1,
+            "schema_version": HIERARCHY_SCHEMA_VERSION,
+            "parser_version": HIERARCHY_PARSER_VERSION,
+            "cache_schema_version": HIERARCHY_CACHE_SCHEMA_VERSION,
             "cutoff": HIERARCHY_CUTOFF,
             "records": {},
             "seed_ids": [],
@@ -101,14 +118,82 @@ def main() -> int:
         graph_manifest = json.loads(
             (work / "data/processed/full_strat1m_minocc100/test_graph-node_id.pkl.manifest.json").read_text()
         )
-        assert label_manifest["validator_semantics_version"] == 2
-        assert graph_manifest["validator_semantics_version"] == 2
+        assert label_manifest["validator_semantics_version"] == VALIDATOR_SEMANTICS_VERSION
+        assert graph_manifest["validator_semantics_version"] == VALIDATOR_SEMANTICS_VERSION
+        assert label_manifest["semantic_contracts"] == expected_semantic_contracts()
+        assert graph_manifest["validator_provenance"]["semantic_contracts"] == expected_semantic_contracts()
         assert (
             graph_manifest["validator_provenance"]["hierarchy"]["content_sha256"]
             == label_manifest["hierarchy"]["content_sha256"]
         )
         assert graph_manifest["graph_count"] == 12
-    print("validator-v2 smoke pipeline: PASS")
+
+        labeled = pd.read_parquet(interim / "full_strat1m_minocc100_labeled/df_test.parquet")
+        encoder = GlobalIntEncoder()
+        encoder.load(benchmark / "globalintencoder.txt")
+        evaluator = CandidateConstraintEvaluator(
+            str(interim / "constraint_registry_full.parquet"),
+            encoder=encoder,
+            assume_complete=True,
+            constraint_scope="local",
+            use_encoded_ids=True,
+            hierarchy_path=hierarchy,
+            require_hierarchy=True,
+        )
+        graph_path = work / "data/processed/full_strat1m_minocc100/test_graph-node_id.pkl"
+        graphs = list(iter_stream(graph_path))
+        restored = Batch.from_data_list(graphs).to_data_list()
+        saw_filtered_primary_shift = False
+        for row, graph in zip(labeled.itertuples(index=False), restored):
+            ids = [int(value) for value in row.factor_constraint_ids]
+            primary = int(row.primary_factor_index)
+            raw_ids = [int(value) for value in row.local_constraint_ids]
+            saw_filtered_primary_shift |= raw_ids.index(int(row.constraint_id)) != primary
+            assert ids == graph.factor_constraint_ids.tolist()
+            assert ids[primary] == int(row.constraint_id) == int(graph.shape_id)
+            assert primary == int(graph.primary_factor_index)
+            slots = tuple(
+                int(getattr(row, name))
+                for name in (
+                    "add_subject",
+                    "add_predicate",
+                    "add_object",
+                    "del_subject",
+                    "del_predicate",
+                    "del_object",
+                )
+            )
+            single = evaluator.evaluate_full(
+                row,
+                candidate_slots=slots,
+                primary_factor_index=primary,
+            )
+            batched = evaluator.evaluate_candidates(
+                row,
+                candidates=[slots],
+                primary_factor_index=primary,
+            )[0]
+            metrics = evaluator.evaluate_candidate_metrics(
+                row,
+                candidates=[slots],
+                primary_factor_index=primary,
+            )[0]
+            assert single == batched
+            assert single["pre_outcomes"] == list(row.factor_outcome_pre)
+            assert single["post_outcomes"] == list(row.factor_outcome_post_gold)
+            assert graph.factor_checkable_pre.tolist() == list(row.factor_checkable_pre)
+            assert graph.factor_satisfied_pre.tolist() == list(row.factor_satisfied_pre)
+            assert metrics.primary_pre_violated == int(
+                row.factor_outcome_pre[primary] == "violated"
+            )
+            assert metrics.primary_checkable == int(
+                row.factor_outcome_post_gold[primary] != "unknown"
+            )
+            assert metrics.primary_satisfied == int(
+                row.factor_outcome_post_gold[primary] == "satisfied"
+            )
+        assert saw_filtered_primary_shift
+    print("validator-v3 smoke pipeline: PASS")
     return 0
 
 

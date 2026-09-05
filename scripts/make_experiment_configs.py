@@ -453,7 +453,7 @@ def main() -> None:
         raise SystemExit(
             "No graph artifacts found under "
             f"{args.processed_root}.\n"
-            "Build the validator-v2 factorized and passive graph suites as described in "
+            "Build the validator-v3 factorized and passive graph suites as described in "
             "docs-technical/12_validator_semantics_revision.md."
         )
 

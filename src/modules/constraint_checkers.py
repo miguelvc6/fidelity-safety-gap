@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Shared parser and three-valued symbolic validator (semantics version 2)."""
+"""Shared parser and three-valued symbolic validator (semantics version 3)."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Callable, Dict, Iterable, List, Mapping, Sequence, Set, Tuple
 
 
-VALIDATOR_SEMANTICS_VERSION = 2
+VALIDATOR_SEMANTICS_VERSION = 3
 P2303 = "P2303"
 P2305 = "P2305"
 P2306 = "P2306"
@@ -69,16 +69,27 @@ def normalize_token(raw: str | None) -> str | None:
 
 def normalize_property_id(raw: str | None) -> str | None:
     token = normalize_token(raw)
-    if token and token.startswith("P") and token[1:].isdigit():
+    if token and token.startswith("P") and token[1:].isdigit() and int(token[1:]) > 0:
         return token
     return None
 
 
 def normalize_item_id(raw: str | None) -> str | None:
     token = normalize_token(raw)
-    if token and token.startswith("Q") and token[1:].isdigit():
+    if token and token.startswith("Q") and token[1:].isdigit() and int(token[1:]) > 0:
         return token
     return None
+
+
+@dataclass(frozen=True)
+class UnresolvedEdit:
+    """A requested edit that could not be projected into bounded evidence."""
+
+    kind: str
+    subject: int
+    predicate: int
+    object: int
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -93,6 +104,9 @@ class EvidenceState:
     other_subject: int
     other_predicate: int
     other_object: int
+    unresolved_edits: Tuple[UnresolvedEdit, ...] = ()
+    applied_additions: frozenset[Tuple[int, int, int]] = frozenset()
+    applied_deletions: frozenset[Tuple[int, int, int]] = frozenset()
 
     def entity_in_scope(self, entity_id: int) -> bool:
         return entity_id in self.facts_by_entity
@@ -114,7 +128,10 @@ class EvidenceState:
         return object_id in self.values_for(entity_id, predicate_id)
 
     def edit_unknown(self, entity_id: int, predicate_id: int) -> bool:
-        return (entity_id, predicate_id) in self.missing_edits
+        return (entity_id, predicate_id) in self.missing_edits or any(
+            edit.subject == entity_id and edit.predicate == predicate_id
+            for edit in self.unresolved_edits
+        )
 
     def focus_statement_present(self) -> bool:
         return self.has_statement(self.focus_subject, self.focus_predicate, self.focus_object)
@@ -143,6 +160,15 @@ class ConstraintInstance:
     p279_predicate: int = 0
 
 
+@dataclass(frozen=True)
+class ValidationResult:
+    """Three-valued outcome plus applicability and auditable uncertainty."""
+
+    outcome: ValidationOutcome
+    applicable: bool
+    unknown_reasons: Tuple[str, ...] = ()
+
+
 def _invalid(instance: ConstraintInstance, reason: str) -> ConstraintInstance:
     values = dict(instance.__dict__)
     values["definition_valid"] = False
@@ -168,7 +194,11 @@ def parse_constraint_instance(
         constraint_id=constraint_id,
         constraint_type=constraint_type,
         constraint_type_id=constraint_type_id,
-        constrained_property=resolve_id(constrained_property_raw),
+        constrained_property=(
+            resolve_id(constrained_property_raw)
+            if normalize_property_id(constrained_property_raw) is not None
+            else 0
+        ),
         required_properties=set(),
         allowed_items=set(),
         allowed_classes=set(),
@@ -180,6 +210,8 @@ def parse_constraint_instance(
     )
     if len(param_predicates_raw) != len(param_objects_raw):
         return _invalid(base, "parameter predicate/object length mismatch")
+    if normalize_property_id(constrained_property_raw) is None:
+        return _invalid(base, "constrained property is not a valid property ID")
     if not base.constrained_property:
         return _invalid(base, "missing or unrepresentable constrained property")
 
@@ -292,7 +324,14 @@ def parse_constraint_instance(
 
 
 class ClassHierarchyProtocol:
-    def reachable(self, child: int, ancestors: Set[int]) -> ValidationOutcome:  # pragma: no cover
+    def reachable(
+        self,
+        child: int,
+        ancestors: Set[int],
+        *,
+        state: EvidenceState | None = None,
+        p279_predicate: int = 0,
+    ) -> ValidationOutcome:  # pragma: no cover
         raise NotImplementedError
 
 
@@ -348,7 +387,16 @@ def _type_relation(
     if selector in {"subclass", "either"}:
         if entity in allowed:
             return ValidationOutcome.SATISFIED
-        checks.append(hierarchy.reachable(entity, allowed) if hierarchy is not None else ValidationOutcome.UNKNOWN)
+        checks.append(
+            hierarchy.reachable(
+                entity,
+                allowed,
+                state=state,
+                p279_predicate=constraint.p279_predicate,
+            )
+            if hierarchy is not None
+            else ValidationOutcome.UNKNOWN
+        )
     if selector in {"instance", "either"}:
         p31 = constraint.p31_predicate
         if not p31 or state.edit_unknown(entity, p31) or not state.entity_in_scope(entity):
@@ -367,7 +415,14 @@ def _type_relation(
                     if cls in allowed:
                         return ValidationOutcome.SATISFIED
                     class_checks.append(
-                        hierarchy.reachable(cls, allowed) if hierarchy is not None else ValidationOutcome.UNKNOWN
+                        hierarchy.reachable(
+                            cls,
+                            allowed,
+                            state=state,
+                            p279_predicate=constraint.p279_predicate,
+                        )
+                        if hierarchy is not None
+                        else ValidationOutcome.UNKNOWN
                     )
                 if any(value == ValidationOutcome.SATISFIED for value in class_checks):
                     return ValidationOutcome.SATISFIED
@@ -383,7 +438,7 @@ def _type_relation(
     return ValidationOutcome.UNKNOWN
 
 
-def evaluate_constraint_outcome(
+def _evaluate_without_unresolved(
     state: EvidenceState,
     constraint: ConstraintInstance,
     p_local: Set[int] | None = None,
@@ -416,6 +471,11 @@ def evaluate_constraint_outcome(
     if family not in subject_families | occurrence_families:
         return ValidationOutcome.UNKNOWN
     if primary and state.focus_predicate != prop:
+        return ValidationOutcome.UNKNOWN
+    # P2303 exempts the entity being checked.  Apply this before primary
+    # vacuity: deleting the last occurrence must not turn an exempt check into
+    # an apparent success.
+    if primary and state.focus_subject in constraint.exceptions:
         return ValidationOutcome.UNKNOWN
 
     if family in subject_families:
@@ -475,8 +535,9 @@ def evaluate_constraint_outcome(
     if family == "distinct":
         owners: dict[int, set[int]] = {}
         for subject, value in _occurrences(state, prop):
-            if subject in constraint.exceptions:
-                continue
+            # Exceptions remove anchors from checking, not their statements
+            # from the evidence used while checking a non-exempt anchor.  This
+            # matches WikibaseQualityConstraints' UniqueValueChecker.
             owners.setdefault(value, set()).add(subject)
         return _aggregate(
             ValidationOutcome.VIOLATED if len(owners.get(value, set())) > 1 else ValidationOutcome.SATISFIED
@@ -504,6 +565,258 @@ def evaluate_constraint_outcome(
     return _aggregate(results)
 
 
+def _relevant_predicates(constraint: ConstraintInstance) -> set[int]:
+    predicates = {constraint.constrained_property}
+    predicates.update(constraint.required_properties)
+    predicates.update(constraint.inverse_properties)
+    predicates.update(constraint.conflict_properties)
+    if constraint.constraint_type in {"type", "valueType"}:
+        predicates.update(value for value in (constraint.p31_predicate, constraint.p279_predicate) if value)
+    return {value for value in predicates if value}
+
+
+def _force_edit(state: EvidenceState, edit: UnresolvedEdit) -> EvidenceState:
+    """Return one possible world in which an unresolved operation succeeded."""
+
+    facts = {
+        entity: {predicate: set(values) for predicate, values in entity_facts.items()}
+        for entity, entity_facts in state.facts_by_entity.items()
+    }
+    present = {entity: set(predicates) for entity, predicates in state.predicates_present.items()}
+    additions = set(getattr(state, "applied_additions", frozenset()))
+    deletions = set(getattr(state, "applied_deletions", frozenset()))
+    triple = (edit.subject, edit.predicate, edit.object)
+    if edit.kind == "add":
+        facts.setdefault(edit.subject, {}).setdefault(edit.predicate, set()).add(edit.object)
+        present.setdefault(edit.subject, set()).add(edit.predicate)
+        additions.add(triple)
+        deletions.discard(triple)
+    elif edit.kind == "del":
+        facts.setdefault(edit.subject, {}).setdefault(edit.predicate, set()).discard(edit.object)
+        deletions.add(triple)
+        additions.discard(triple)
+    return replace(
+        state,
+        facts_by_entity=facts,
+        predicates_present=present,
+        missing_edits=set(),
+        unresolved_edits=(),
+        applied_additions=frozenset(additions),
+        applied_deletions=frozenset(deletions),
+    )
+
+
+def _applicable(state: EvidenceState, constraint: ConstraintInstance, *, primary: bool) -> bool:
+    if not constraint.definition_valid or not constraint.constrained_property:
+        return False
+    if primary:
+        return state.focus_predicate == constraint.constrained_property and state.focus_subject not in constraint.exceptions
+    if any(subject not in constraint.exceptions for subject, _value in _occurrences(state, constraint.constrained_property)):
+        return True
+    return any(
+        edit.kind == "add"
+        and edit.predicate == constraint.constrained_property
+        and edit.subject not in constraint.exceptions
+        for edit in getattr(state, "unresolved_edits", ())
+    )
+
+
+def _legacy_missing_leaves_a_violation(
+    state: EvidenceState,
+    constraint: ConstraintInstance,
+    missing: set[tuple[int, int]],
+    *,
+    primary: bool,
+) -> bool:
+    """Recognize a known violation independent of pair-only legacy metadata."""
+
+    family = constraint.constraint_type
+    prop = constraint.constrained_property
+    subject_anchors = [state.focus_subject] if primary else _subjects_with_property(state, prop)
+    subject_anchors = [anchor for anchor in subject_anchors if anchor not in constraint.exceptions]
+    for anchor in subject_anchors:
+        if (anchor, prop) in missing:
+            continue
+        if family == "conflictWith":
+            conflict = next(iter(constraint.conflict_properties))
+            values = state.values_for(anchor, conflict)
+            violates = bool(values & constraint.value_restrictions) if constraint.value_restrictions else bool(values)
+            if violates and (anchor, conflict) not in missing:
+                return True
+        elif family == "itemRequiresStatement":
+            required = next(iter(constraint.required_properties))
+            values = state.values_for(anchor, required)
+            has_required = bool(values & constraint.value_restrictions) if constraint.value_restrictions else bool(values)
+            if not has_required and state.property_complete(anchor, required) and (anchor, required) not in missing:
+                return True
+        elif family == "single" and len(state.values_for(anchor, prop)) > 1:
+            return True
+
+    occurrences = _occurrences(state, prop)
+    if primary:
+        occurrences = [(subject, value) for subject, value in occurrences if subject == state.focus_subject]
+    occurrences = [(subject, value) for subject, value in occurrences if subject not in constraint.exceptions]
+    if family == "oneOf":
+        return any(value not in constraint.allowed_items and (subject, prop) not in missing for subject, value in occurrences)
+    if family == "valueRequiresStatement":
+        required = next(iter(constraint.required_properties))
+        for subject, value in occurrences:
+            required_values = state.values_for(value, required)
+            has_required = (
+                bool(required_values & constraint.value_restrictions)
+                if constraint.value_restrictions
+                else bool(required_values)
+            )
+            if (
+                not has_required
+                and state.property_complete(value, required)
+                and (subject, prop) not in missing
+                and (value, required) not in missing
+            ):
+                return True
+    if family in {"inverse", "symmetric"}:
+        inverse = prop if family == "symmetric" else next(iter(constraint.inverse_properties))
+        return any(
+            not state.has_statement(value, inverse, subject)
+            and state.property_complete(value, inverse)
+            and (subject, prop) not in missing
+            and (value, inverse) not in missing
+            for subject, value in occurrences
+        )
+    if family == "distinct":
+        owners: dict[int, set[int]] = {}
+        for subject, value in _occurrences(state, prop):
+            owners.setdefault(value, set()).add(subject)
+        for subject, value in occurrences:
+            stable_owners = {
+                owner for owner in owners.get(value, set()) if (owner, prop) not in missing
+            }
+            if subject in stable_owners and len(stable_owners) > 1:
+                return True
+    # Pair-only ancestry uncertainty cannot safely be localized through an
+    # arbitrary P279 path, so type-family violations remain unknown.
+    return False
+
+
+def evaluate_constraint_detailed(
+    state: EvidenceState,
+    constraint: ConstraintInstance,
+    p_local: Set[int] | None = None,
+    *,
+    hierarchy: ClassHierarchyProtocol | None = None,
+    primary: bool = True,
+) -> ValidationResult:
+    """Evaluate a definition and retain why a result is not checkable.
+
+    Unresolved edits are handled as bounded possible worlds.  A definite value
+    is returned only when the projected state and every relevant successful-edit
+    world agree.  This preserves unaffected violations without certifying an
+    edit whose unresolved effect could change the result.
+    """
+
+    del p_local
+    applicable = _applicable(state, constraint, primary=primary)
+    if not constraint.definition_valid or not constraint.constrained_property:
+        return ValidationResult(
+            ValidationOutcome.UNKNOWN,
+            False,
+            (constraint.invalid_reason or "invalid constraint definition",),
+        )
+    if primary and state.focus_predicate != constraint.constrained_property:
+        return ValidationResult(ValidationOutcome.UNKNOWN, False, ("primary property mismatch",))
+    if primary and state.focus_subject in constraint.exceptions:
+        return ValidationResult(ValidationOutcome.UNKNOWN, False, ("primary anchor is exempt",))
+
+    outcome = _evaluate_without_unresolved(state, constraint, hierarchy=hierarchy, primary=primary)
+    relevant_predicates = _relevant_predicates(constraint)
+    detailed = tuple(
+        edit
+        for edit in getattr(state, "unresolved_edits", ())
+        if not edit.predicate or edit.predicate in relevant_predicates
+    )
+    described_pairs = {(edit.subject, edit.predicate) for edit in getattr(state, "unresolved_edits", ())}
+    legacy_relevant = {
+        pair
+        for pair in state.missing_edits
+        if pair[1] in relevant_predicates and pair not in described_pairs
+    }
+    if legacy_relevant:
+        if outcome == ValidationOutcome.VIOLATED and _legacy_missing_leaves_a_violation(
+            state,
+            constraint,
+            legacy_relevant,
+            primary=primary,
+        ):
+            return ValidationResult(ValidationOutcome.VIOLATED, applicable)
+        return ValidationResult(
+            ValidationOutcome.UNKNOWN,
+            applicable,
+            ("relevant unresolved edit lacks operation details",),
+        )
+
+    if detailed:
+        if any(not edit.subject or not edit.predicate or not edit.object for edit in detailed):
+            return ValidationResult(
+                ValidationOutcome.UNKNOWN,
+                applicable,
+                ("relevant unresolved edit is malformed or partial",),
+            )
+        clean_state = replace(
+            state,
+            missing_edits=set(state.missing_edits) - described_pairs,
+            unresolved_edits=(),
+        )
+        outcome = _evaluate_without_unresolved(
+            clean_state,
+            constraint,
+            hierarchy=hierarchy,
+            primary=primary,
+        )
+        possible = {outcome}
+        # A benchmark candidate has at most one add and one delete.  Enumerate
+        # every success/failure combination without mutating the shared state.
+        worlds = [clean_state]
+        for edit in detailed:
+            worlds += [_force_edit(world, edit) for world in list(worlds)]
+        possible.update(
+            _evaluate_without_unresolved(world, constraint, hierarchy=hierarchy, primary=primary)
+            for world in worlds
+        )
+        if len(possible) != 1:
+            reasons = tuple(
+                sorted({f"unresolved {edit.kind} affects {edit.predicate}: {edit.reason}" for edit in detailed})
+            )
+            return ValidationResult(ValidationOutcome.UNKNOWN, applicable, reasons)
+        outcome = next(iter(possible))
+
+    reasons: Tuple[str, ...] = ()
+    if outcome == ValidationOutcome.UNKNOWN:
+        if not applicable:
+            reasons = ("no applicable non-exempt anchor",)
+        else:
+            reasons = ("incomplete local or hierarchy evidence",)
+    return ValidationResult(outcome, applicable, reasons)
+
+
+def evaluate_constraint_outcome(
+    state: EvidenceState,
+    constraint: ConstraintInstance,
+    p_local: Set[int] | None = None,
+    *,
+    hierarchy: ClassHierarchyProtocol | None = None,
+    primary: bool = True,
+) -> ValidationOutcome:
+    """Compatibility wrapper returning only the semantics-v3 outcome."""
+
+    return evaluate_constraint_detailed(
+        state,
+        constraint,
+        p_local,
+        hierarchy=hierarchy,
+        primary=primary,
+    ).outcome
+
+
 def evaluate_constraint(
     state: EvidenceState,
     constraint: ConstraintInstance,
@@ -512,7 +825,7 @@ def evaluate_constraint(
     hierarchy: ClassHierarchyProtocol | None = None,
     primary: bool = True,
 ) -> Tuple[bool, int]:
-    """Compatibility result: ``(checkable, satisfied)`` from v2 outcome."""
+    """Compatibility result: ``(checkable, satisfied)`` from v3 outcome."""
 
     outcome = evaluate_constraint_outcome(state, constraint, p_local, hierarchy=hierarchy, primary=primary)
     if outcome == ValidationOutcome.UNKNOWN:

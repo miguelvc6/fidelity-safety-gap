@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 import importlib.util
+import itertools
 import json
 from pathlib import Path
 
 import pytest
 
-from modules.class_hierarchy import ClassHierarchy, HIERARCHY_CUTOFF, canonical_sha256
+from modules.class_hierarchy import (
+    ClassHierarchy,
+    HIERARCHY_CUTOFF,
+    HIERARCHY_CACHE_SCHEMA_VERSION,
+    HIERARCHY_PARSER_VERSION,
+    HIERARCHY_SCHEMA_VERSION,
+    canonical_sha256,
+)
 from modules.constraint_checkers import ValidationOutcome
+from modules.constraint_checkers import EvidenceState
 
 
 def test_equality_transitive_cycles_and_incomplete_ancestry() -> None:
@@ -23,12 +32,14 @@ def test_equality_transitive_cycles_and_incomplete_ancestry() -> None:
 
 def test_artifact_checksum_cutoff_and_unencoded_intermediate(tmp_path: Path) -> None:
     payload = {
-        "schema_version": 1,
+        "schema_version": HIERARCHY_SCHEMA_VERSION,
+        "parser_version": HIERARCHY_PARSER_VERSION,
+        "cache_schema_version": HIERARCHY_CACHE_SCHEMA_VERSION,
         "cutoff": HIERARCHY_CUTOFF,
         "records": {
-            "Q1": {"status": "ok", "parents": ["Q999"], "closure_complete": True},
-            "Q999": {"status": "ok", "parents": ["Q2"], "closure_complete": True},
-            "Q2": {"status": "ok", "parents": [], "closure_complete": True},
+            "Q1": {"status": "ok", "parents": ["Q999"], "closure_complete": True, "direct_adjacency_complete": True},
+            "Q999": {"status": "ok", "parents": ["Q2"], "closure_complete": True, "direct_adjacency_complete": True},
+            "Q2": {"status": "ok", "parents": [], "closure_complete": True, "direct_adjacency_complete": True},
         },
     }
     payload["content_sha256"] = canonical_sha256(payload)
@@ -44,6 +55,19 @@ def test_artifact_checksum_cutoff_and_unencoded_intermediate(tmp_path: Path) -> 
     path.write_text(json.dumps(broken), encoding="utf-8")
     with pytest.raises(ValueError, match="cutoff"):
         ClassHierarchy.from_artifact(path, resolve_id=lambda raw: ids.get(str(raw), 0))
+
+
+def test_artifact_loader_rejects_pre_v3_parser_contract(tmp_path: Path) -> None:
+    payload = {
+        "schema_version": 1,
+        "cutoff": HIERARCHY_CUTOFF,
+        "records": {},
+    }
+    payload["content_sha256"] = canonical_sha256(payload)
+    path = tmp_path / "legacy.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="schema"):
+        ClassHierarchy.from_artifact(path, resolve_id=lambda _raw: 0)
 
 
 def _downloader_module():
@@ -149,6 +173,203 @@ def test_historical_client_accepts_legacy_empty_claims_list() -> None:
     result = module.HistoricalRevisionClient._record_from_page("Q5", page)
     assert result["status"] == "ok"
     assert result["parents"] == []
+    assert result["direct_adjacency_complete"] is True
+
+
+@pytest.mark.parametrize(
+    ("value", "parents", "complete"),
+    [
+        ({"entity-type": "item", "numeric-id": 5}, ["Q5"], True),
+        ({"entity-type": "item", "id": "Q5", "numeric-id": 5}, ["Q5"], True),
+        ({"entity-type": "item", "id": "Q5", "numeric-id": 6}, [], False),
+        ({"entity-type": "property", "numeric-id": 5}, [], False),
+        ({"entity-type": "item", "id": "bad", "numeric-id": 5}, [], False),
+        ({"entity-type": "item", "id": "Q5", "numeric-id": "5"}, [], False),
+        ({"entity-type": "item", "id": "Q0"}, [], False),
+    ],
+)
+def test_historical_parent_entity_id_formats(value, parents, complete) -> None:
+    module = _downloader_module()
+    entity = {
+        "claims": {
+            "P279": [
+                {
+                    "rank": "normal",
+                    "mainsnak": {
+                        "snaktype": "value",
+                        "datavalue": {"type": "wikibase-entityid", "value": value},
+                    },
+                }
+            ]
+        }
+    }
+    page = {
+        "revisions": [
+            {
+                "revid": 15,
+                "timestamp": "2018-06-30T00:00:00Z",
+                "slots": {"main": {"content": json.dumps(entity)}},
+            }
+        ]
+    }
+    result = module.HistoricalRevisionClient._record_from_page("Q7", page)
+    assert result["parents"] == parents
+    assert result["direct_adjacency_complete"] is complete
+
+
+def test_valid_parent_is_preserved_alongside_unknown_parent() -> None:
+    module = _downloader_module()
+    entity = {
+        "claims": {
+            "P279": [
+                {
+                    "rank": "normal",
+                    "mainsnak": {
+                        "snaktype": "value",
+                        "datavalue": {"value": {"id": "Q5"}},
+                    },
+                },
+                {"rank": "normal", "mainsnak": {"snaktype": "somevalue"}},
+            ]
+        }
+    }
+    page = {
+        "revisions": [
+            {
+                "revid": 16,
+                "timestamp": "2018-06-30T00:00:00Z",
+                "slots": {"main": {"content": json.dumps(entity)}},
+            }
+        ]
+    }
+    result = module.HistoricalRevisionClient._record_from_page("Q7", page)
+    assert result["parents"] == ["Q5"]
+    assert result["direct_adjacency_complete"] is False
+    assert module._closure_complete("Q7", {"Q7": result, "Q5": {"status": "ok", "parents": [], "direct_adjacency_complete": True}}) is False
+
+
+def test_valid_parent_is_preserved_alongside_malformed_rank() -> None:
+    module = _downloader_module()
+    entity = {
+        "claims": {
+            "P279": [
+                {
+                    "rank": "normal",
+                    "mainsnak": {
+                        "snaktype": "value",
+                        "datavalue": {"value": {"id": "Q5"}},
+                    },
+                },
+                {
+                    "rank": "invalid-rank",
+                    "mainsnak": {
+                        "snaktype": "value",
+                        "datavalue": {"value": {"id": "Q6"}},
+                    },
+                },
+            ]
+        }
+    }
+    page = {
+        "revisions": [
+            {
+                "revid": 18,
+                "timestamp": "2018-06-30T00:00:00Z",
+                "slots": {"main": {"content": json.dumps(entity)}},
+            }
+        ]
+    }
+    result = module.HistoricalRevisionClient._record_from_page("Q7", page)
+    assert result["parents"] == ["Q5"]
+    assert result["direct_adjacency_complete"] is False
+
+
+def test_novalue_is_complete_absence_under_truthy_projection() -> None:
+    module = _downloader_module()
+    entity = {
+        "claims": {
+            "P279": [
+                {"rank": "normal", "mainsnak": {"snaktype": "novalue"}},
+            ]
+        }
+    }
+    page = {
+        "revisions": [
+            {
+                "revid": 17,
+                "timestamp": "2018-06-30T00:00:00Z",
+                "slots": {"main": {"content": json.dumps(entity)}},
+            }
+        ]
+    }
+    result = module.HistoricalRevisionClient._record_from_page("Q7", page)
+    assert result["parents"] == []
+    assert result["direct_adjacency_complete"] is True
+    assert result["snak_counts"]["novalue"] == 1
+
+
+def test_exhaustive_effective_hierarchy_matches_independent_bfs() -> None:
+    """Finite reference check independent of ClassHierarchy.reachable."""
+
+    possible_edges = ((1, 2), (1, 3), (2, 4), (3, 4), (4, 1), (4, 5))
+    hierarchy = ClassHierarchy(
+        parents={node: set() for node in range(1, 6)},
+        complete={node: True for node in range(1, 6)},
+    )
+
+    def reference(edges: set[tuple[int, int]], child: int, target: int) -> bool:
+        stack = [child]
+        visited: set[int] = set()
+        while stack:
+            node = stack.pop()
+            if node == target:
+                return True
+            if node in visited:
+                continue
+            visited.add(node)
+            stack.extend(parent for source, parent in edges if source == node)
+        return False
+
+    for flags in itertools.product((False, True), repeat=len(possible_edges)):
+        edges = {edge for edge, enabled in zip(possible_edges, flags) if enabled}
+        facts = {
+            node: {279: {parent for source, parent in edges if source == node}}
+            for node in range(1, 6)
+        }
+        state = EvidenceState(
+            facts_by_entity=facts,
+            predicates_present={node: {279} for node in facts},
+            assume_complete=True,
+            missing_edits=set(),
+            focus_subject=1,
+            focus_predicate=279,
+            focus_object=2,
+            other_subject=0,
+            other_predicate=0,
+            other_object=0,
+        )
+        expected = (
+            ValidationOutcome.SATISFIED
+            if reference(edges, 1, 5)
+            else ValidationOutcome.VIOLATED
+        )
+        assert hierarchy.reachable(1, {5}, state=state, p279_predicate=279) == expected
+
+
+def test_candidate_reachability_does_not_scan_or_mutate_whole_hierarchy() -> None:
+    class NoFullScanDict(dict):
+        def items(self):  # pragma: no cover - failure guard
+            raise AssertionError("candidate reachability scanned the whole hierarchy")
+
+    hierarchy = ClassHierarchy(
+        parents={node: ({node + 1} if node < 1000 else set()) for node in range(1, 1001)},
+        complete={node: True for node in range(1, 1001)},
+    )
+    snapshot = {node: set(parents) for node, parents in hierarchy.parents.items()}
+    hierarchy.parents = NoFullScanDict(hierarchy.parents)
+    for _ in range(100):
+        assert hierarchy.reachable(1, {5}) == ValidationOutcome.SATISFIED
+    assert dict(hierarchy.parents) == snapshot
 
 
 def test_historical_client_records_unrepresentable_revision_as_incomplete() -> None:
@@ -202,9 +423,33 @@ def test_stale_success_cache_without_content_hash_is_refetched(tmp_path: Path) -
     assert len(client.session.calls) == 1
     assert refreshed["revision_id"] == 12
     assert refreshed["revision_content_sha256"]
+    assert (tmp_path / "Q5.pre-parser-v2.json").exists()
+    cache_payload = json.loads((tmp_path / "Q5.json").read_text(encoding="utf-8"))
+    assert cache_payload["parser_version"] == module.HIERARCHY_PARSER_VERSION
+    assert cache_payload["cache_schema_version"] == module.HIERARCHY_CACHE_SCHEMA_VERSION
     second = module._load_or_fetch(client, tmp_path, "Q5", HIERARCHY_CUTOFF)
     assert refreshed == second
     assert len(client.session.calls) == 1
+
+
+def test_stale_cache_with_raw_page_is_reparsed_without_network(tmp_path: Path) -> None:
+    module = _downloader_module()
+    response_page = _Response().json()["query"]["pages"][0]
+    stale = {
+        "cutoff": HIERARCHY_CUTOFF,
+        "parser_version": 1,
+        "source_page": response_page,
+        "record": {"entity_id": "Q5", "status": "ok", "parents": []},
+    }
+    (tmp_path / "Q5.json").write_text(json.dumps(stale), encoding="utf-8")
+    client = module.HistoricalRevisionClient(timeout=1.0, retries=0)
+    client.session = _Session()
+
+    reparsed = module._load_or_fetch(client, tmp_path, "Q5", HIERARCHY_CUTOFF)
+
+    assert reparsed["parents"] == ["Q6"]
+    assert client.session.calls == []
+    assert (tmp_path / "Q5.pre-parser-v2.json").exists()
 
 
 def test_batched_historical_retrieval_and_per_entity_resume(tmp_path: Path) -> None:

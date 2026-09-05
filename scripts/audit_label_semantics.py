@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only equality audit of validator-v2 labels and shared reconstruction."""
+"""Read-only equality audit of validator-v3 labels and shared reconstruction."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ if str(SRC) not in sys.path:
 
 from modules.evaluation_artifacts import atomic_write_json, repository_relative_path, sha256_file
 from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION
+from modules.semantics_provenance import expected_semantic_contracts
 
 
 def _load_eval_module():
@@ -68,7 +69,9 @@ def run_audit(args: argparse.Namespace) -> dict[str, object]:
     labeled_dir = Path(args.labeled_dir)
     label_manifest = json.loads((labeled_dir / "label_manifest.json").read_text(encoding="utf-8"))
     if label_manifest.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
-        raise ValueError("Label audit requires validator semantics v2")
+        raise ValueError("Label audit requires current validator semantics")
+    if label_manifest.get("semantic_contracts") != expected_semantic_contracts():
+        raise ValueError("Label audit requires current semantic contracts")
     support = EVAL._maybe_prepare_global_support(
         args.dataset,
         args.min_occurrence,
@@ -85,6 +88,7 @@ def run_audit(args: argparse.Namespace) -> dict[str, object]:
     report: dict[str, object] = {
         "schema_version": 2,
         "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+        "semantic_contracts": expected_semantic_contracts(),
         "hierarchy": label_manifest.get("hierarchy"),
         "mode": "read_only",
         "labeled_directory": repository_relative_path(labeled_dir),

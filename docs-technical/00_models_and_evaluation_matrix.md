@@ -16,7 +16,7 @@ artifacts unambiguous.
 
 All reported training uses seed 42. Direct--Passive GNN has a 128-wide,
 two-layer backbone and dropout 0.5. The three factor-based proposal models use
-the same 400-wide, four-layer backbone and the regenerated validator-v2 factorized graph suite.
+the same 400-wide, four-layer backbone and the regenerated validator-v3 factorized graph suite.
 Candidate--SR draws proposals from Direct--Factor GNN.
 
 The default generator emits exactly these five configurations. Experimental

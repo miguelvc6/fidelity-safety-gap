@@ -41,4 +41,6 @@ Add `--g0-first` to run `G0`, `G0-BP`, `M1D`, and `M1D-BP` in that order. The fl
 
 The gate rejects non-finite histories, total loss at or above 100, valid M1D logit magnitude at or above 10,000, incomplete schema-v3 metrics, legacy metric fields, checksum or row-count failures, replay disagreement, or incorrect A1 provenance. It promotes a base-preserving variant as mitigation only when both deletion rates fall and EPPF rises relative to its matched control.
 
-Any future rerun must use one matched validator-v2 label/graph generation. Corrected symbolic states are reconstructed for training-objective events and evaluation metrics with the same hierarchy identity.
+Any future rerun must use one matched validator-v3 label/graph generation.
+Corrected symbolic states are reconstructed for training-objective events and
+evaluation metrics with the same hierarchy and semantic-contract identities.

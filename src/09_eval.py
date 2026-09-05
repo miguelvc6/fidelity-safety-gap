@@ -73,6 +73,7 @@ from modules.repair_eval import (
     load_violation_contexts,
 )
 from modules.reranker_eval import CandidateConstraintEvaluator
+from modules.semantics_provenance import expected_semantic_contracts
 from modules.training_utils import load_graph_dataset
 from modules.policy import (
     POLICY_NAMES,
@@ -952,6 +953,7 @@ def _run_and_save(
     payload = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
         "validator_semantics_version": manifest["validator_semantics_version"],
+        "semantic_contracts": manifest["semantic_contracts"],
         "hierarchy": manifest["hierarchy"],
         "model_selection": selection_block,
         "prediction_artifacts": {
@@ -1184,6 +1186,7 @@ def _write_per_constraint_csv(
         row = {
             "schema_version": EVALUATION_SCHEMA_VERSION,
             "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+            "semantic_contracts": json.dumps(expected_semantic_contracts(), sort_keys=True),
             "hierarchy_content_sha256": hierarchy_identity["content_sha256"],
             "constraint_type": constraint_type,
             "support": int(support_counts.get(constraint_type, 0)),
@@ -1217,6 +1220,7 @@ def _write_historical_strata(
         record: dict[str, object] = {
             "schema_version": EVALUATION_SCHEMA_VERSION,
             "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+            "semantic_contracts": json.dumps(expected_semantic_contracts(), sort_keys=True),
             "hierarchy_content_sha256": hierarchy_identity["content_sha256"],
             "stratum": str(stratum),
             "constraint_type": str(family),
@@ -2171,6 +2175,7 @@ def main():
             payload = {
                 "schema_version": EVALUATION_SCHEMA_VERSION,
                 "validator_semantics_version": manifest["validator_semantics_version"],
+                "semantic_contracts": manifest["semantic_contracts"],
                 "hierarchy": manifest["hierarchy"],
                 "model_selection": selection_block,
                 "prediction_artifacts": {

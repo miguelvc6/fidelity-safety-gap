@@ -5,8 +5,18 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
+import sys
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION  # noqa: E402
+from modules.semantics_provenance import expected_semantic_contracts  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,8 +55,20 @@ def _run_model_name(run_dir: Path) -> str:
 
 def _read_rows(run_dir: Path) -> list[dict[str, Any]]:
     source = run_dir / "evaluations" / "h2" / "factor_semantics.csv"
+    report_path = run_dir / "evaluations" / "h2" / "h2_report.json"
     if not source.exists():
         raise FileNotFoundError(f"H2 factor semantics file not found: {source}")
+    if not report_path.exists():
+        raise FileNotFoundError(f"H2 report not found: {report_path}")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if report.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
+        raise ValueError(f"H2 report uses incompatible validator semantics: {report_path}")
+    if report.get("semantic_contracts") != expected_semantic_contracts():
+        raise ValueError(f"H2 report uses incompatible semantic contracts: {report_path}")
+    hierarchy_sha256 = (report.get("hierarchy") or {}).get("content_sha256")
+    if not hierarchy_sha256:
+        raise ValueError(f"H2 report lacks hierarchy identity: {report_path}")
+    contracts_json = json.dumps(expected_semantic_contracts(), sort_keys=True)
     with source.open("r", encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
         rows = []
@@ -56,6 +78,9 @@ def _read_rows(run_dir: Path) -> list[dict[str, Any]]:
                 {
                     "run": run_dir.name,
                     "model": _run_model_name(run_dir),
+                    "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+                    "semantic_contracts": contracts_json,
+                    "hierarchy_content_sha256": hierarchy_sha256,
                     "state": row.get("state", ""),
                     "factor_family": row.get("factor_family", row.get("constraint_type", "")),
                     "support": row.get("support", ""),
@@ -83,6 +108,9 @@ def main() -> None:
     fieldnames = [
         "run",
         "model",
+        "validator_semantics_version",
+        "semantic_contracts",
+        "hierarchy_content_sha256",
         "state",
         "factor_family",
         "support",

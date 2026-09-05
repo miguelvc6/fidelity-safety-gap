@@ -1,11 +1,11 @@
 # Symbolic Evaluation and Prediction Artifacts
 
-Validator version 2 uses the same constraint parser, evidence-state builder,
+Validator version 3 uses the same constraint parser, evidence-state builder,
 and three-valued evaluator in label generation, candidate training, reranking,
 diagnostics, and evaluation. The full semantics and hierarchy construction are
-specified in [the validator-v2 guide](12_validator_semantics_revision.md); the
+specified in [the validator-v3 guide](12_validator_semantics_revision.md); the
 evaluation-population rationale is in
-[Validator-v2 evaluation populations](../docs-conceptual/10_validator_v2_evaluation_population.md).
+[Validator-v3 evaluation and objective decisions](../docs-conceptual/11_validator_v3_evaluation_and_objective_decisions.md).
 
 ## State contract
 
@@ -32,19 +32,20 @@ uv run python scripts/audit_label_semantics.py \
 
 Every evaluation writes under `<run>/evaluations/`:
 
-- `model.json`: operation-level fidelity, symbolic metrics, validator version,
-  and hierarchy identity;
+- `model.json`: operation-level fidelity, symbolic metrics, validator and
+  semantic-contract versions, and hierarchy identity;
 - `per_constraint.csv`: family metrics with the same provenance columns;
 - `historical_strata.csv`: historical fix, non-fix, and uncheckable outcomes;
 - `predictions.parquet`: ordered identity, six predicted slots, resolved
   operations, strata, and per-row metric events; and
 - `predictions.manifest.json`: schema, producer, row count, dataset, graph,
-  validator, hierarchy, and SHA-256 identities.
+  validator, hierarchy/parser/cache/effective-policy/objective contracts, and
+  SHA-256 identities.
 
 Writes are atomic. If an older artifact exists, it is preserved once with the
 suffix `.pre-schema-v3`. Prediction replay recomputes metric events and rejects
 a missing manifest, schema versions other than 3, row/order changes, checksum
-changes, validator mismatches, or hierarchy mismatches.
+changes, validator/semantic-contract mismatches, or hierarchy mismatches.
 
 ```bash
 uv run python src/09_eval.py --run-directory models/<run-directory> \

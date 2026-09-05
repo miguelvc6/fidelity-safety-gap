@@ -6,11 +6,28 @@ import json
 from pathlib import Path
 from typing import Iterable
 
-from modules.class_hierarchy import HIERARCHY_CUTOFF, load_hierarchy_artifact, sha256_file
+from modules.class_hierarchy import (
+    HIERARCHY_CACHE_SCHEMA_VERSION,
+    HIERARCHY_CUTOFF,
+    HIERARCHY_PARSER_VERSION,
+    HIERARCHY_SCHEMA_VERSION,
+    load_hierarchy_artifact,
+    sha256_file,
+)
 from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION
+from modules.semantic_versions import semantic_contract_versions
 
 
-DEFAULT_HIERARCHY_PATH = Path("data/static/wikidata-p279-2018-07-01.v1.json")
+DEFAULT_HIERARCHY_PATH = Path("data/static/wikidata-p279-2018-07-01.v2.json")
+
+
+def expected_semantic_contracts() -> dict[str, int]:
+    return {
+        "hierarchy_schema_version": HIERARCHY_SCHEMA_VERSION,
+        "hierarchy_parser_version": HIERARCHY_PARSER_VERSION,
+        "hierarchy_cache_schema_version": HIERARCHY_CACHE_SCHEMA_VERSION,
+        **semantic_contract_versions(),
+    }
 
 
 def graph_manifest_path(graph_path: Path) -> Path:
@@ -32,6 +49,8 @@ def validate_graph_semantics(
         if int(manifest.get("validator_semantics_version", -1)) != VALIDATOR_SEMANTICS_VERSION:
             raise ValueError(f"Graph suite has incompatible validator semantics: {manifest_path}")
         provenance = manifest.get("validator_provenance") or {}
+        if provenance.get("semantic_contracts") != expected_semantic_contracts():
+            raise ValueError(f"Graph suite has incompatible semantic contracts: {manifest_path}")
         graph_hierarchy = provenance.get("hierarchy") or {}
         if graph_hierarchy.get("content_sha256") != identity.content_sha256:
             raise ValueError(f"Graph suite has incompatible hierarchy: {manifest_path}")
@@ -62,5 +81,6 @@ def validate_graph_semantics(
     return {
         "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
         "hierarchy": dict(identity.__dict__),
+        "semantic_contracts": expected_semantic_contracts(),
         "graph_manifests": manifests,
     }

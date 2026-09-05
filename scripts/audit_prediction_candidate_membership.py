@@ -39,6 +39,7 @@ from modules.evaluation_artifacts import (  # noqa: E402
     sha256_file,
 )
 from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION  # noqa: E402
+from modules.semantics_provenance import expected_semantic_contracts  # noqa: E402
 from modules.repair_eval import (  # noqa: E402
     ConstraintRepairHeuristics,
     load_violation_contexts,
@@ -105,6 +106,8 @@ def main() -> None:
         raise ValueError("Candidate membership rejects non-schema-v3 predictions.")
     if int(predictions_manifest.get("validator_semantics_version", -1)) != VALIDATOR_SEMANTICS_VERSION:
         raise ValueError("Candidate membership rejects cross-validator predictions.")
+    if predictions_manifest.get("semantic_contracts") != expected_semantic_contracts():
+        raise ValueError("Candidate membership rejects incompatible semantic contracts.")
     hierarchy_identity = predictions_manifest.get("hierarchy") or {}
     if not hierarchy_identity.get("content_sha256"):
         raise ValueError("Prediction manifest lacks a hierarchy identity.")
@@ -217,6 +220,7 @@ def main() -> None:
     report = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
         "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+        "semantic_contracts": expected_semantic_contracts(),
         "hierarchy": hierarchy_identity,
         "status": "ok" if membership_count == len(predictions) else "failed",
         "run_directory": repository_relative_path(run_directory),

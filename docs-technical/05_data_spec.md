@@ -186,6 +186,11 @@ re-run.
 - `factor_checkable_post_gold`, `factor_satisfied_post_gold`
 - `factor_types`
 - `factor_constraint_ids`
+- `primary_factor_index`
+- `factor_outcome_pre`, `factor_outcome_post_gold`
+- `factor_applicable_pre`, `factor_applicable_post_gold`
+- `factor_unknown_reason_pre`, `factor_unknown_reason_post_gold`
+- `historical_edit_applicable`, `historical_unresolved_edits_json`
 - `num_checkable_factors_pre`, `coverage_pre`
 - `num_checkable_factors_post_gold`, `coverage_post_gold`
 - `validator_semantics_version`, `hierarchy_content_sha256`
@@ -196,7 +201,7 @@ By default, `--factor-family-policy supported_only` keeps raw local-closure
 columns unchanged but writes only supported executable secondary constraints to
 `factor_constraint_ids` and aligned label arrays. Unsupported primary
 constraints, if any, are retained and marked not checkable.
-Under validator v2, not checkable is the storage representation of the
+Under validator v3, not checkable is the storage representation of the
 three-valued `unknown` outcome.
 When this directory exists, `06_graph.py` uses it automatically unless
 `--use-unlabeled-interim` is passed.

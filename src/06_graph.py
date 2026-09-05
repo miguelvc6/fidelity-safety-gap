@@ -75,6 +75,8 @@ from modules.data_encoders import (
 )
 from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION
 from modules.class_hierarchy import ClassHierarchy, HIERARCHY_CUTOFF
+from modules.constraint_identity import resolve_primary_index, select_constraint_ids
+from modules.semantics_provenance import expected_semantic_contracts
 
 
 LITERAL_ID = 0
@@ -85,7 +87,7 @@ OVERWRITE_MODE_ATOMIC = "atomic"
 OVERWRITE_MODE_UNSAFE = "unsafe"
 OVERWRITE_MODE_SKIP = "skip"
 OVERWRITE_MODE_CHOICES = (OVERWRITE_MODE_ATOMIC, OVERWRITE_MODE_UNSAFE, OVERWRITE_MODE_SKIP)
-GRAPH_BUILD_CONTRACT_SCHEMA_VERSION = 1
+GRAPH_BUILD_CONTRACT_SCHEMA_VERSION = 2
 
 
 def _resolve_registry_id_with_encoder(raw_id: str | None, encoder: GlobalIntEncoder) -> int:
@@ -152,23 +154,13 @@ def _normalize_id_sequence(value: Any) -> list[Any]:
 
 
 def _factor_ids_for_graph(graph: dict[str, Any], constraint_scope: str) -> list[int]:
-    """Return the factor IDs to instantiate, preferring labeler-filtered IDs."""
-    constraint_ids_raw = graph.get("factor_constraint_ids")
-    if constraint_ids_raw is None:
-        if constraint_scope == "focus":
-            constraint_ids_raw = graph.get("local_constraint_ids_focus")
-            if constraint_ids_raw is None:
-                constraint_ids_raw = graph.get("local_constraint_ids")
-        else:
-            constraint_ids_raw = graph.get("local_constraint_ids")
+    """Return the exact factor vector selected by the shared identity contract."""
 
-    if isinstance(constraint_ids_raw, Iterable) and not isinstance(constraint_ids_raw, (str, bytes)):
-        factor_ids = [int(cid) for cid in constraint_ids_raw if cid is not None]
-    else:
-        factor_ids = []
-    if not factor_ids:
-        factor_ids = [int(graph["constraint_id"])]
-    return factor_ids
+    return select_constraint_ids(
+        graph,
+        constraint_scope=constraint_scope,
+        coerce=int,
+    )
 
 
 def _constraint_family_from_registry_entry(registry_entry: dict[str, Any]) -> str:
@@ -583,6 +575,11 @@ def create_graph(
         factor_ids = _factor_ids_for_graph(graph, constraint_scope)
     else:
         factor_ids = [int(graph["constraint_id"])]
+    expected_primary_factor_index = resolve_primary_index(
+        graph,
+        factor_ids,
+        supplied_index=graph.get("primary_factor_index"),
+    )
 
     required_factor_fields = (
         "factor_checkable_pre",
@@ -885,6 +882,9 @@ def create_graph(
                 primary_factor_focus_scope_ok = matched_focus_predicate
 
     assert primary_factor_index >= 0, "Primary constraint_id missing from factor list."
+    assert primary_factor_index == expected_primary_factor_index, (
+        "Graph primary factor position disagrees with row.constraint_id"
+    )
     if factorized_representation and debug_factor_wiring and primary_factor_focus_scope_ok is not None:
         assert primary_factor_focus_scope_ok, "Primary factor missing scope edge to focus predicate."
         if factor_local_ids:
@@ -1911,7 +1911,7 @@ def parse_args():
     parser.add_argument(
         "--hierarchy",
         type=Path,
-        default=Path("data/static/wikidata-p279-2018-07-01.v1.json"),
+        default=Path("data/static/wikidata-p279-2018-07-01.v2.json"),
         help="Fixed hierarchy artifact whose identity is written into graph manifests.",
     )
     parser.add_argument(
@@ -2032,7 +2032,7 @@ if __name__ == "__main__":
     encoder.freeze()
     if not args.hierarchy.exists():
         raise FileNotFoundError(
-            f"Graph provenance requires validator-v2 hierarchy artifact {args.hierarchy}"
+            f"Graph provenance requires validator-v3 hierarchy artifact {args.hierarchy}"
         )
     hierarchy = ClassHierarchy.from_artifact(
         args.hierarchy,
@@ -2042,6 +2042,7 @@ if __name__ == "__main__":
     validator_provenance: dict[str, Any] = {
         "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
         "hierarchy": hierarchy.identity.__dict__ if hierarchy.identity is not None else None,
+        "semantic_contracts": expected_semantic_contracts(),
         "code_version": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1], text=True
         ).strip(),
@@ -2053,6 +2054,8 @@ if __name__ == "__main__":
         label_manifest = json.loads(label_manifest_path.read_text(encoding="utf-8"))
         if label_manifest.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
             raise ValueError("Labeled graph input uses incompatible validator semantics")
+        if label_manifest.get("semantic_contracts") != expected_semantic_contracts():
+            raise ValueError("Labeled graph input uses incompatible semantic contracts")
         label_hierarchy = label_manifest.get("hierarchy") or {}
         if label_hierarchy.get("content_sha256") != hierarchy.identity.content_sha256:
             raise ValueError("Labeled graph input and graph builder use different hierarchies")

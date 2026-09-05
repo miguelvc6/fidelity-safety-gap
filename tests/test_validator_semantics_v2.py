@@ -15,7 +15,6 @@ from modules.constraint_checkers import (
     parse_constraint_instance,
 )
 from modules.evidence_state import apply_evidence_edits, build_pre_state
-from modules.reranker_eval import _ReusableEvidenceState
 
 
 IDS = {
@@ -137,13 +136,42 @@ def test_parser_rejects_missing_multiple_malformed_scope_and_separator() -> None
     assert not definition("single", [("P4680", "Q54828449")]).definition_valid
 
 
+def test_parser_rejects_resolvable_item_as_constrained_property() -> None:
+    constraint = parse_constraint_instance(
+        constraint_id=900,
+        constraint_type="single",
+        constraint_type_id=1,
+        constrained_property_raw="Q5",
+        param_predicates_raw=[],
+        param_objects_raw=[],
+        resolve_id=resolve,
+    )
+    assert not constraint.definition_valid
+    assert constraint.invalid_reason == "constrained property is not a valid property ID"
+
+
+def test_wikidata_ids_must_be_positive() -> None:
+    constraint = parse_constraint_instance(
+        constraint_id=900,
+        constraint_type="single",
+        constraint_type_id=1,
+        constrained_property_raw="P0",
+        param_predicates_raw=[],
+        param_objects_raw=[],
+        resolve_id=lambda _raw: 1,
+    )
+    assert not constraint.definition_valid
+
+
 def test_parser_does_not_drop_unrepresentable_value_restrictions() -> None:
-    constraint = definition(
+    required = definition(
         "itemRequiresStatement",
         [("P2306", "P20"), ("P2305", "Q999999")],
     )
-    assert not constraint.definition_valid
-    assert constraint.invalid_reason == "P2305 value is outside the fixed representation"
+    one_of = definition("oneOf", [("P2305", "Q999999")])
+    for constraint in (required, one_of):
+        assert not constraint.definition_valid
+        assert constraint.invalid_reason == "P2305 value is outside the fixed representation"
 
 
 def test_exception_removes_anchor_and_all_exempt_is_unknown() -> None:
@@ -152,11 +180,17 @@ def test_exception_removes_anchor_and_all_exempt_is_unknown() -> None:
     assert evaluate_constraint_outcome(state({1: {10: {5, 6}}}), exempt) == ValidationOutcome.UNKNOWN
 
 
-def test_distinct_ignores_exempt_competing_subjects() -> None:
+def test_distinct_keeps_exempt_competing_subject_as_evidence() -> None:
+    """P2303 exempts the checked entity, not evidence from other entities.
+
+    Reference contract: WikibaseQualityConstraints commit
+    e58668f5d76db19681c1f38e6a2f6d818da35faa checks the current entity's
+    exceptions before UniqueValueChecker performs its cross-entity lookup.
+    """
     constraint = definition("distinct", [("P2303", "Q5")])
     constraint = ConstraintInstance(**{**constraint.__dict__, "exceptions": frozenset({2})})
     evidence = state({1: {10: {5}}, 2: {10: {5}}})
-    assert evaluate_constraint_outcome(evidence, constraint, primary=False) == ValidationOutcome.SATISFIED
+    assert evaluate_constraint_outcome(evidence, constraint, primary=False) == ValidationOutcome.VIOLATED
 
 
 def test_multi_anchor_aggregation_and_secondary_binding() -> None:
@@ -189,8 +223,8 @@ def test_candidate_edit_does_not_mutate_shared_predicate_scope() -> None:
     assert p_local == {10}
 
 
-def test_reusable_candidate_state_treats_failed_edit_as_incomplete() -> None:
-    reusable = _ReusableEvidenceState(
+def test_canonical_candidate_state_treats_failed_edit_as_incomplete() -> None:
+    reusable = EvidenceState(
         facts_by_entity={1: {10: {5}}},
         predicates_present={1: {10}},
         assume_complete=True,

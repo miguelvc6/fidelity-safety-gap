@@ -32,7 +32,7 @@ recommended for training the reported models.
 uv sync --group dev --python 3.12
 ```
 
-## Validator-v2 smoke run
+## Validator-v3 smoke run
 
 The self-contained smoke fixture exercises label generation and factorized
 graph construction without consulting live Wikidata:
@@ -44,7 +44,7 @@ uv run python tests/smoke_validator_v2_pipeline.py
 ## Reproducing the reported experiment suite
 
 The paper uses `full_strat1m_minocc100`, `node_id` encoding, seed 42, validator
-semantics version 2, and a fixed Wikidata class hierarchy cut off at
+semantics version 3, and a fixed Wikidata class hierarchy cut off at
 2018-07-01. Build that artifact first, then regenerate labels and both graph
 suites. Large generated inputs and checkpoints are intentionally not stored in
 Git.
@@ -52,9 +52,9 @@ Git.
 ```bash
 uv run python scripts/build_historical_class_hierarchy.py --seeds-only
 uv run python scripts/build_historical_class_hierarchy.py
-uv run python src/05_constraint_labeler.py --dataset full_strat1m --min-occurrence 100 --registry-dataset full --constraint-scope local --hierarchy data/static/wikidata-p279-2018-07-01.v1.json
-uv run python src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-representation factorized --registry-dataset full --constraint-scope local --shard-size 200000 --use-torch-save --persistence-profile research_safe --overwrite atomic --hierarchy data/static/wikidata-p279-2018-07-01.v1.json
-uv run python src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-representation eswc_passive --registry-dataset full --constraint-scope local --shard-size 10000 --use-torch-save --persistence-profile research_safe --overwrite atomic --use-unlabeled-interim --hierarchy data/static/wikidata-p279-2018-07-01.v1.json
+uv run python src/05_constraint_labeler.py --dataset full_strat1m --min-occurrence 100 --registry-dataset full --constraint-scope local --hierarchy data/static/wikidata-p279-2018-07-01.v2.json
+uv run python src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-representation factorized --registry-dataset full --constraint-scope local --shard-size 200000 --use-torch-save --persistence-profile research_safe --overwrite atomic --hierarchy data/static/wikidata-p279-2018-07-01.v2.json
+uv run python src/06_graph.py --dataset full_strat1m --min-occurrence 100 --encoding node_id --constraint-representation eswc_passive --registry-dataset full --constraint-scope local --shard-size 10000 --use-torch-save --persistence-profile research_safe --overwrite atomic --use-unlabeled-interim --hierarchy data/static/wikidata-p279-2018-07-01.v2.json
 uv run python scripts/make_experiment_configs.py --variant full_strat1m_minocc100 --encoding node_id
 uv run python src/10_scheduler.py --paper-suite --dry-run
 uv run python src/10_scheduler.py --paper-suite

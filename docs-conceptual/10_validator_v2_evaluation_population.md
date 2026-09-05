@@ -1,4 +1,11 @@
-# Validator-v2 Evaluation Populations
+# Superseded Validator-v2 Evaluation-Population Note
+
+This note is retained only for historical links. Validator semantics v3 keeps
+the unfiltered principal population but changes the effective-hierarchy and
+Candidate--C/Candidate--DP objective decisions. The current rationale is in
+[Validator-v3 evaluation and objective decisions](11_validator_v3_evaluation_and_objective_decisions.md).
+
+The text below describes the earlier v2 generation.
 
 The principal experiment continues to train on every sampled historical
 correction. Validator-dependent losses are masked only where the attached
@@ -21,5 +28,5 @@ Wikidata `P279` hierarchy whose cutoff is 1 July 2018. It never consults live
 Wikidata. Missing local evidence or incomplete historical ancestry produces
 `unknown` rather than a guessed Boolean result.
 
-The engineering contract and regeneration commands are documented in
-[Validator semantics v2 and experiment regeneration](../docs-technical/12_validator_semantics_revision.md).
+The current engineering contract and regeneration commands are documented in
+[Validator semantics v3 and regeneration](../docs-technical/12_validator_semantics_revision.md).

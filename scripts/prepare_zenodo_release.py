@@ -23,6 +23,15 @@ from pathlib import Path
 from typing import Iterable
 
 
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION  # noqa: E402
+from modules.semantics_provenance import expected_semantic_contracts  # noqa: E402
+
+
 REPOSITORY_URL = "https://github.com/miguelvc6/fidelity-safety-gap"
 UPSTREAM_DATASET_DOI = "https://doi.org/10.6084/m9.figshare.13338743.v2"
 ZENODO_DOI = "10.5281/zenodo.22013512"
@@ -73,7 +82,7 @@ GRAPH_METADATA = (
     "data/processed/full_strat1m_minocc100/"
     "test_graph_repr-eswc_passive-node_id.pkl.build-contract.json",
     "data/interim/full_strat1m_minocc100_labeled/label_manifest.json",
-    "data/static/wikidata-p279-2018-07-01.v1.json",
+    "data/static/wikidata-p279-2018-07-01.v2.json",
 )
 
 BENCHMARK_INPUTS = (
@@ -307,7 +316,7 @@ tar -xzf fidelity-safety-gap-{version}-paper-results.tar.gz -C /path/to/fidelity
 ```
 
 The benchmark archive contains the exact immutable sampled rows, the
-validator-v2 labels used to construct the training graphs, and the fixed
+validator-v3 labels used to construct the training graphs, and the fixed
 2018-07-01 class hierarchy. Rebuilding labels is permitted only with that
 hierarchy and the matching validator version; manifests reject mixed inputs.
 
@@ -473,8 +482,9 @@ def main() -> None:
 
         manifest = {
             "schema_version": 3,
-            "validator_semantics_version": 2,
-            "hierarchy_artifact": "data/static/wikidata-p279-2018-07-01.v1.json",
+            "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+            "semantic_contracts": expected_semantic_contracts(),
+            "hierarchy_artifact": "data/static/wikidata-p279-2018-07-01.v2.json",
             "title": "The Fidelity--Safety Gap in Neural Wikidata Constraint Repair: reproduction artifacts",
             "release_version": args.release_version,
             "zenodo_doi": args.doi,

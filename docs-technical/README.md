@@ -13,7 +13,8 @@ operating procedures:
 - [Training](07_train.md)
 - [Deletion-shortcut study](10_deletion_shortcut_study.md)
 - [Zenodo release preparation](11_zenodo_release.md)
-- [Validator semantics v2 and experiment regeneration](12_validator_semantics_revision.md)
+- [Validator semantics v3 and regeneration](12_validator_semantics_revision.md)
+- [Validator-v3 verification record](13_validator_v3_verification.md)
 
 Research rationale belongs in the
 [conceptual documentation](../docs-conceptual/README.md).

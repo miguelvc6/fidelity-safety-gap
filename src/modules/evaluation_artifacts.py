@@ -14,6 +14,7 @@ import pandas as pd
 import torch
 
 from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION
+from modules.semantics_provenance import expected_semantic_contracts
 
 
 EVALUATION_SCHEMA_VERSION = 3
@@ -218,6 +219,7 @@ def write_prediction_artifacts(
     manifest = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
         "validator_semantics_version": int(validator_semantics_version),
+        "semantic_contracts": expected_semantic_contracts(),
         "hierarchy": hierarchy_identity or {"content_sha256": "fixture-no-hierarchy"},
         "row_count": len(frame),
         "split": split,
@@ -266,6 +268,8 @@ def load_and_validate_predictions(
         raise ValueError("Prediction manifest is not schema version 3.")
     if int(manifest.get("validator_semantics_version", -1)) != int(validator_semantics_version):
         raise ValueError("Prediction replay crosses validator semantics versions.")
+    if manifest.get("semantic_contracts") != expected_semantic_contracts():
+        raise ValueError("Prediction replay crosses semantic contract versions.")
     recorded_hierarchy = manifest.get("hierarchy") or {}
     recorded_hierarchy_checksum = recorded_hierarchy.get("content_sha256")
     if not recorded_hierarchy_checksum:

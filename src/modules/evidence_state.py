@@ -13,7 +13,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 
-from modules.constraint_checkers import EvidenceState
+from modules.constraint_checkers import EvidenceState, UnresolvedEdit
 
 
 EMPTY_VALUES = (None, "", 0)
@@ -238,7 +238,10 @@ def resolve_triple(
     if triple is None or len(triple) < 3:
         return None
     resolve = resolver or (lambda value: value)
-    resolved = tuple(resolve(value) for value in triple[:3])
+    try:
+        resolved = tuple(resolve(value) for value in triple[:3])
+    except (TypeError, ValueError, KeyError, IndexError):
+        return None
     if any(value in EMPTY_VALUES for value in resolved):
         return None
     return resolved  # type: ignore[return-value]
@@ -261,10 +264,50 @@ def apply_evidence_edits(
     facts, present = clone_fact_maps(pre_state.facts_by_entity, pre_state.predicates_present)
     local_predicates = set(p_local)
     missing_edits: set[tuple[Any, Any]] = set()
+    unresolved_edits: list[UnresolvedEdit] = []
+    applied_additions = set(getattr(pre_state, "applied_additions", frozenset()))
+    applied_deletions = set(getattr(pre_state, "applied_deletions", frozenset()))
     resolved = {
         "del": resolve_triple(delete, resolver=resolver),
         "add": resolve_triple(add, resolver=resolver),
     }
+
+    def _requested(raw: Sequence[Any] | None) -> bool:
+        return raw is not None and any(value not in EMPTY_VALUES for value in raw[:3])
+
+    def _partial_unresolved(kind: str, raw: Sequence[Any] | None) -> None:
+        if not _requested(raw):
+            return
+        resolve = resolver or (lambda value: value)
+        padded = list(raw[:3]) if raw is not None else []
+        padded.extend([0] * (3 - len(padded)))
+        values_list: list[Any] = []
+        for value in padded:
+            if value in EMPTY_VALUES:
+                values_list.append(0)
+                continue
+            try:
+                values_list.append(resolve(value))
+            except (TypeError, ValueError, KeyError, IndexError):
+                values_list.append(0)
+        values = tuple(values_list)
+        subject, predicate, obj = values
+        if subject not in EMPTY_VALUES and predicate not in EMPTY_VALUES:
+            missing_edits.add((subject, predicate))
+        unresolved_edits.append(
+            UnresolvedEdit(
+                kind=kind,
+                subject=subject,
+                predicate=predicate,
+                object=obj,
+                reason="invalid_or_partial_operation",
+            )
+        )
+
+    if resolved["del"] is None:
+        _partial_unresolved("del", delete)
+    if resolved["add"] is None:
+        _partial_unresolved("add", add)
 
     def _apply(kind: str, triple: tuple[Any, Any, Any] | None) -> None:
         if triple is None:
@@ -272,9 +315,15 @@ def apply_evidence_edits(
         subject, predicate, obj = triple
         if subject not in facts:
             missing_edits.add((subject, predicate))
+            unresolved_edits.append(
+                UnresolvedEdit(kind, subject, predicate, obj, "subject_outside_bounded_scope")
+            )
             return
         if kind == "del" and predicate not in local_predicates:
             missing_edits.add((subject, predicate))
+            unresolved_edits.append(
+                UnresolvedEdit(kind, subject, predicate, obj, "predicate_outside_bounded_scope")
+            )
             return
         if (
             kind == "del"
@@ -282,14 +331,22 @@ def apply_evidence_edits(
             and predicate not in pre_state.predicates_present.get(subject, set())
         ):
             missing_edits.add((subject, predicate))
+            unresolved_edits.append(
+                UnresolvedEdit(kind, subject, predicate, obj, "predicate_adjacency_incomplete")
+            )
             return
         entity_facts = facts[subject]
+        concrete = (subject, predicate, obj)
         if kind == "del":
             entity_facts.get(predicate, set()).discard(obj)
+            applied_deletions.add(concrete)
+            applied_additions.discard(concrete)
         else:
             entity_facts.setdefault(predicate, set()).add(obj)
             present.setdefault(subject, set()).add(predicate)
             local_predicates.add(predicate)
+            applied_additions.add(concrete)
+            applied_deletions.discard(concrete)
 
     _apply("del", resolved["del"])
     _apply("add", resolved["add"])
@@ -305,6 +362,9 @@ def apply_evidence_edits(
         other_subject=pre_state.other_subject,
         other_predicate=pre_state.other_predicate,
         other_object=pre_state.other_object,
+        unresolved_edits=tuple(unresolved_edits),
+        applied_additions=frozenset(applied_additions),
+        applied_deletions=frozenset(applied_deletions),
     )
     return post_state, resolved
 

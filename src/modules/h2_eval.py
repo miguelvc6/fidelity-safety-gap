@@ -35,6 +35,7 @@ from modules.repair_eval import (
     evaluate_global_repair_samples,
     evaluate_repair_samples,
 )
+from modules.semantics_provenance import expected_semantic_contracts
 
 logger = logging.getLogger(__name__)
 
@@ -949,6 +950,7 @@ def write_h2_report(
     report = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
         "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
+        "semantic_contracts": expected_semantic_contracts(),
         "hierarchy": (
             getattr(
                 getattr(support.global_support, "evaluator", None),

@@ -1,6 +1,6 @@
 # Evaluation Protocol
 
-The reported comparison uses one regenerated validator-v2 generation. All
+The reported comparison uses one regenerated validator-v3 generation. All
 factor-derived labels, factorized graph wiring, factor-dependent checkpoints,
 predictions, and metrics share the same fixed semantics and 1 July 2018 class
 hierarchy. Stored graph tensors are training metadata; evaluation reconstructs
@@ -17,7 +17,7 @@ factor-dependent system is retrained.
 
 The rationale for full-population training and the historical-fix diagnostic
 strata is specified in
-[Validator-v2 evaluation populations](10_validator_v2_evaluation_population.md).
+[Validator-v3 evaluation and objective decisions](11_validator_v3_evaluation_and_objective_decisions.md).
 
 ## Symbolic evidence
 
@@ -35,8 +35,9 @@ diagnostics, and evaluation:
 Constraint results are three-valued. Incomplete local evidence, unavailable
 historical hierarchy revisions, malformed definitions, unsupported scopes,
 and unrepresentable mandatory parameters produce `unknown`, not an assumed
-Boolean. Type traversal may use only the fixed historical hierarchy; live
-Wikidata is never a fallback.
+Boolean. Type traversal uses the immutable fixed historical hierarchy with the
+current state's local P279 additions and deletion tombstones; live Wikidata is
+never a fallback.
 
 ## Metrics
 

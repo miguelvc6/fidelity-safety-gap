@@ -14,7 +14,11 @@ from modules.model_store import sanitize_fragment
 from modules.class_hierarchy import load_hierarchy_artifact
 from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION
 from modules.data_encoders import graph_dataset_filename
-from modules.semantics_provenance import DEFAULT_HIERARCHY_PATH, validate_graph_semantics
+from modules.semantics_provenance import (
+    DEFAULT_HIERARCHY_PATH,
+    expected_semantic_contracts,
+    validate_graph_semantics,
+)
 
 LOG_DIR = Path("logs")
 RAW_LOG_DIR = LOG_DIR / "runs"
@@ -93,6 +97,8 @@ def _validate_checkpoint_semantics(
     provenance = payload.get("training_provenance") or {}
     if int(provenance.get("validator_semantics_version", -1)) != VALIDATOR_SEMANTICS_VERSION:
         raise ExperimentError(f"Checkpoint has incompatible validator semantics: {checkpoint_path}")
+    if provenance.get("semantic_contracts") != expected_semantic_contracts():
+        raise ExperimentError(f"Checkpoint has incompatible semantic contracts: {checkpoint_path}")
     _hierarchy_payload, hierarchy = load_hierarchy_artifact(DEFAULT_HIERARCHY_PATH)
     checkpoint_hierarchy = provenance.get("hierarchy") or {}
     if checkpoint_hierarchy.get("content_sha256") != hierarchy.content_sha256:

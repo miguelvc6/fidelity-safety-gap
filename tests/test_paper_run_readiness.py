@@ -202,7 +202,7 @@ def test_make_experiment_configs_empty_processed_root_message() -> None:
             sys.argv = argv_backup
 
     assert "No graph artifacts found under" in message
-    assert "Build the validator-v2 factorized and passive graph suites" in message
+    assert "Build the validator-v3 factorized and passive graph suites" in message
     assert "12_validator_semantics_revision.md" in message
 
 
