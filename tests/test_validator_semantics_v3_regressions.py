@@ -208,3 +208,74 @@ def test_partial_add_on_known_other_subject_is_irrelevant_to_primary(
     post, _ = apply_evidence_edits(pre, p_local={10}, delete=None, add=(2, 10, 0))
 
     assert evaluate_constraint_outcome(post, _constraint(family)) == expected
+
+
+@pytest.mark.parametrize("family", ["inverse", "valueRequiresStatement"])
+def test_unknown_predicate_can_reintroduce_primary_violation(family: str) -> None:
+    pre = _state(
+        {
+            1: {10: {5, 6}},
+            5: {20: {1}},
+            6: {},
+        }
+    )
+    constraint = _constraint(family)
+
+    completed_support, _ = apply_evidence_edits(
+        pre,
+        p_local={10, 20},
+        delete=(1, 10, 6),
+        add=(1, 20, 6),
+    )
+    completed_trigger, _ = apply_evidence_edits(
+        pre,
+        p_local={10, 20},
+        delete=(1, 10, 6),
+        add=(1, 10, 6),
+    )
+    partial, _ = apply_evidence_edits(
+        pre,
+        p_local={10, 20},
+        delete=(1, 10, 6),
+        add=(1, 0, 6),
+    )
+
+    assert evaluate_constraint_outcome(completed_support, constraint) == O.SATISFIED
+    assert evaluate_constraint_outcome(completed_trigger, constraint) == O.VIOLATED
+    assert evaluate_constraint_outcome(partial, constraint) == O.UNKNOWN
+
+
+def test_self_inverse_combines_trigger_and_reciprocal_roles() -> None:
+    pre = _state(
+        {
+            1: {10: {5, 6}},
+            5: {10: {1}},
+            6: {},
+        }
+    )
+    self_inverse = replace(_constraint("inverse"), inverse_properties=[10])
+    symmetric = _constraint("symmetric")
+
+    completed_absent, _ = apply_evidence_edits(
+        pre,
+        p_local={10},
+        delete=(5, 10, 6),
+        add=(6, 10, 1),
+    )
+    completed_mirror, _ = apply_evidence_edits(
+        pre,
+        p_local={10},
+        delete=(5, 10, 1),
+        add=(6, 10, 1),
+    )
+    partial, _ = apply_evidence_edits(
+        pre,
+        p_local={10},
+        delete=(5, 10, 0),
+        add=(6, 10, 1),
+    )
+
+    assert evaluate_constraint_outcome(completed_absent, self_inverse) == O.SATISFIED
+    assert evaluate_constraint_outcome(completed_mirror, self_inverse) == O.VIOLATED
+    assert evaluate_constraint_outcome(partial, symmetric) == O.UNKNOWN
+    assert evaluate_constraint_outcome(partial, self_inverse) == O.UNKNOWN

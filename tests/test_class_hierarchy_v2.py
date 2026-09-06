@@ -475,3 +475,90 @@ def test_batched_historical_retrieval_and_per_entity_resume(tmp_path: Path) -> N
     assert (tmp_path / "Q9.json").exists()
     assert [call[1]["titles"] for call in session.calls] == ["Q5", "Q9"]
     assert all("|" not in call[1]["titles"] for call in session.calls)
+
+
+def test_legacy_revision_provenance_enables_verified_batch_reparse(tmp_path: Path) -> None:
+    module = _downloader_module()
+    legacy_cache = tmp_path / "legacy"
+    current_cache = tmp_path / "current"
+    legacy_cache.mkdir()
+
+    def page(entity_id: str, revision_id: int, parent: str) -> dict:
+        entity = {
+            "claims": {
+                "P279": [
+                    {
+                        "rank": "normal",
+                        "mainsnak": {
+                            "snaktype": "value",
+                            "datavalue": {
+                                "type": "wikibase-entityid",
+                                "value": {"entity-type": "item", "id": parent},
+                            },
+                        },
+                    }
+                ]
+            }
+        }
+        return {
+            "title": entity_id,
+            "revisions": [
+                {
+                    "revid": revision_id,
+                    "parentid": revision_id - 1,
+                    "timestamp": "2018-06-30T00:00:00Z",
+                    "slots": {"main": {"content": json.dumps(entity)}},
+                }
+            ],
+        }
+
+    pages = {
+        "Q5": page("Q5", 15, "Q7"),
+        "Q9": page("Q9", 19, "Q11"),
+    }
+    for entity_id, source_page in pages.items():
+        record = module.HistoricalRevisionClient._record_from_page(entity_id, source_page)
+        (legacy_cache / f"{entity_id}.json").write_text(
+            json.dumps({"cutoff": HIERARCHY_CUTOFF, "record": record}),
+            encoding="utf-8",
+        )
+
+    class RevisionResponse:
+        headers = {}
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"query": {"pages": list(pages.values())}}
+
+    class RevisionSession:
+        def __init__(self):
+            self.headers = {}
+            self.calls = []
+
+        def get(self, url, params, timeout):
+            self.calls.append((url, params, timeout))
+            return RevisionResponse()
+
+    client = module.HistoricalRevisionClient(timeout=1.0, retries=0)
+    client.session = RevisionSession()
+    records = module._load_or_fetch_many(
+        client,
+        current_cache,
+        ["Q5", "Q9"],
+        HIERARCHY_CUTOFF,
+        legacy_cache,
+    )
+
+    assert records["Q5"]["parents"] == ["Q7"]
+    assert records["Q9"]["parents"] == ["Q11"]
+    assert len(client.session.calls) == 1
+    params = client.session.calls[0][1]
+    assert "revids" in params
+    assert "rvstart" not in params
+    assert set(params["revids"].split("|")) == {"15", "19"}
+    for entity_id in pages:
+        cached = json.loads((current_cache / f"{entity_id}.json").read_text())
+        assert cached["parser_version"] == module.HIERARCHY_PARSER_VERSION
+        assert cached["source_page"] == pages[entity_id]

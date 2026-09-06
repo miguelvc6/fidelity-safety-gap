@@ -43,19 +43,20 @@ def _labeler_module():
     return module
 
 
-def _evaluator() -> CandidateConstraintEvaluator:
-    constraint = ConstraintInstance(
-        constraint_id=900,
-        constraint_type="single",
-        constraint_type_id=0,
-        constrained_property=10,
-        required_properties=set(),
-        allowed_items=set(),
-        allowed_classes=set(),
-        relation_predicates=[],
-        inverse_properties=[],
-        conflict_properties=set(),
-    )
+def _evaluator(constraint: ConstraintInstance | None = None) -> CandidateConstraintEvaluator:
+    if constraint is None:
+        constraint = ConstraintInstance(
+            constraint_id=900,
+            constraint_type="single",
+            constraint_type_id=0,
+            constrained_property=10,
+            required_properties=set(),
+            allowed_items=set(),
+            allowed_classes=set(),
+            relation_predicates=[],
+            inverse_properties=[],
+            conflict_properties=set(),
+        )
     evaluator = CandidateConstraintEvaluator.__new__(CandidateConstraintEvaluator)
     evaluator._encoder = None
     evaluator._assume_complete = True
@@ -85,6 +86,28 @@ def _row() -> SimpleNamespace:
         object_objects=[],
         other_entity_predicates=[],
         other_entity_objects=[],
+        local_constraint_ids=[900],
+        factor_constraint_ids=[900],
+        primary_factor_index=0,
+    )
+
+
+def _occurrence_row(family: str, *, reciprocal_predicate: int) -> SimpleNamespace:
+    return SimpleNamespace(
+        constraint_id=900,
+        constraint_type=family,
+        subject=1,
+        predicate=10,
+        object=6,
+        other_subject=5,
+        other_predicate=reciprocal_predicate,
+        other_object=1,
+        subject_predicates=[10, 10],
+        subject_objects=[5, 6],
+        object_predicates=[],
+        object_objects=[],
+        other_entity_predicates=[reciprocal_predicate],
+        other_entity_objects=[1],
         local_constraint_ids=[900],
         factor_constraint_ids=[900],
         primary_factor_index=0,
@@ -187,3 +210,74 @@ def test_labeler_and_candidate_evaluator_preserve_ordered_edit_events() -> None:
         candidate_slots=(1, 20, 5, 1, 20, 5),
     )
     assert details["post_outcomes"] == ["satisfied"]
+
+
+def test_unknown_predicate_dependency_reaches_final_metric_callback() -> None:
+    module = _evaluation_module()
+    cases = [
+        (
+            ConstraintInstance(
+                constraint_id=900,
+                constraint_type="inverse",
+                constraint_type_id=0,
+                constrained_property=10,
+                required_properties=set(),
+                allowed_items=set(),
+                allowed_classes=set(),
+                relation_predicates=[],
+                inverse_properties=[20],
+                conflict_properties=set(),
+            ),
+            _occurrence_row("inverse", reciprocal_predicate=20),
+            (1, 0, 6, 1, 10, 6),
+        ),
+        (
+            ConstraintInstance(
+                constraint_id=900,
+                constraint_type="valueRequiresStatement",
+                constraint_type_id=0,
+                constrained_property=10,
+                required_properties={20},
+                allowed_items=set(),
+                allowed_classes=set(),
+                relation_predicates=[],
+                inverse_properties=[],
+                conflict_properties=set(),
+            ),
+            _occurrence_row("valueRequiresStatement", reciprocal_predicate=20),
+            (1, 0, 6, 1, 10, 6),
+        ),
+        (
+            ConstraintInstance(
+                constraint_id=900,
+                constraint_type="inverse",
+                constraint_type_id=0,
+                constrained_property=10,
+                required_properties=set(),
+                allowed_items=set(),
+                allowed_classes=set(),
+                relation_predicates=[],
+                inverse_properties=[10],
+                conflict_properties=set(),
+            ),
+            _occurrence_row("inverse", reciprocal_predicate=10),
+            (6, 10, 1, 5, 10, 0),
+        ),
+    ]
+
+    for constraint, row, slots in cases:
+        evaluator = _evaluator(constraint)
+        raw = torch.tensor([slots])
+        direct = evaluator.evaluate_full(row, candidate_slots=slots)
+        callback, output = module.GlobalMetricsSupport(
+            rows=[row],
+            evaluator=evaluator,
+        ).build_postprocess()
+        callback(raw, torch.zeros_like(raw), [row.constraint_type])
+        instance = output["paper_metric_instances"][0]
+
+        assert direct["pre_outcomes"] == ["violated"]
+        assert direct["post_outcomes"] == ["unknown"]
+        assert instance["post_checkable"] == direct["post_checkable"]
+        assert instance["post_satisfied"] == direct["post_satisfied"]
+        assert instance["events"]["pfr"] == {"numerator": 0, "denominator": 1}

@@ -615,34 +615,53 @@ def _edit_may_affect(
     subject = edit.subject
     prop = constraint.constrained_property
     focus = state.focus_subject
+
+    def _matches_role(
+        predicates: Iterable[int],
+        subjects: Iterable[int] = (),
+        *,
+        any_subject: bool = False,
+    ) -> bool:
+        """Return whether known edit components can fill one semantic role."""
+
+        role_predicates = {value for value in predicates if value}
+        if not role_predicates:
+            return False
+        predicate_matches = not edit.predicate or edit.predicate in role_predicates
+        if not predicate_matches:
+            return False
+        return any_subject or not subject or subject in set(subjects)
+
+    trigger = _matches_role({prop}, {focus})
     if family in {"single", "oneOf"}:
-        return (not subject or subject == focus) and (not edit.predicate or edit.predicate == prop)
-    if family in {"conflictWith", "itemRequiresStatement"}:
-        return not subject or subject == focus
+        return trigger
+    if family == "conflictWith":
+        support = _matches_role(constraint.conflict_properties, {focus})
+        return trigger or support
+    if family == "itemRequiresStatement":
+        support = _matches_role(constraint.required_properties, {focus})
+        return trigger or support
     if family == "distinct":
-        return True
+        return _matches_role({prop}, any_subject=True)
     if family == "type":
-        if not edit.predicate or edit.predicate == constraint.p279_predicate:
-            return True
-        return not subject or subject == focus
+        direct_type = _matches_role({constraint.p31_predicate}, {focus})
+        ancestry = _matches_role({constraint.p279_predicate}, any_subject=True)
+        return trigger or direct_type or ancestry
 
     focus_values = state.values_for(focus, prop)
-    if family == "symmetric":
-        return not subject or subject == focus or subject in focus_values
-    if family == "inverse":
-        if edit.predicate == prop:
-            return not subject or subject == focus
-        return not subject or subject in focus_values
-    if family == "valueRequiresStatement":
-        if edit.predicate == prop:
-            return not subject or subject == focus
-        return not subject or subject in focus_values
+    if family in {"symmetric", "inverse", "valueRequiresStatement"}:
+        if family == "symmetric":
+            support_predicates: Iterable[int] = {prop}
+        elif family == "inverse":
+            support_predicates = constraint.inverse_properties
+        else:
+            support_predicates = constraint.required_properties
+        support = _matches_role(support_predicates, focus_values)
+        return trigger or support
     if family == "valueType":
-        if not edit.predicate or edit.predicate == constraint.p279_predicate:
-            return True
-        if edit.predicate == prop:
-            return not subject or subject == focus
-        return not subject or subject in focus_values
+        direct_type = _matches_role({constraint.p31_predicate}, focus_values)
+        ancestry = _matches_role({constraint.p279_predicate}, any_subject=True)
+        return trigger or direct_type or ancestry
     return True
 
 

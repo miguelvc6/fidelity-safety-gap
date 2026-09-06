@@ -19,6 +19,7 @@ and work intentionally deferred to full regeneration.
 | Final metric adapter erases partial operations | reproduced and fixed | `09_eval.py`, `RepairSample`, paper/H2 evaluation | raw-slot callback, artifact round-trip, supplied full-entry-point test |
 | Unresolved deletion replayed after successful addition | reproduced and fixed | canonical evidence events and detailed validator | five-family ordered-world regressions and labeler/candidate parity |
 | Partial-edit relevance uses only the property | reproduced and fixed | `_edit_may_affect` | primary single/one-of controls plus conservative distinct/secondary controls |
+| Trigger/support roles treated as exclusive | reproduced and fixed | `_edit_may_affect` role union | unknown-predicate inverse/value-requires and self-inverse callback regressions |
 
 No applicable finding was left unresolved. The distinct-values disagreement is
 not implemented as the original audit expectation: the checked anchor is
@@ -32,6 +33,52 @@ fix retains raw prediction slots for symbolic evaluation, records requested
 operations in source order, and replays uncertain operations from the pre-edit
 state. These are corrections to the not-yet-generated v3 artifact contract;
 no v3 labels, graphs, checkpoints, or results existed to migrate.
+
+The follow-up review of commit `0db57f5` confirmed all 100 carried-forward
+cases, then found three role-dependency counterexamples. An unknown predicate
+could reintroduce a deleted primary occurrence for inverse or value-requires,
+and a self-inverse predicate was classified only as a trigger rather than also
+as reciprocal support. The corrected dependency check takes the union of all
+compatible semantic roles. Repository regressions cover the primitive
+validator and the real candidate/final-metric callback, including the rule that
+an unresolved result receives no primary-fix credit.
+
+## Current primary historical diagnostic
+
+The resumable downloader rebuilt all 6,382 historical nodes by retrieving raw
+content for the retained exact revision identities. Every parser-v2 cache entry
+retains its source page; revision ID, timestamp, and content checksum were
+verified during migration. The direct edge topology remains equal to v1 (8,732
+edges), while parser v2 marks 55 direct
+adjacencies and 434 transitive closures incomplete instead of certifying them.
+
+The primary-only streaming diagnostic evaluated all 955,405 immutable sampled
+rows with the corrected working tree and parser-v2 hierarchy. `Pass / all`
+uses every primary instance as its denominator; `pass / checkable` excludes
+three-valued `unknown` outcomes. These are descriptive historical-edit
+diagnostics, not validator acceptance targets.
+
+| Constraint family | Primary rows | Pre pass / all | Pre pass / checkable | Post pass / all | Post pass / checkable |
+|---|---:|---:|---:|---:|---:|
+| conflictWith | 100,612 | 1.23% | 1.23% | 93.58% | 93.59% |
+| distinct | 228,208 | 4.64% | 4.64% | 99.51% | 99.52% |
+| inverse | 70,361 | 25.78% | 25.82% | 97.51% | 98.34% |
+| itemRequiresStatement | 99,999 | 19.77% | 19.77% | 99.48% | 99.49% |
+| oneOf | 6,855 | 0.00% | 0.00% | 23.15% | 97.00% |
+| single | 119,723 | 54.33% | 71.65% | 65.29% | 86.10% |
+| symmetric | 29,642 | 88.93% | 93.62% | 90.94% | 99.94% |
+| type | 100,003 | 33.83% | 34.43% | 95.86% | 96.20% |
+| valueRequiresStatement | 100,002 | 37.21% | 45.12% | 77.75% | 99.10% |
+| valueType | 100,000 | 48.11% | 51.39% | 89.15% | 98.17% |
+
+The machine-readable report is
+`models/paper_diagnostics/primary_historical_satisfaction_v3.json`; it includes
+exact counts, split-level results, all nine pre/post transitions, and input/code
+identities. The report SHA-256 is
+`39bffd7cad9005bf45a1277dcb69e302f3942fb028e75b565a986d9cdb73370f`.
+The hierarchy is
+`data/static/wikidata-p279-2018-07-01.v2.json`, SHA-256
+`2c331f662799715d5a2fda042061fa88c0922801c5dfa29601c029244ce1b1f4`.
 
 ## Executed commands
 
@@ -67,7 +114,7 @@ FSG_REPO="$PWD" PYTHONPATH="$PWD/src" uv run python -m pytest -q \
 # before: 1 failed; after: 1 passed
 
 uv run python -m pytest -q -ra
-# 186 passed, 3 third-party deprecation warnings, 0 skipped
+# 191 passed, 3 third-party deprecation warnings, 0 skipped
 
 uv run python -m compileall -q src scripts tests
 # exit 0
@@ -95,10 +142,11 @@ matched. `sha256sum --check release/zenodo/v1.0.0/SHA256SUMS` also passed for
 all eight release entries. The downloader's read-only `--seeds-only` check
 reported the expected 3,941 fixed hierarchy seeds.
 
-Both final readiness commands were also invoked as negative pre-regeneration
-checks. Each exited 1 as required: paper readiness stopped at the deliberately
-removed stale B0 evaluation, and suite validation stopped because the v2
-hierarchy artifact has not yet been built. Neither accepted the old generation.
+Before the hierarchy rebuild, both final readiness commands were invoked as
+negative pre-regeneration checks. Each exited 1 as required: paper readiness
+stopped at the deliberately removed stale B0 evaluation, and suite validation
+stopped because the v2 hierarchy artifact was absent. Neither accepted the old
+generation.
 
 ## Bounded real-row identity observation
 
@@ -121,16 +169,16 @@ paper-system artifacts (10,000 rows total). It found 56 partial additions and
 four partial deletions: A1 had 19/3, B0 had 28/1, the definition-majority
 baseline had 6/0, and M1D had 3/0; the other six artifacts had none in their
 prefixes. One A1 prediction contained an unresolved partial deletion followed
-by a successful addition on a different triple; no identical-triple overlap occurred in the
-bounded prefixes. These stale v2 predictions are prevalence evidence only, not
-v3 metrics. Their partial-operation frequency confirms that retaining raw slots
-in final symbolic evaluation is operationally relevant.
+by a successful addition on a different triple; no identical-triple overlap
+occurred in the bounded prefixes. These stale v2 predictions are prevalence
+evidence only, not v3 metrics. Their partial-operation frequency confirms that
+retaining raw slots in final symbolic evaluation is operationally relevant.
 
 ## Deferred checks
 
 The following require the intentionally deferred full run and are not claimed
-as completed: network retrieval of all hierarchy revisions, full label and graph
-regeneration, passive-payload checksum equality, GPU training/evaluation,
-schema-v3 result completion for all nine paper systems, paper/PDF rebuild, and
-paper-to-artifact numerical equality. The readiness scripts now fail closed
-until those artifacts share the exact v3 contract identities.
+as completed: full label and graph regeneration, passive-payload checksum
+equality, GPU training/evaluation, schema-v3 result completion for all nine
+paper systems, paper/PDF rebuild, and paper-to-artifact numerical equality. The
+readiness scripts now fail closed until those artifacts share the exact v3
+contract identities.

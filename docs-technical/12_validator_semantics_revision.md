@@ -113,8 +113,11 @@ Partial operations retain every known component. Relevance is decided from the
 known subject and property before returning `unknown`: for example, an addition
 to a known different subject cannot affect a primary single-value or one-of
 anchor, but it can affect distinct-values or introduce an anchor for a selected
-secondary definition. This makes an unresolved competing distinct owner or new
-secondary one-of anchor unknown while preserving independent definite results.
+secondary definition. Trigger and support dependencies are combined as a union:
+an unknown predicate is a wildcard for every compatible role, and a predicate
+alias such as an inverse property equal to its constrained property retains both
+roles. This makes an unresolved competing distinct owner or new secondary
+one-of anchor unknown while preserving independent definite results.
 Legacy pair-only `missing_edits` metadata fails closed unless an unaffected
 violation can be established without the uncertain pair. Detailed results expose
 applicability and unknown reasons; labeled rows persist edit applicability and
@@ -268,6 +271,19 @@ uv run python scripts/diagnose_validator_transitions.py \
 The report contains the 3-by-3 pre/post primary transitions overall and by
 family, post-edit unknown reasons, primary-index mismatches, and single-value
 failure witnesses. No transition or historical pass-rate threshold is imposed.
+
+Primary-only pre/post proportions can also be recomputed directly from the
+immutable, unlabelled benchmark rows without writing factor labels:
+
+```bash
+uv run python scripts/compute_primary_historical_satisfaction.py \
+  --output models/paper_diagnostics/primary_historical_satisfaction_v3.json
+```
+
+This streaming diagnostic evaluates only `row.constraint_id`, reports both
+`satisfied / total` and `satisfied / checkable`, retains the complete 3-by-3
+transition table, and records source, registry, encoder, hierarchy, and code
+identities. It refuses to run without the parser-v2 fixed-cutoff hierarchy.
 
 Final artifact gates, after the complete generation and paper update, are:
 

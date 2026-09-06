@@ -274,6 +274,83 @@ class HistoricalRevisionClient:
         # pages. Keep this convenience method strictly single-page per request.
         return {entity_id: self.fetch(entity_id, cutoff) for entity_id in entity_ids}
 
+    def fetch_revision_pages(
+        self,
+        revisions_by_entity: dict[str, int],
+    ) -> dict[str, dict[str, Any]]:
+        """Retrieve already-proven historical revision IDs in one API call."""
+
+        if not revisions_by_entity:
+            return {}
+        if len(revisions_by_entity) > 50:
+            raise ValueError("At most 50 revision IDs may be requested at once")
+        entity_by_revision = {
+            int(revision_id): entity_id
+            for entity_id, revision_id in revisions_by_entity.items()
+        }
+        if len(entity_by_revision) != len(revisions_by_entity):
+            raise ValueError("Historical revision IDs must be unique within a batch")
+        params = {
+            "action": "query",
+            "format": "json",
+            "formatversion": "2",
+            "prop": "revisions",
+            "revids": "|".join(str(value) for value in sorted(entity_by_revision)),
+            "rvprop": "ids|timestamp|content",
+            "rvslots": "main",
+            "maxlag": str(int(self.maxlag)),
+        }
+        last_error: Exception | None = None
+        for attempt in range(self.retries + 1):
+            try:
+                self._pace_request()
+                response = self.session.get(API_URL, params=params, timeout=self.timeout)
+                response.raise_for_status()
+                payload = response.json()
+                if payload.get("error"):
+                    error = payload["error"]
+                    if error.get("code") == "maxlag":
+                        retry_after = response.headers.get("Retry-After", "")
+                        try:
+                            delay = max(60.0, float(retry_after))
+                        except (TypeError, ValueError):
+                            delay = 60.0
+                        raise MaxlagError(str(error), retry_after=delay)
+                    raise RuntimeError(str(error))
+                pages_by_entity: dict[str, dict[str, Any]] = {}
+                for page in payload["query"]["pages"]:
+                    revisions = page.get("revisions") or []
+                    if len(revisions) != 1:
+                        raise RuntimeError("Revision-ID response did not contain exactly one revision")
+                    revision_id = int(revisions[0]["revid"])
+                    entity_id = entity_by_revision.get(revision_id)
+                    if entity_id is None:
+                        raise RuntimeError(f"Unexpected historical revision {revision_id}")
+                    pages_by_entity[entity_id] = page
+                missing = set(revisions_by_entity) - set(pages_by_entity)
+                if missing:
+                    raise RuntimeError(
+                        "Historical revision response omitted " + ", ".join(sorted(missing))
+                    )
+                self._last_pages.update(pages_by_entity)
+                return pages_by_entity
+            except (requests.RequestException, ValueError, KeyError, RuntimeError) as exc:
+                last_error = exc
+                if attempt >= self.retries:
+                    break
+                retry_delay = min(60.0, (2**attempt) + random.random())
+                response = getattr(exc, "response", None)
+                if isinstance(exc, MaxlagError):
+                    retry_delay = exc.retry_after
+                elif response is not None and int(getattr(response, "status_code", 0)) == 429:
+                    retry_after = response.headers.get("Retry-After", "")
+                    try:
+                        retry_delay = max(60.0, float(retry_after))
+                    except (TypeError, ValueError):
+                        retry_delay = 60.0
+                time.sleep(retry_delay)
+        raise RuntimeError("Batched historical revision retrieval failed") from last_error
+
     def fetch(self, entity_id: str, cutoff: str) -> dict[str, Any]:
         params = {
             "action": "query",
@@ -340,6 +417,32 @@ def _cache_path(cache_dir: Path, entity_id: str) -> Path:
     return cache_dir / f"{entity_id}.json"
 
 
+def _write_cache(
+    path: Path,
+    *,
+    cutoff: str,
+    source_page: dict[str, Any] | None,
+    record: dict[str, Any],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(
+        json.dumps(
+            {
+                "cache_schema_version": HIERARCHY_CACHE_SCHEMA_VERSION,
+                "parser_version": HIERARCHY_PARSER_VERSION,
+                "cutoff": cutoff,
+                "source_page": source_page,
+                "record": record,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
 def _load_or_fetch(
     client: HistoricalRevisionClient,
     cache_dir: Path,
@@ -364,44 +467,14 @@ def _load_or_fetch(
             legacy = path.with_name(f"{path.stem}.pre-parser-v{HIERARCHY_PARSER_VERSION}{path.suffix}")
             if not legacy.exists():
                 shutil.copy2(path, legacy)
-            temporary = path.with_suffix(".json.tmp")
-            temporary.write_text(
-                json.dumps(
-                    {
-                        "cache_schema_version": HIERARCHY_CACHE_SCHEMA_VERSION,
-                        "parser_version": HIERARCHY_PARSER_VERSION,
-                        "cutoff": cutoff,
-                        "source_page": source_page,
-                        "record": record,
-                    },
-                    sort_keys=True,
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            temporary.replace(path)
+            _write_cache(path, cutoff=cutoff, source_page=source_page, record=record)
             return record
         legacy = path.with_name(f"{path.stem}.pre-parser-v{HIERARCHY_PARSER_VERSION}{path.suffix}")
         if not legacy.exists():
             shutil.copy2(path, legacy)
     record = client.fetch(entity_id, cutoff)
     source_page = client._last_pages.get(entity_id)
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(
-        json.dumps(
-            {
-                "cache_schema_version": HIERARCHY_CACHE_SCHEMA_VERSION,
-                "parser_version": HIERARCHY_PARSER_VERSION,
-                "cutoff": cutoff,
-                "source_page": source_page,
-                "record": record,
-            },
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    temporary.replace(path)
+    _write_cache(path, cutoff=cutoff, source_page=source_page, record=record)
     return record
 
 
@@ -410,13 +483,69 @@ def _load_or_fetch_many(
     cache_dir: Path,
     entity_ids: list[str],
     cutoff: str,
+    legacy_cache_dir: Path | None = None,
 ) -> dict[str, dict[str, Any]]:
     # Persist each response immediately. If a later entity fails, every prior
     # revision in this queue chunk remains available to a safe restart.
-    return {
-        entity_id: _load_or_fetch(client, cache_dir, entity_id, cutoff)
-        for entity_id in entity_ids
-    }
+    records: dict[str, dict[str, Any]] = {}
+    pending: list[str] = []
+    for entity_id in entity_ids:
+        path = _cache_path(cache_dir, entity_id)
+        if path.exists():
+            records[entity_id] = _load_or_fetch(client, cache_dir, entity_id, cutoff)
+        else:
+            pending.append(entity_id)
+
+    legacy_provenance: dict[str, dict[str, Any]] = {}
+    if legacy_cache_dir is not None:
+        for entity_id in pending:
+            legacy_path = _cache_path(legacy_cache_dir, entity_id)
+            if not legacy_path.exists():
+                continue
+            legacy = json.loads(legacy_path.read_text(encoding="utf-8"))
+            record = legacy.get("record") or {}
+            revision_id = record.get("revision_id")
+            content_sha256 = record.get("revision_content_sha256")
+            timestamp = record.get("revision_timestamp")
+            if (
+                legacy.get("cutoff") == cutoff
+                and isinstance(revision_id, int)
+                and revision_id > 0
+                and isinstance(content_sha256, str)
+                and len(content_sha256) == 64
+                and isinstance(timestamp, str)
+                and timestamp <= cutoff
+            ):
+                legacy_provenance[entity_id] = record
+
+    if legacy_provenance:
+        pages = client.fetch_revision_pages(
+            {
+                entity_id: int(record["revision_id"])
+                for entity_id, record in legacy_provenance.items()
+            }
+        )
+        for entity_id, page in pages.items():
+            record = client._record_from_page(entity_id, page)
+            legacy_record = legacy_provenance[entity_id]
+            if record.get("revision_id") != legacy_record["revision_id"]:
+                raise RuntimeError(f"Historical revision identity changed for {entity_id}")
+            if record.get("revision_timestamp") != legacy_record["revision_timestamp"]:
+                raise RuntimeError(f"Historical revision timestamp changed for {entity_id}")
+            if record.get("revision_content_sha256") != legacy_record["revision_content_sha256"]:
+                raise RuntimeError(f"Historical revision content changed for {entity_id}")
+            _write_cache(
+                _cache_path(cache_dir, entity_id),
+                cutoff=cutoff,
+                source_page=page,
+                record=record,
+            )
+            records[entity_id] = record
+
+    for entity_id in pending:
+        if entity_id not in records:
+            records[entity_id] = _load_or_fetch(client, cache_dir, entity_id, cutoff)
+    return records
 
 
 def _closure_complete(node: str, records: dict[str, dict[str, Any]]) -> bool:
@@ -454,7 +583,13 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     queued = set(pending)
     while pending:
         batch = [pending.popleft() for _ in range(min(args.batch_size, len(pending)))]
-        batch_records = _load_or_fetch_many(client, args.cache, batch, args.cutoff)
+        batch_records = _load_or_fetch_many(
+            client,
+            args.cache,
+            batch,
+            args.cutoff,
+            args.legacy_cache,
+        )
         for entity_id in batch:
             record = batch_records[entity_id]
             records[entity_id] = record
@@ -519,6 +654,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark", type=Path, default=Path("data/interim/full_strat1m_minocc100"))
     parser.add_argument("--encoder", type=Path, default=Path("data/interim/full_strat1m_minocc100/globalintencoder.txt"))
     parser.add_argument("--cache", type=Path, default=Path("data/interim/hierarchy_cache_2018-07-01.v2"))
+    parser.add_argument(
+        "--legacy-cache",
+        type=Path,
+        default=Path("data/interim/hierarchy_cache_2018-07-01"),
+        help=(
+            "Optional parser-v1 cache whose recorded revision IDs and content hashes "
+            "permit verified batched source retrieval before parser-v2 reprocessing."
+        ),
+    )
     parser.add_argument("--output", type=Path, default=Path("data/static/wikidata-p279-2018-07-01.v2.json"))
     parser.add_argument("--cutoff", default=HIERARCHY_CUTOFF)
     parser.add_argument("--expected-seed-count", type=int, default=3941)
