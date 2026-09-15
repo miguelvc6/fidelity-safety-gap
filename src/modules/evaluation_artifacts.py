@@ -1,4 +1,4 @@
-"""Schema-v3 evaluation output and replay artifact helpers."""
+"""Schema-v2 evaluation output and replay artifact helpers."""
 
 from __future__ import annotations
 
@@ -13,11 +13,8 @@ from typing import Any, Iterable, Sequence
 import pandas as pd
 import torch
 
-from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION
-from modules.semantics_provenance import expected_semantic_contracts
 
-
-EVALUATION_SCHEMA_VERSION = 3
+EVALUATION_SCHEMA_VERSION = 2
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PREDICTION_COLUMNS = (
     "pred_add_subject",
@@ -100,7 +97,6 @@ def build_predictions_frame(
         values = tensor[index].tolist()
         record.update({column: int(value) for column, value in zip(PREDICTION_COLUMNS, values)})
         instance = metric_instances[index]
-        record["historical_stratum"] = str(instance.get("historical_stratum", "uncheckable"))
         for operation in ("add", "del"):
             resolved = instance.get(f"resolved_{operation}")
             if resolved is None:
@@ -119,19 +115,14 @@ def build_predictions_frame(
     return pd.DataFrame.from_records(records)
 
 
-def backup_previous_schema_once(path: Path) -> Path | None:
+def backup_schema_v1_once(path: Path) -> Path | None:
     path = Path(path)
     if not path.exists():
         return None
-    backup = path.with_name(f"{path.stem}.pre-schema-v3{path.suffix}")
+    backup = path.with_name(f"{path.stem}.pre-schema-v2{path.suffix}")
     if not backup.exists():
         shutil.copy2(path, backup)
     return backup
-
-
-# Compatibility alias for callers outside this repository. New code uses the
-# schema-neutral name above.
-backup_schema_v1_once = backup_previous_schema_once
 
 
 def _temporary_path(target: Path) -> Path:
@@ -206,8 +197,6 @@ def write_prediction_artifacts(
     dataset_variant: str,
     split: str = "test",
     source_predictions_path: Path | None = None,
-    validator_semantics_version: int = VALIDATOR_SEMANTICS_VERSION,
-    hierarchy_identity: dict[str, Any] | None = None,
 ) -> tuple[Path, Path, dict[str, Any]]:
     output_dir.mkdir(parents=True, exist_ok=True)
     predictions_path = output_dir / "predictions.parquet"
@@ -218,9 +207,6 @@ def write_prediction_artifacts(
     graph_files = [_file_identity(Path(path)) for path in graph_paths]
     manifest = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
-        "validator_semantics_version": int(validator_semantics_version),
-        "semantic_contracts": expected_semantic_contracts(),
-        "hierarchy": hierarchy_identity or {"content_sha256": "fixture-no-hierarchy"},
         "row_count": len(frame),
         "split": split,
         "checkpoint": _file_identity(checkpoint_path),
@@ -251,12 +237,10 @@ def load_and_validate_predictions(
     graph_paths: Iterable[Path],
     dataset_variant: str,
     split: str = "test",
-    validator_semantics_version: int = VALIDATOR_SEMANTICS_VERSION,
-    hierarchy_identity: dict[str, Any] | None = None,
 ) -> tuple[torch.Tensor, dict[str, Any]]:
     predictions_path = Path(predictions_path)
     if predictions_path.suffix.lower() != ".parquet":
-        raise ValueError("Schema-v3 prediction replay requires a Parquet artifact.")
+        raise ValueError("Schema-v2 prediction replay requires a Parquet artifact.")
     manifest_path = predictions_path.with_suffix(".manifest.json")
     if not predictions_path.exists() or not manifest_path.exists():
         raise FileNotFoundError(
@@ -265,17 +249,7 @@ def load_and_validate_predictions(
     with manifest_path.open("r", encoding="utf-8") as handle:
         manifest = json.load(handle)
     if int(manifest.get("schema_version", -1)) != EVALUATION_SCHEMA_VERSION:
-        raise ValueError("Prediction manifest is not schema version 3.")
-    if int(manifest.get("validator_semantics_version", -1)) != int(validator_semantics_version):
-        raise ValueError("Prediction replay crosses validator semantics versions.")
-    if manifest.get("semantic_contracts") != expected_semantic_contracts():
-        raise ValueError("Prediction replay crosses semantic contract versions.")
-    recorded_hierarchy = manifest.get("hierarchy") or {}
-    recorded_hierarchy_checksum = recorded_hierarchy.get("content_sha256")
-    if not recorded_hierarchy_checksum:
-        raise ValueError("Prediction manifest lacks hierarchy identity.")
-    if hierarchy_identity is not None and recorded_hierarchy_checksum != hierarchy_identity.get("content_sha256"):
-        raise ValueError("Prediction replay crosses hierarchy identities.")
+        raise ValueError("Prediction manifest is not schema version 2.")
     recorded_prediction = manifest.get("predictions") or {}
     if recorded_prediction.get("sha256") != sha256_file(predictions_path):
         raise ValueError("Prediction Parquet checksum does not match its manifest.")

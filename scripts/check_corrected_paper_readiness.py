@@ -28,9 +28,6 @@ from modules.evaluation_artifacts import (  # noqa: E402
     sha256_file,
 )
 from modules.repair_eval import PAPER_METRIC_KEYS  # noqa: E402
-from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION  # noqa: E402
-from modules.class_hierarchy import load_hierarchy_artifact  # noqa: E402
-from modules.semantics_provenance import expected_semantic_contracts  # noqa: E402
 
 EXPECTED_ROWS = 143_316
 LEGACY_FIELDS = {
@@ -371,15 +368,10 @@ def _check_evaluation(
     *,
     verify_graph_checksums: bool,
 ) -> dict[str, Any]:
-    expected_contracts = expected_semantic_contracts()
     model_path, artifact_dir = _evaluation_paths(system)
     model = _load(model_path)
     if model.get("schema_version") != EVALUATION_SCHEMA_VERSION:
-        raise ValueError(f"{system}: model schema is not v3")
-    if model.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
-        raise ValueError(f"{system}: model uses incompatible validator semantics")
-    if model.get("semantic_contracts") != expected_contracts:
-        raise ValueError(f"{system}: model uses incompatible semantic contracts")
+        raise ValueError(f"{system}: model schema is not v2")
     legacy = _legacy_fields(model)
     if legacy:
         raise ValueError(f"{system}: legacy metric fields remain: {sorted(legacy)}")
@@ -388,14 +380,7 @@ def _check_evaluation(
     manifest_path = artifact_dir / "predictions.manifest.json"
     manifest = _load(manifest_path)
     if manifest.get("schema_version") != EVALUATION_SCHEMA_VERSION:
-        raise ValueError(f"{system}: prediction manifest schema is not v3")
-    if manifest.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
-        raise ValueError(f"{system}: prediction manifest uses incompatible validator semantics")
-    if manifest.get("semantic_contracts") != expected_contracts:
-        raise ValueError(f"{system}: prediction manifest uses incompatible semantic contracts")
-    hierarchy = manifest.get("hierarchy") or {}
-    if not hierarchy.get("content_sha256") or hierarchy != model.get("hierarchy"):
-        raise ValueError(f"{system}: hierarchy provenance is absent or inconsistent")
+        raise ValueError(f"{system}: prediction manifest schema is not v2")
     if int(manifest.get("row_count", -1)) != EXPECTED_ROWS:
         raise ValueError(f"{system}: expected {EXPECTED_ROWS} predictions")
     predictions = manifest.get("predictions") or {}
@@ -405,20 +390,6 @@ def _check_evaluation(
     _assert_file_identity(system, "interim dataset", artifact)
     if dataset.get("variant") != "full_strat1m_minocc100" or dataset.get("split") != "test":
         raise ValueError(f"{system}: wrong dataset variant or split")
-
-    expected_contracts_json = json.dumps(expected_contracts, sort_keys=True)
-    for csv_name in ("per_constraint.csv", "historical_strata.csv"):
-        provenance_frame = pd.read_csv(artifact_dir / csv_name)
-        if set(provenance_frame.get("validator_semantics_version", [])) != {
-            VALIDATOR_SEMANTICS_VERSION
-        }:
-            raise ValueError(f"{system}: {csv_name} uses incompatible validator semantics")
-        if set(provenance_frame.get("semantic_contracts", [])) != {expected_contracts_json}:
-            raise ValueError(f"{system}: {csv_name} uses incompatible semantic contracts")
-        if set(provenance_frame.get("hierarchy_content_sha256", [])) != {
-            hierarchy["content_sha256"]
-        }:
-            raise ValueError(f"{system}: {csv_name} uses an incompatible hierarchy")
 
     frame = pd.read_parquet(predictions_path)
     required = set(IDENTITY_COLUMNS + PREDICTION_COLUMNS)
@@ -492,6 +463,8 @@ def _check_evaluation(
                     f"{system}: training config {key}={training_config.get(key)!r}, "
                     f"expected {expected!r}"
                 )
+        # A1 predates the explicit seed field; its training entry point hard-coded
+        # 42. New configurations record the same value directly.
         if training_config.get("seed", 42) != 42:
             raise ValueError(f"{system}: training seed is not 42")
         if (
@@ -555,20 +528,6 @@ def _check_evaluation(
             raise ValueError(f"{system}: factorized run references passive graphs")
         history_path = expected_run / "training_history.json"
         history = _load(history_path)
-        if system != "B0":
-            training_provenance = history.get("training_provenance") or {}
-            if (
-                training_provenance.get("validator_semantics_version")
-                != VALIDATOR_SEMANTICS_VERSION
-            ):
-                raise ValueError(f"{system}: training history uses incompatible validator semantics")
-            if training_provenance.get("semantic_contracts") != expected_contracts:
-                raise ValueError(f"{system}: training history uses incompatible semantic contracts")
-            if (
-                (training_provenance.get("hierarchy") or {}).get("content_sha256")
-                != hierarchy["content_sha256"]
-            ):
-                raise ValueError(f"{system}: training history uses an incompatible hierarchy")
         val_loss = history.get("val_loss")
         if not isinstance(val_loss, list) or not val_loss:
             raise ValueError(f"{system}: validation-loss history is missing")
@@ -582,6 +541,14 @@ def _check_evaluation(
             "best_epoch": best_epoch_index + 1,
             "best_validation_loss": float(val_loss[best_epoch_index]),
         }
+        if system == "M1D" and not (
+            len(val_loss) == 3
+            and best_epoch_index == 0
+            and math.isclose(float(val_loss[0]), 1.48208, abs_tol=1e-12)
+            and math.isclose(float(val_loss[1]), 46_378.4448, abs_tol=1e-8)
+            and math.isclose(float(val_loss[2]), 1_016_081_888.0512, abs_tol=1e-4)
+        ):
+            raise ValueError("M1D: training instability record differs from the paper")
     else:
         if manifest.get("config") is not None or manifest.get("checkpoint") is not None:
             raise ValueError(f"{system}: deterministic baseline has learned-model provenance")
@@ -604,7 +571,6 @@ def _check_evaluation(
         "dataset_sha256": artifact.get("sha256"),
         "row_identity_sha256": dataset.get("row_identity_sha256"),
         "row_count": manifest["row_count"],
-        "hierarchy_content_sha256": hierarchy["content_sha256"],
         "graph_checksums_verified": bool(verify_graph_checksums and system in RUNS),
         "training": training_summary,
         "fidelity": fidelity,
@@ -615,7 +581,6 @@ def _check_evaluation(
 
 
 def _check_sidecars(system: str) -> dict[str, Any]:
-    expected_contracts = expected_semantic_contracts()
     evaluation_dir = ROOT / "models" / RUNS[system] / "evaluations"
     h2 = _load(evaluation_dir / "h2" / "h2_report.json")
     legacy = _legacy_fields(h2)
@@ -623,15 +588,6 @@ def _check_sidecars(system: str) -> dict[str, Any]:
         raise ValueError(f"{system}: legacy metric fields remain in H2: {sorted(legacy)}")
     if h2.get("status") not in {"ok", "partial"} or not h2.get("overall"):
         raise ValueError(f"{system}: incomplete H2 report")
-    model = _load(evaluation_dir / "model.json")
-    if h2.get("schema_version") != EVALUATION_SCHEMA_VERSION:
-        raise ValueError(f"{system}: H2 schema is not v3")
-    if h2.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
-        raise ValueError(f"{system}: H2 validator semantics mismatch")
-    if h2.get("semantic_contracts") != expected_contracts:
-        raise ValueError(f"{system}: H2 semantic contracts mismatch")
-    if h2.get("hierarchy") != model.get("hierarchy"):
-        raise ValueError(f"{system}: H2 hierarchy mismatch")
     if h2.get("selection_mode") != EXPECTED_H2_SELECTION[system]:
         raise ValueError(
             f"{system}: H2 selection mode is {h2.get('selection_mode')!r}, "
@@ -661,7 +617,7 @@ def _check_sidecars(system: str) -> dict[str, Any]:
             "numerator": normal.get(f"{name}_numerator"),
             "denominator": normal.get(f"{name}_denominator"),
         }
-        exact_replay = h2.get("normal_prediction_source") == "validated_schema_v3_replay"
+        exact_replay = h2.get("normal_prediction_source") == "validated_schema_v2_replay"
         matches = observed == metric if exact_replay else _metric_within_selector_tolerance(observed, metric)
         if not matches:
             mode = "validated replay" if exact_replay else "selector rerun tolerance"
@@ -672,13 +628,7 @@ def _check_sidecars(system: str) -> dict[str, Any]:
     if legacy:
         raise ValueError(f"{system}: legacy metric fields remain in oracle: {sorted(legacy)}")
     if oracle.get("schema_version") != EVALUATION_SCHEMA_VERSION:
-        raise ValueError(f"{system}: oracle schema is not v3")
-    if oracle.get("validator_semantics_version") != VALIDATOR_SEMANTICS_VERSION:
-        raise ValueError(f"{system}: oracle validator semantics mismatch")
-    if oracle.get("semantic_contracts") != expected_contracts:
-        raise ValueError(f"{system}: oracle semantic contracts mismatch")
-    if oracle.get("hierarchy") != model.get("hierarchy"):
-        raise ValueError(f"{system}: oracle hierarchy mismatch")
+        raise ValueError(f"{system}: oracle schema is not v2")
     expected_candidate_config = {
         "heuristic_max_candidates": 30,
         "heuristic_max_values": 3,
@@ -701,7 +651,7 @@ def _check_sidecars(system: str) -> dict[str, Any]:
         _check_paper_metrics(system, overall.get(key), context=key)
     selected_metrics = overall["selected_paper_metrics"]
     selected_source = oracle.get("selected_prediction_source") or {}
-    exact_selected_replay = selected_source.get("mode") == "validated_schema_v3_replay"
+    exact_selected_replay = selected_source.get("mode") == "validated_schema_v2_replay"
     model_manifest = _load(evaluation_dir / "predictions.manifest.json")
     expected_prediction_sha = (model_manifest.get("predictions") or {}).get("sha256")
     if not exact_selected_replay or selected_source.get("sha256") != expected_prediction_sha:
@@ -874,9 +824,6 @@ def main() -> None:
         for system in PAPER_ROW_NAMES
     }
     reference = systems["A1"]
-    _hierarchy_payload, hierarchy_identity = load_hierarchy_artifact(
-        ROOT / "data" / "static" / "wikidata-p279-2018-07-01.v2.json"
-    )
     for system, report in systems.items():
         if report["row_count"] != reference["row_count"]:
             raise ValueError(f"{system}: row count differs from A1")
@@ -884,8 +831,6 @@ def main() -> None:
             raise ValueError(f"{system}: dataset differs from A1")
         if report["row_identity_sha256"] != reference["row_identity_sha256"]:
             raise ValueError(f"{system}: row identity differs from A1")
-        if report["hierarchy_content_sha256"] != hierarchy_identity.content_sha256:
-            raise ValueError(f"{system}: hierarchy differs from the fixed artifact")
     dfb_metrics = systems["DFB"]["paper_metrics"]
     for metric_name, expected in (
         ("base_deletion_rate", 1.0),
@@ -900,9 +845,6 @@ def main() -> None:
     paper = _check_paper(args.paper.resolve(), systems) if args.paper else None
     report = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
-        "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
-        "semantic_contracts": expected_semantic_contracts(),
-        "hierarchy": dict(hierarchy_identity.__dict__),
         "ready": True,
         "canonical_scope": {
             "learned_systems": list(RUNS),

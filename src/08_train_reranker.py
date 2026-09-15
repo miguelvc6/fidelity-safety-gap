@@ -44,7 +44,6 @@ from modules.repair_eval import ConstraintRepairHeuristics, ViolationContext, lo
 from modules.candidates import CandidateConfig, batch_topk_candidate_triples, build_candidates
 from modules.reranker import CandidateReranker, RerankerConfig, build_reranker
 from modules.reranker_eval import CandidateConstraintEvaluator
-from modules.semantics_provenance import validate_graph_semantics
 from modules.training_utils import (
     load_graph_dataset,
     placeholder_ids_from_encoder,
@@ -312,8 +311,6 @@ def _load_parquet_rows(interim_path: Path, split: str) -> list:
         "other_entity_objects",
         "local_constraint_ids",
         "local_constraint_ids_focus",
-        "factor_constraint_ids",
-        "primary_factor_index",
     ]
     df = pd.read_parquet(path)
     existing = [col for col in columns if col in df.columns]
@@ -742,19 +739,10 @@ def _run_epoch(
             log_probs = F.log_softmax(scores, dim=0)
             probs = log_probs.exp()
 
-            primary_attr = getattr(graph, "primary_factor_index", None)
-            if primary_attr is None:
-                raise ValueError("Reranker graph is missing primary_factor_index")
-            primary_tensor = torch.as_tensor(primary_attr).view(-1)
-            if primary_tensor.numel() != 1:
-                raise ValueError(
-                    "Reranker graph primary_factor_index must be scalar; "
-                    f"got {tuple(primary_tensor.shape)}"
-                )
             metrics_summary = evaluator.evaluate_candidate_metrics(
                 row,
                 candidates=candidates,
-                primary_factor_index=int(primary_tensor.item()),
+                primary_factor_index=int(getattr(graph, "primary_factor_index", 0)),
             )
 
             primary_oracle = max(m.primary_satisfied for m in metrics_summary)
@@ -878,7 +866,6 @@ def main() -> None:
         model_cfg.encoding,
         constraint_representation=model_cfg.constraint_representation,
     )
-    semantics_provenance = validate_graph_semantics([train_path, val_path])
 
     train_data = load_graph_dataset(train_path)
     val_data = load_graph_dataset(val_path)
@@ -934,7 +921,6 @@ def main() -> None:
         assume_complete=training_cfg.assume_complete_entity_facts,
         constraint_scope=training_cfg.constraint_scope,
         use_encoded_ids=use_encoded_ids,
-        require_hierarchy=True,
     )
 
     use_node_embeddings, feature_dim, _, role_spec = infer_node_feature_spec(train_data)
@@ -1041,13 +1027,12 @@ def main() -> None:
     )
     logger.info("Updated resolved experiment config at %s", args.experiment_config)
     training_provenance = {
-        "schema_version": 3,
+        "schema_version": 2,
         "seed": training_cfg.seed,
         "config": _file_identity(args.experiment_config),
         "proposal_checkpoint": _file_identity(proposal_checkpoint_path),
         "train_graph": repository_relative_path(train_path),
         "validation_graph": repository_relative_path(val_path),
-        **semantics_provenance,
     }
     if args.predict_only:
         checkpoint_path = get_checkpoint_path(run_dir)

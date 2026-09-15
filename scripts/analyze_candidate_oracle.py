@@ -49,7 +49,6 @@ from modules.evaluation_artifacts import (
 )
 from modules.model_store import config_copy_path, get_checkpoint_path
 from modules.repair_eval import PaperMetricsAccumulator, evaluate_paper_metric_instance
-from modules.semantics_provenance import expected_semantic_contracts
 from modules.training_utils import load_graph_dataset
 
 NONE_CLASS_INDEX = 0
@@ -436,7 +435,6 @@ def run_analysis(args: argparse.Namespace) -> None:
         dataset_path=global_support.dataset_path,
         graph_paths=graph_paths,
         dataset_variant=dataset_variant_name(model_cfg.dataset_variant, model_cfg.min_occurrence),
-        hierarchy_identity=global_support.evaluator.hierarchy_identity,
     )
 
     overall = Aggregate()
@@ -504,7 +502,7 @@ def run_analysis(args: argparse.Namespace) -> None:
             candidate_scores = [float(v) for v in candidate_scores_tensor.detach().cpu().tolist()]
             # Selected-candidate diagnostics must describe the exact paper prediction,
             # including deterministic resolution of near-tied CUDA scores.  Replaying
-            # the validated schema-v3 artifact avoids treating an independent rerun as
+            # the validated schema-v2 artifact avoids treating an independent rerun as
             # evaluation truth while the candidate set below remains freshly rebuilt.
             selected_slots = [int(value) for value in selected_predictions[context_index].tolist()]
             selected_tuple = tuple(selected_slots)
@@ -651,9 +649,6 @@ def run_analysis(args: argparse.Namespace) -> None:
 
     summary = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
-        "validator_semantics_version": selected_manifest["validator_semantics_version"],
-        "semantic_contracts": expected_semantic_contracts(),
-        "hierarchy": selected_manifest["hierarchy"],
         "run_directory": repository_relative_path(run_directory),
         "config": {
             "path": repository_relative_path(config_copy_path(run_directory)),
@@ -675,7 +670,7 @@ def run_analysis(args: argparse.Namespace) -> None:
         if training_cfg.chooser.enabled
         else ("direct_safety" if training_cfg.direct_safety.enabled else "slot_argmax"),
         "selected_prediction_source": {
-            "mode": "validated_schema_v3_replay",
+            "mode": "validated_schema_v2_replay",
             "path": repository_relative_path(prediction_path),
             "sha256": selected_manifest["predictions"]["sha256"],
         },

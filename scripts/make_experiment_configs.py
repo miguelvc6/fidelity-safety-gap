@@ -237,12 +237,6 @@ def _proposal_config_payload(
         "model": exp.model_name,
         "constraint_representation": exp.constraint_representation,
         "factor_executor_impl": exp.factor_executor_impl,
-        # Keep the node-embedding architecture explicit in every generated
-        # config.  This is part of the checkpoint shape, and in particular
-        # must remain identical for the archived Direct--Passive checkpoint
-        # that the corrected paper suite intentionally reuses.
-        "num_embedding_size": 128,
-        "use_node_embeddings": True,
         "use_edge_attributes": True,
         "use_edge_subtraction": False,
         "use_role_embeddings": True,
@@ -277,7 +271,6 @@ def _proposal_config_payload(
         model_config.update(
             {
                 "factor_executor_impl": "per_type_grouped_v2",
-                "allow_experimental_grouped_mm": False,
                 "gold_edit_embedding_mode": "compact",
                 "pressure_module_sharing": exp.pressure_module_sharing,
                 "active_factor_type_ids": list(active_factor_type_ids),
@@ -453,8 +446,10 @@ def main() -> None:
         raise SystemExit(
             "No graph artifacts found under "
             f"{args.processed_root}.\n"
-            "Build the validator-v3 factorized and passive graph suites as described in "
-            "docs-technical/12_validator_semantics_revision.md."
+            "Restore the paper graph artifacts, or build graphs for a new labeled dataset "
+            "as described in docs-technical/00_training_and_evaluation_execution_plan.md. "
+            "Do not relabel the released paper benchmark: its training labels are part of "
+            "the recorded experimental provenance."
         )
 
     canonical_proposals: list[ProposalExperiment] = [

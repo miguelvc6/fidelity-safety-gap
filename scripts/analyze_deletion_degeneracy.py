@@ -38,7 +38,6 @@ from modules.evaluation_artifacts import (
 )
 from modules.model_store import config_copy_path
 from modules.repair_eval import PaperMetricsAccumulator, evaluate_paper_metric_instance
-from modules.semantics_provenance import expected_semantic_contracts
 
 NONE_CLASS_INDEX = 0
 
@@ -65,7 +64,7 @@ def parse_args() -> argparse.Namespace:
         dest="predictions",
         default=None,
         help=(
-            "Schema-v3 Parquet predictions. --reranker-predictions is retained as an alias. "
+            "Schema-v2 Parquet predictions. --reranker-predictions is retained as an alias. "
             "Defaults to <g0-run-directory>/evaluations/predictions.parquet."
         ),
     )
@@ -270,7 +269,6 @@ def run_analysis(args: argparse.Namespace) -> None:
         dataset_path=global_support.dataset_path,
         graph_paths=graph_paths,
         dataset_variant=variant,
-        hierarchy_identity=global_support.evaluator.hierarchy_identity,
     )
     limit = len(rows)
     if args.limit is not None:
@@ -335,9 +333,6 @@ def run_analysis(args: argparse.Namespace) -> None:
 
     summary = {
         "schema_version": EVALUATION_SCHEMA_VERSION,
-        "validator_semantics_version": predictions_manifest["validator_semantics_version"],
-        "semantic_contracts": expected_semantic_contracts(),
-        "hierarchy": predictions_manifest["hierarchy"],
         "g0_run_directory": repository_relative_path(run_directory),
         "predictions": {
             "path": repository_relative_path(predictions_path),

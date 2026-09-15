@@ -109,14 +109,11 @@ def test_canonical_bundle_defines_the_five_paper_systems(tmp_path) -> None:
         original["model_config"]["num_layers"],
     ) == (128, 2)
     assert original["model_config"]["dropout"] == 0.5
-    assert original["model_config"]["num_embedding_size"] == 128
-    assert original["model_config"]["use_node_embeddings"] is True
     assert a1["expected_trainable_parameters"] == 50_072_465
 
     for payload in (a1, m1c, m1d):
         cfg = payload["model_config"]
         assert cfg["factor_executor_impl"] == "per_type_grouped_v2"
-        assert cfg["allow_experimental_grouped_mm"] is False
         assert cfg["gold_edit_embedding_mode"] == "compact"
         assert cfg["pressure_module_sharing"] == "per_type"
         assert cfg["active_factor_type_ids"] == [0, 2]
@@ -160,7 +157,6 @@ def test_deletion_study_is_additive_and_defines_calibrated_matched_pairs(tmp_pat
 
     for payload in (m1d, m1d_bp):
         assert payload["model_config"]["factor_executor_impl"] == "per_type_grouped_v2"
-        assert payload["model_config"]["allow_experimental_grouped_mm"] is False
         assert payload["model_config"]["gold_edit_embedding_mode"] == "compact"
         assert payload["training_config"]["seed"] == 42
         assert payload["training_config"]["learning_rate"] == 1e-5

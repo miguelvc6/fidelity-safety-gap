@@ -8,7 +8,6 @@ without rebuilding graphs.
 
 import argparse
 import json
-import subprocess
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,24 +17,24 @@ import numpy as np
 import pandas as pd
 
 from modules.constraint_checkers import (
-    VALIDATOR_SEMANTICS_VERSION,
     ConstraintInstance,
     EvidenceState,
-    evaluate_constraint_detailed,
+    evaluate_constraint,
+    normalize_property_id,
     normalize_token,
-    parse_constraint_instance,
 )
-from modules.class_hierarchy import ClassHierarchy, HIERARCHY_CUTOFF, sha256_file
-from modules.constraint_identity import resolve_primary_index
 from modules.data_encoders import GlobalIntEncoder
 from modules.evidence_state import (
     apply_evidence_edits as _shared_apply_evidence_edits,
     build_facts_state as _shared_build_facts_state,
     compute_p_local as _shared_compute_p_local,
 )
-from modules.semantics_provenance import expected_semantic_contracts
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+PARAM_P2306 = "P2306"
+PARAM_P2309 = "P2309"
+PARAM_P2308 = "P2308"
+PARAM_P2305 = "P2305"
+PARAM_P1696 = "P1696"
 
 
 @dataclass(frozen=True)
@@ -218,7 +217,7 @@ def _apply_edit(
     placeholder_map: Dict[Any, Any],
     assume_complete: bool,
     cast_int: bool,
-) -> EvidenceState:
+) -> Set[Tuple[int, int]]:
     pre_state = EvidenceState(
         facts_by_entity=facts_by_entity,
         predicates_present=predicates_present,
@@ -252,7 +251,11 @@ def _apply_edit(
         ),
         resolver=resolver,
     )
-    return post_state
+    facts_by_entity.clear()
+    facts_by_entity.update(post_state.facts_by_entity)
+    predicates_present.clear()
+    predicates_present.update(post_state.predicates_present)
+    return post_state.missing_edits
 
 
 def _build_constraint_instance(
@@ -264,18 +267,62 @@ def _build_constraint_instance(
     constraint_type_id: int,
     default_relation_predicates: List[int],
 ) -> ConstraintInstance:
-    p31 = default_relation_predicates[0] if default_relation_predicates else 0
-    p279 = default_relation_predicates[1] if len(default_relation_predicates) > 1 else 0
-    return parse_constraint_instance(
+    constrained_property_id = _resolve_registry_id(registry_entry.constrained_property_raw, encoder)
+
+    param_predicates = registry_entry.param_predicates_raw
+    param_objects = registry_entry.param_objects_raw
+    param_pairs = list(zip(param_predicates, param_objects))
+
+    required_properties: Set[int] = set()
+    allowed_items: Set[int] = set()
+    allowed_classes: Set[int] = set()
+    relation_predicates: List[int] = []
+    inverse_properties: List[int] = []
+    conflict_properties: Set[int] = set()
+
+    for pred_raw, obj_raw in param_pairs:
+        pred_norm = normalize_token(pred_raw)
+        obj_norm = normalize_token(obj_raw)
+        pred_key = pred_norm or pred_raw
+        obj_key = obj_norm or obj_raw
+        obj_id = _resolve_registry_id(obj_raw, encoder) if encoder else 0
+
+        if pred_key == PARAM_P2306:
+            if normalize_property_id(obj_key):
+                if obj_id:
+                    required_properties.add(obj_id)
+        elif pred_key == PARAM_P2305:
+            if obj_id:
+                allowed_items.add(obj_id)
+        elif pred_key == PARAM_P2308:
+            if obj_id:
+                allowed_classes.add(obj_id)
+        elif pred_key == PARAM_P2309:
+            if normalize_property_id(obj_key) and obj_id:
+                relation_predicates.append(obj_id)
+        elif pred_key == PARAM_P1696:
+            if normalize_property_id(obj_key) and obj_id:
+                inverse_properties.append(obj_id)
+
+        if normalize_property_id(obj_key) and obj_id:
+            conflict_properties.add(obj_id)
+
+    if not relation_predicates:
+        relation_predicates = list(default_relation_predicates)
+    if not inverse_properties and constrained_property_id:
+        inverse_properties = [constrained_property_id]
+
+    return ConstraintInstance(
         constraint_id=constraint_id,
         constraint_type=constraint_type_name,
         constraint_type_id=constraint_type_id,
-        constrained_property_raw=registry_entry.constrained_property_raw,
-        param_predicates_raw=registry_entry.param_predicates_raw,
-        param_objects_raw=registry_entry.param_objects_raw,
-        resolve_id=lambda raw: _resolve_registry_id(raw, encoder),
-        p31_predicate=p31,
-        p279_predicate=p279,
+        constrained_property=constrained_property_id,
+        required_properties=required_properties,
+        allowed_items=allowed_items,
+        allowed_classes=allowed_classes,
+        relation_predicates=relation_predicates,
+        inverse_properties=inverse_properties,
+        conflict_properties=conflict_properties,
     )
 
 
@@ -357,7 +404,6 @@ def _process_dataframe(
     use_encoded_ids: bool,
     constraint_scope: str,
     factor_family_policy: str,
-    hierarchy: ClassHierarchy | None = None,
 ) -> Tuple[pd.DataFrame, Dict[str, Counter[str]], Counter[str]]:
     default_relation_predicates = _resolve_default_relations(encoder)
     constraint_cache: Dict[str, ConstraintInstance] = {}
@@ -370,15 +416,6 @@ def _process_dataframe(
     factor_satisfied_post: List[List[int]] = []
     factor_types: List[List[int]] = []
     factor_constraint_ids: List[List[int]] = []
-    primary_factor_indices: List[int] = []
-    factor_outcome_pre: List[List[str]] = []
-    factor_outcome_post: List[List[str]] = []
-    factor_applicable_pre: List[List[bool]] = []
-    factor_applicable_post: List[List[bool]] = []
-    factor_unknown_reason_pre: List[List[str]] = []
-    factor_unknown_reason_post: List[List[str]] = []
-    edit_applicable: List[bool] = []
-    unresolved_edit_diagnostics: List[str] = []
     num_checkable_pre: List[int] = []
     num_checkable_post: List[int] = []
     coverage_pre: List[float] = []
@@ -415,7 +452,7 @@ def _process_dataframe(
         }
         post_predicates = {ent: set(preds) for ent, preds in predicates_present.items()}
         placeholder_map = _build_placeholder_map(encoder, row)
-        post_state = _apply_edit(
+        missing_edits = _apply_edit(
             post_facts,
             post_predicates,
             p_local,
@@ -423,6 +460,18 @@ def _process_dataframe(
             placeholder_map=placeholder_map,
             assume_complete=assume_complete,
             cast_int=use_encoded_ids,
+        )
+        post_state = EvidenceState(
+            facts_by_entity=post_facts,
+            predicates_present=post_predicates,
+            assume_complete=assume_complete,
+            missing_edits=missing_edits,
+            focus_subject=subject,
+            focus_predicate=predicate,
+            focus_object=obj,
+            other_subject=other_subject,
+            other_predicate=other_predicate,
+            other_object=other_object,
         )
 
         if constraint_scope == "focus":
@@ -433,23 +482,12 @@ def _process_dataframe(
             constraint_ids_raw = getattr(row, "local_constraint_ids", None)
         local_constraint_ids = _coerce_sequence(constraint_ids_raw, cast_int=use_encoded_ids)
         primary_constraint_id = _coerce_value(getattr(row, "constraint_id", 0), cast_int=use_encoded_ids)
-        raw_primary_index = resolve_primary_index(
-            row,
-            local_constraint_ids,
-            coerce=lambda value: _coerce_value(value, cast_int=use_encoded_ids),
-        )
         retained_constraint_ids: List[int] = []
         checkable_pre_row: List[bool] = []
         satisfied_pre_row: List[int] = []
         checkable_post_row: List[bool] = []
         satisfied_post_row: List[int] = []
         types_row: List[int] = []
-        outcome_pre_row: List[str] = []
-        outcome_post_row: List[str] = []
-        applicable_pre_row: List[bool] = []
-        applicable_post_row: List[bool] = []
-        reason_pre_row: List[str] = []
-        reason_post_row: List[str] = []
 
         for constraint_id in local_constraint_ids:
             entry = _lookup_registry_entry(constraint_id, registry_by_id, use_encoded_ids=use_encoded_ids)
@@ -467,12 +505,6 @@ def _process_dataframe(
                 checkable_post_row.append(False)
                 satisfied_post_row.append(0)
                 types_row.append(-1)
-                outcome_pre_row.append("unknown")
-                outcome_post_row.append("unknown")
-                applicable_pre_row.append(False)
-                applicable_post_row.append(False)
-                reason_pre_row.append("constraint missing from registry")
-                reason_post_row.append("constraint missing from registry")
                 coverage["missing_registry"]["total"] += 1
                 continue
 
@@ -503,38 +535,10 @@ def _process_dataframe(
                 satisfied_pre = 0
                 checkable_post = False
                 satisfied_post = 0
-                outcome_pre = "unknown"
-                outcome_post = "unknown"
-                applicable_pre = False
-                applicable_post = False
-                reason_pre = "unsupported constraint family"
-                reason_post = "unsupported constraint family"
             else:
                 filter_stats["supported_retained"] += 1
-                pre_result = evaluate_constraint_detailed(
-                    pre_state,
-                    constraint_instance,
-                    p_local,
-                    hierarchy=hierarchy,
-                    primary=is_primary,
-                )
-                post_result = evaluate_constraint_detailed(
-                    post_state,
-                    constraint_instance,
-                    p_local,
-                    hierarchy=hierarchy,
-                    primary=is_primary,
-                )
-                checkable_pre = pre_result.outcome.value != "unknown"
-                satisfied_pre = int(pre_result.outcome.value == "satisfied")
-                checkable_post = post_result.outcome.value != "unknown"
-                satisfied_post = int(post_result.outcome.value == "satisfied")
-                outcome_pre = pre_result.outcome.value
-                outcome_post = post_result.outcome.value
-                applicable_pre = pre_result.applicable
-                applicable_post = post_result.applicable
-                reason_pre = "; ".join(pre_result.unknown_reasons)
-                reason_post = "; ".join(post_result.unknown_reasons)
+                checkable_pre, satisfied_pre = evaluate_constraint(pre_state, constraint_instance, p_local)
+                checkable_post, satisfied_post = evaluate_constraint(post_state, constraint_instance, p_local)
 
             retained_constraint_ids.append(int(constraint_id))
             checkable_pre_row.append(bool(checkable_pre))
@@ -542,12 +546,6 @@ def _process_dataframe(
             checkable_post_row.append(bool(checkable_post))
             satisfied_post_row.append(int(satisfied_post))
             types_row.append(int(constraint_instance.constraint_type_id))
-            outcome_pre_row.append(outcome_pre)
-            outcome_post_row.append(outcome_post)
-            applicable_pre_row.append(bool(applicable_pre))
-            applicable_post_row.append(bool(applicable_post))
-            reason_pre_row.append(reason_pre)
-            reason_post_row.append(reason_post)
 
             ctype = constraint_instance.constraint_type or "unknown"
             coverage[ctype]["total"] += 1
@@ -555,39 +553,15 @@ def _process_dataframe(
             coverage[ctype]["checkable_post"] += int(checkable_post)
             coverage[ctype]["satisfied_pre"] += int(satisfied_pre) if checkable_pre else 0
             coverage[ctype]["satisfied_post"] += int(satisfied_post) if checkable_post else 0
-            if is_primary:
-                coverage[ctype]["primary_total"] += 1
-                coverage[ctype]["primary_checkable_pre"] += int(checkable_pre)
-                coverage[ctype]["primary_checkable_post"] += int(checkable_post)
-                coverage[ctype]["primary_satisfied_pre"] += int(satisfied_pre) if checkable_pre else 0
-                coverage[ctype]["primary_satisfied_post"] += int(satisfied_post) if checkable_post else 0
 
         filter_stats["raw_factor_total"] += len(local_constraint_ids)
         filter_stats["retained_factor_total"] += len(retained_constraint_ids)
-        retained_primary_index = resolve_primary_index(
-            row,
-            retained_constraint_ids,
-            coerce=lambda value: _coerce_value(value, cast_int=use_encoded_ids),
-        )
-        if local_constraint_ids[raw_primary_index] != retained_constraint_ids[retained_primary_index]:
-            raise AssertionError("Primary constraint identity changed during factor filtering")
         factor_checkable_pre.append(checkable_pre_row)
         factor_satisfied_pre.append(satisfied_pre_row)
         factor_checkable_post.append(checkable_post_row)
         factor_satisfied_post.append(satisfied_post_row)
         factor_types.append(types_row)
         factor_constraint_ids.append(retained_constraint_ids)
-        primary_factor_indices.append(retained_primary_index)
-        factor_outcome_pre.append(outcome_pre_row)
-        factor_outcome_post.append(outcome_post_row)
-        factor_applicable_pre.append(applicable_pre_row)
-        factor_applicable_post.append(applicable_post_row)
-        factor_unknown_reason_pre.append(reason_pre_row)
-        factor_unknown_reason_post.append(reason_post_row)
-        edit_applicable.append(not bool(post_state.unresolved_edits))
-        unresolved_edit_diagnostics.append(
-            json.dumps([edit.__dict__ for edit in post_state.unresolved_edits], sort_keys=True)
-        )
 
         total = len(retained_constraint_ids)
         num_checkable = sum(1 for flag in checkable_pre_row if flag)
@@ -604,22 +578,10 @@ def _process_dataframe(
     df["factor_satisfied_post_gold"] = factor_satisfied_post
     df["factor_types"] = factor_types
     df["factor_constraint_ids"] = factor_constraint_ids
-    df["primary_factor_index"] = primary_factor_indices
-    df["factor_outcome_pre"] = factor_outcome_pre
-    df["factor_outcome_post_gold"] = factor_outcome_post
-    df["factor_applicable_pre"] = factor_applicable_pre
-    df["factor_applicable_post_gold"] = factor_applicable_post
-    df["factor_unknown_reason_pre"] = factor_unknown_reason_pre
-    df["factor_unknown_reason_post_gold"] = factor_unknown_reason_post
-    df["historical_edit_applicable"] = edit_applicable
-    df["historical_unresolved_edits_json"] = unresolved_edit_diagnostics
     df["num_checkable_factors_pre"] = num_checkable_pre
     df["coverage_pre"] = coverage_pre
     df["num_checkable_factors_post_gold"] = num_checkable_post
     df["coverage_post_gold"] = coverage_post
-    df["validator_semantics_version"] = VALIDATOR_SEMANTICS_VERSION
-    if hierarchy is not None and hierarchy.identity is not None:
-        df["hierarchy_content_sha256"] = hierarchy.identity.content_sha256
 
     return df, coverage, filter_stats
 
@@ -882,12 +844,6 @@ def main() -> None:
         help="Dataset variant to label, e.g. full or full_strat1m.",
     )
     parser.add_argument(
-        "--hierarchy",
-        type=Path,
-        default=Path("data/static/wikidata-p279-2018-07-01.v2.json"),
-        help="Checksummed historical P279 artifact fixed at 2018-07-01.",
-    )
-    parser.add_argument(
         "--registry-dataset",
         default=None,
         help="Raw dataset name for constraint_registry_<dataset>.parquet. Defaults to --dataset.",
@@ -959,21 +915,11 @@ def main() -> None:
     use_encoded_ids = pd.api.types.is_integer_dtype(first_df["constraint_id"])
     if use_encoded_ids and encoder is None:
         raise SystemExit("Encoder is required to resolve registry ids for encoded parquet data.")
-    if not args.hierarchy.exists():
-        raise FileNotFoundError(
-            f"Validator semantics v3 requires the fixed hierarchy artifact: {args.hierarchy}"
-        )
-    hierarchy = ClassHierarchy.from_artifact(
-        args.hierarchy,
-        resolve_id=lambda raw: _resolve_registry_id(raw, encoder),
-        expected_cutoff=HIERARCHY_CUTOFF,
-    )
     registry_by_id = _resolve_registry_mapping(registry_raw, encoder=encoder, use_encoded_ids=use_encoded_ids)
     output_root.mkdir(parents=True, exist_ok=True)
 
     combined_coverage: Dict[str, Counter[str]] = defaultdict(Counter)
     combined_filter_stats: Counter[str] = Counter()
-    split_manifest: Dict[str, Any] = {}
 
     for parquet_path in parquet_paths:
         df = pd.read_parquet(parquet_path)
@@ -990,7 +936,6 @@ def main() -> None:
             use_encoded_ids=use_encoded_ids,
             constraint_scope=args.constraint_scope,
             factor_family_policy=args.factor_family_policy,
-            hierarchy=hierarchy,
         )
         for ctype, stats in coverage.items():
             combined_coverage[ctype].update(stats)
@@ -1000,22 +945,6 @@ def main() -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         labeled_df.to_parquet(output_path)
         print(f"Wrote labeled parquet to {output_path}")
-        split_manifest[parquet_path.stem.removeprefix("df_")] = {
-            "source": {
-                "path": str(parquet_path.resolve()),
-                "size_bytes": parquet_path.stat().st_size,
-                "sha256": sha256_file(parquet_path),
-            },
-            "output": {
-                "path": str(output_path.resolve()),
-                "size_bytes": output_path.stat().st_size,
-                "sha256": sha256_file(output_path),
-            },
-            "row_count": len(labeled_df),
-            "family_outcomes": {
-                family: dict(sorted(stats.items())) for family, stats in sorted(coverage.items())
-            },
-        }
 
     _print_coverage(combined_coverage)
     _print_coverage_table(combined_coverage)
@@ -1025,62 +954,6 @@ def main() -> None:
         output_root,
         args.constraint_scope,
         args.factor_family_policy,
-    )
-    code_version = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=REPOSITORY_ROOT, text=True
-    ).strip()
-    label_manifest = {
-        "schema_version": 2,
-        "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
-        "semantic_contracts": expected_semantic_contracts(),
-        "hierarchy": hierarchy.identity.__dict__ if hierarchy.identity is not None else None,
-        "constraint_scope": args.constraint_scope,
-        "factor_family_policy": args.factor_family_policy,
-        "assume_complete_entity_facts": args.assume_complete_entity_facts,
-        "code_version": code_version,
-        "registry": {
-            "path": str(registry_path.resolve()),
-            "size_bytes": registry_path.stat().st_size,
-            "sha256": sha256_file(registry_path),
-        },
-        "encoder": {
-            "path": str(encoder_path.resolve()),
-            "size_bytes": encoder_path.stat().st_size,
-            "sha256": sha256_file(encoder_path),
-        },
-        "splits": split_manifest,
-    }
-    (output_root / "label_manifest.json").write_text(
-        json.dumps(label_manifest, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    historical_satisfaction = {
-        "schema_version": 2,
-        "diagnostic_only": True,
-        "acceptance_threshold": None,
-        "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
-        "semantic_contracts": expected_semantic_contracts(),
-        "hierarchy_content_sha256": hierarchy.identity.content_sha256,
-        "splits": {
-            split: {
-                family: {
-                    "satisfied": int(stats.get("primary_satisfied_post", 0)),
-                    "checkable": int(stats.get("primary_checkable_post", 0)),
-                    "percentage": (
-                        100.0 * int(stats.get("primary_satisfied_post", 0))
-                        / int(stats.get("primary_checkable_post", 0))
-                        if int(stats.get("primary_checkable_post", 0))
-                        else None
-                    ),
-                }
-                for family, stats in details["family_outcomes"].items()
-            }
-            for split, details in split_manifest.items()
-        },
-    }
-    (output_root / "historical_primary_satisfaction.json").write_text(
-        json.dumps(historical_satisfaction, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
     )
 
 

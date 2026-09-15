@@ -40,15 +40,15 @@ models/paper_diagnostics/*
 models/**/*.pth
 models/**/*.png
 models/**/reranker_predictions.json
-models/**/evaluations/*.pre-schema-v*.*
+models/**/evaluations/*.pre-schema-v2.*
 models/**/evaluations/model.direct.json
 
 # Local research notes and superseded browser/notebook views.
 commands.md
-notebooks/
+notebooks/nb.ipynb
 docs-conceptual/deprecated/
 docs-conceptual/constraint_factors_research_overview.html
-deprecated/
+deprecated/*
 99_*
 model-configs/*
 

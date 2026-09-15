@@ -8,7 +8,6 @@ from typing import Iterable, Sequence
 import pandas as pd
 
 from modules.data_encoders import GlobalIntEncoder
-from modules.constraint_identity import resolve_primary_index
 from modules.reranker_eval import CandidateConstraintEvaluator
 
 logger = logging.getLogger(__name__)
@@ -200,12 +199,6 @@ def load_global_eval_rows(base_path: Path, split: str) -> list:
         "object_objects",
         "other_entity_predicates",
         "other_entity_objects",
-        "add_subject",
-        "add_predicate",
-        "add_object",
-        "del_subject",
-        "del_predicate",
-        "del_object",
         "local_constraint_ids",
         "local_constraint_ids_focus",
         "factor_checkable_pre",
@@ -318,14 +311,7 @@ class ConstraintRepairHeuristics:
         self._relation_param = self._maybe_id("<http://www.wikidata.org/entity/P2309>")
         self._items_param = self._maybe_id("<http://www.wikidata.org/entity/P2305>")
         self._property_param = self._maybe_id("<http://www.wikidata.org/entity/P2306>")
-        self._selector_items = {
-            value: self._maybe_id(f"<http://www.wikidata.org/entity/{item}>")
-            for item, value in {
-                "Q21503252": "instance",
-                "Q21514624": "subclass",
-                "Q30208840": "either",
-            }.items()
-        }
+        self._inverse_param = self._maybe_id("<http://www.wikidata.org/entity/P1696>")
 
     def _maybe_id(self, token: str) -> int | None:
         """Return the encoder id for *token*, or None if missing from the vocabulary."""
@@ -393,7 +379,7 @@ class ConstraintRepairHeuristics:
             candidates.add.extend(self._item_requires_additions(context))
         elif ctype == "valueRequiresStatement":
             candidates.add.extend(self._value_requires_additions(context))
-        elif ctype in {"inverse", "symmetric"}:
+        elif ctype == "inverse":
             candidates.add.extend(self._inverse_additions(context))
 
         return candidates
@@ -551,21 +537,9 @@ class ConstraintRepairHeuristics:
         if not allowed_classes:
             return []
 
-        selector_values = ctx.values_for_predicate(self._relation_param or -1, self.none_class)
-        if len(selector_values) != 1:
-            return []
-        selector = next(
-            (name for name, encoded in self._selector_items.items() if encoded == selector_values[0]),
-            None,
-        )
-        if selector == "instance":
-            relation_candidates = [self._instance_of]
-        elif selector == "subclass":
-            relation_candidates = [self._subclass_of]
-        elif selector == "either":
-            relation_candidates = [self._instance_of, self._subclass_of]
-        else:
-            return []
+        relation_candidates = ctx.values_for_predicate(self._relation_param or -1, self.none_class)
+        if not relation_candidates:
+            relation_candidates = [pid for pid in (self._instance_of, self._subclass_of) if pid]
 
         subject_values = self._component_values(
             subject_placeholder, getattr(ctx, subject_placeholder, self.none_class)
@@ -596,20 +570,17 @@ class ConstraintRepairHeuristics:
             return []
         subject_values = self._component_values("subject", ctx.subject)
         patterns: list[TriplePattern] = []
-        required_values = ctx.values_for_predicate(self._items_param or -1, self.none_class)
-        object_patterns = self._value_sets(required_values) if required_values else [None]
         for prop in required_props:
             if not self._has_value(prop):
                 continue
             predicate_values = frozenset({int(prop)})
-            for objects in object_patterns:
-                patterns.append(
-                    TriplePattern(
-                        subjects=subject_values,
-                        predicates=predicate_values,
-                        objects=objects,
-                    )
+            patterns.append(
+                TriplePattern(
+                    subjects=subject_values,
+                    predicates=predicate_values,
+                    objects=None,  # any value for the required statement is acceptable
                 )
+            )
         return patterns
 
     def _value_requires_additions(self, ctx: ViolationContext) -> list[TriplePattern]:
@@ -622,29 +593,26 @@ class ConstraintRepairHeuristics:
             return []
         subject_values = self._component_values("object", ctx.object)
         patterns: list[TriplePattern] = []
-        required_values = ctx.values_for_predicate(self._items_param or -1, self.none_class)
-        object_patterns = self._value_sets(required_values) if required_values else [None]
         for prop in required_props:
             if not self._has_value(prop):
                 continue
-            for objects in object_patterns:
-                patterns.append(
-                    TriplePattern(
-                        subjects=subject_values,
-                        predicates=frozenset({int(prop)}),
-                        objects=objects,
-                    )
+            patterns.append(
+                TriplePattern(
+                    subjects=subject_values,
+                    predicates=frozenset({int(prop)}),
+                    objects=None,
                 )
+            )
         return patterns
 
     def _inverse_additions(self, ctx: ViolationContext) -> list[TriplePattern]:
         """
         adding `(object, inverse_predicate, subject)` where `inverse_predicate` is taken
-        from the constraint's property parameter (P2306). Symmetric constraints use
-        the constrained predicate itself.
+        from `inverse property (P1696)` or, if unspecified, defaults to the original predicate (covering symmetric
+        properties).
         """
-        predicate_ids = ctx.values_for_predicate(self._property_param or -1, self.none_class)
-        if ctx.constraint_type == "symmetric" and not predicate_ids:
+        predicate_ids = ctx.values_for_predicate(self._inverse_param or -1, self.none_class)
+        if not predicate_ids:
             predicate_ids = [ctx.predicate]
 
         subject_values = self._component_values("object", ctx.object)
@@ -675,8 +643,6 @@ class RepairSample:
     constraint_type: str
     predicted: dict[str, tuple[int, int, int] | None]
     gold: dict[str, tuple[int, int, int] | None]
-    predicted_slots: tuple[int, int, int, int, int, int] | None = None
-    gold_slots: tuple[int, int, int, int, int, int] | None = None
 
 
 def evaluate_repair_samples(
@@ -760,12 +726,6 @@ def _coerce_factor_sequence(value: object) -> list[int] | list[bool] | None:
 
 
 def _candidate_slots_from_sample(sample: RepairSample, none_class: int) -> tuple[int, int, int, int, int, int]:
-    if sample.predicted_slots is not None:
-        if len(sample.predicted_slots) != 6:
-            raise ValueError(
-                f"RepairSample.predicted_slots must contain six values, got {len(sample.predicted_slots)}"
-            )
-        return tuple(int(value) for value in sample.predicted_slots)  # type: ignore[return-value]
     add = sample.predicted.get("add")
     delete = sample.predicted.get("del")
     if add is None:
@@ -787,11 +747,23 @@ def _candidate_slots_from_sample(sample: RepairSample, none_class: int) -> tuple
 
 
 def _resolve_primary_index_from_row(row: object, local_constraint_ids: Sequence[int]) -> int:
-    return resolve_primary_index(
-        row,
-        local_constraint_ids,
-        supplied_index=getattr(row, "primary_factor_index", None),
-    )
+    value = getattr(row, "primary_factor_index", None)
+    if value is not None:
+        try:
+            idx = int(value)
+            if 0 <= idx < len(local_constraint_ids):
+                return idx
+        except (TypeError, ValueError):
+            pass
+    constraint_id = getattr(row, "constraint_id", None)
+    try:
+        constraint_id = int(constraint_id)
+    except (TypeError, ValueError):
+        return -1
+    try:
+        return list(local_constraint_ids).index(constraint_id)
+    except ValueError:
+        return -1
 
 
 def evaluate_paper_metric_instance(
@@ -870,9 +842,10 @@ def evaluate_paper_metric_instance(
             if post_satisfied[i]:
                 sir_num += 1
 
-    # Complete-triple projection is used only for operation-count/fidelity
-    # metrics. Symbolic evaluation above consumes the raw six slots, where a
-    # partially populated group is retained as explicit uncertainty.
+    # A slot group is an operation only when all three components resolve.
+    # This matches `_triples_from_indices` and the resolved operations written
+    # to schema-v2 prediction artifacts. Partially populated slot groups do not
+    # mutate the symbolic state and therefore do not count as disruption.
     add_count = int(all(value != none_class for value in slots[:3]))
     del_count = int(all(value != none_class for value in slots[3:]))
     pre_base_present = int(details.get("pre_focus_present", 0))
@@ -892,35 +865,6 @@ def evaluate_paper_metric_instance(
     )
     eppf_event = int(pfr_event and bool(post_base_present))
     vacuous_event = int(base_deleted and delta_denom > 0 and delta_num > 0)
-
-    historical_stratum = "uncheckable"
-    gold_fields = (
-        "add_subject",
-        "add_predicate",
-        "add_object",
-        "del_subject",
-        "del_predicate",
-        "del_object",
-    )
-    # Small programmatic callers may supply row-like fixtures that do not carry
-    # the historical edit.  Such rows have no defensible stratum; importantly,
-    # they must not trigger a second, semantically unrelated evaluator call.
-    if pfr_eligible and all(hasattr(row, field) for field in gold_fields):
-        gold_slots = tuple(int(getattr(row, field, 0) or 0) for field in gold_fields)
-        gold_details = evaluator.evaluate_full(
-            row,
-            candidate_slots=gold_slots,
-            primary_factor_index=primary_index,
-            factor_constraint_ids=local_constraint_ids,
-        )
-        gold_post_checkable = gold_details["post_checkable"]
-        gold_post_satisfied = gold_details["post_satisfied"]
-        if not bool(gold_post_checkable[primary_index]):
-            historical_stratum = "uncheckable"
-        elif bool(gold_post_satisfied[primary_index]):
-            historical_stratum = "historical_fix"
-        else:
-            historical_stratum = "historical_nonfix"
 
     events = {
         "pfr": {"numerator": pfr_event, "denominator": pfr_eligible},
@@ -947,7 +891,6 @@ def evaluate_paper_metric_instance(
         "post_base_present": post_base_present,
         "resolved_add": details.get("resolved_add"),
         "resolved_del": details.get("resolved_del"),
-        "historical_stratum": historical_stratum,
     }
 
 

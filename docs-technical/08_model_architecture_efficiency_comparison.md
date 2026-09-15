@@ -158,12 +158,11 @@ This storage change does not itself alter parameter count beyond active-type com
 
 The implementation has three execution modes:
 
-- the stable default uses segmented `F.linear` calls on CUDA and CPU;
-- an explicit `allow_experimental_grouped_mm=true` opt-in permits BF16 CUDA `torch.nn.functional.grouped_mm` on SM80 or newer when the output width is a multiple of eight;
+- BF16 CUDA on SM80 or newer uses `torch.nn.functional.grouped_mm` when the output width is a multiple of eight;
 - scalar heads use a vectorized selected-weight dot product; and
-- unsupported and full-precision execution also use segmented `F.linear`.
+- CPU, unsupported CUDA, and full-precision execution use a segmented `F.linear` fallback.
 
-The grouped path can replace repeated boolean masks, scatters, and small per-type launches with grouped matrix operations. The same dispatch is reused by the precondition executor and post-edit head. Per-type pressure banks use the same mechanism when pressure is not shared. It is not enabled in paper runs: the 2026-09-04 full-regeneration smoke measurement reached batch 131 in about 11 minutes with the stable segmented backend, including roughly four minutes of first-shard loading, and its steady-state batches were faster than the experimental path on the available A30. The paper configs record the stable setting explicitly.
+The grouped path can replace repeated boolean masks, scatters, and small per-type launches with grouped matrix operations. The same dispatch is reused by the precondition executor and post-edit head. Per-type pressure banks use the same mechanism when pressure is not shared.
 
 Important limitations:
 

@@ -9,7 +9,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator, Sequence, cast
+from typing import Any, Iterator, cast
 
 import torch
 import torch.nn.functional as F
@@ -42,8 +42,6 @@ from modules.evaluation_artifacts import (
 from modules.models import BaseGraphModel, build_model
 from modules.repair_eval import ConstraintRepairHeuristics, ViolationContext, load_violation_contexts
 from modules.reranker_eval import CandidateConstraintEvaluator
-from modules.semantics_provenance import validate_graph_semantics
-from modules.semantic_versions import CANDIDATE_OBJECTIVE_VERSION
 from modules.policy import POLICY_NAMES, derive_policy_label
 from modules.training_utils import (
     ConstraintMetricsAccumulator,
@@ -81,7 +79,6 @@ _INITIALIZATION_MODEL_KEYS = (
     "head_hidden",
     "num_factor_types",
     "factor_executor_impl",
-    "allow_experimental_grouped_mm",
     "gold_edit_embedding_mode",
     "pressure_module_sharing",
     "active_factor_type_ids",
@@ -113,58 +110,6 @@ def _max_abs_value(tensor: torch.Tensor | None) -> float:
     if tensor is None or tensor.numel() == 0:
         return 0.0
     return float(torch.nan_to_num(tensor.detach(), nan=0.0, posinf=float("inf"), neginf=float("-inf")).abs().max().item())
-
-
-def _masked_candidate_mean(
-    probs: torch.Tensor,
-    values: torch.Tensor,
-    eligible: torch.Tensor,
-) -> torch.Tensor:
-    """Compatibility helper: exact conditional mean for supplied probabilities."""
-
-    mask = eligible.to(device=probs.device, dtype=torch.bool)
-    if not bool(mask.any().item()):
-        return probs.sum() * 0.0
-    selected_probs = probs.float()[mask]
-    mass = selected_probs.sum()
-    if not bool((mass > 0).item()):
-        return probs.sum() * 0.0
-    return torch.sum((selected_probs / mass) * values.float()[mask])
-
-
-def _conditional_candidate_mean(
-    logits: torch.Tensor,
-    values: torch.Tensor,
-    eligible: torch.Tensor,
-) -> torch.Tensor:
-    """Stable conditional expectation over fixed eligible candidates."""
-
-    mask = eligible.to(device=logits.device, dtype=torch.bool)
-    if not bool(mask.any().item()):
-        return logits.float().sum() * 0.0
-    conditional_probs = torch.softmax(logits.float()[mask], dim=0)
-    return torch.sum(conditional_probs * values.float()[mask])
-
-
-def _proven_fix_candidate_penalty(
-    logits: torch.Tensor,
-    metrics_summary: Sequence[Any],
-) -> torch.Tensor:
-    """Expected failure-to-prove-a-fix cost for a pre-violated primary."""
-
-    if not metrics_summary:
-        return logits.float().sum() * 0.0
-    eligibility = {bool(metric.primary_pre_violated) for metric in metrics_summary}
-    if len(eligibility) != 1:
-        raise AssertionError("Pre-edit primary eligibility changed across candidate edits")
-    if not next(iter(eligibility)):
-        return logits.float().sum() * 0.0
-    success = torch.tensor(
-        [float(metric.primary_checkable and metric.primary_satisfied) for metric in metrics_summary],
-        dtype=torch.float32,
-        device=logits.device,
-    )
-    return torch.sum(torch.softmax(logits.float(), dim=0) * (1.0 - success))
 
 
 def _file_identity(path: Path) -> dict[str, object]:
@@ -449,8 +394,6 @@ def _load_parquet_rows(interim_path: Path, split: str) -> list:
         "other_entity_objects",
         "local_constraint_ids",
         "local_constraint_ids_focus",
-        "factor_constraint_ids",
-        "primary_factor_index",
     ]
     df = pd.read_parquet(path)
     existing = [col for col in columns if col in df.columns]
@@ -479,17 +422,6 @@ def _assert_factor_labels(graph: Data, graph_index: int | None = None) -> None:
     assert 0 <= primary_idx < expected_len, (
         f"{prefix}primary_factor_index {primary_idx} out of range for {expected_len} factors"
     )
-    shape_id = getattr(graph, "shape_id", None)
-    if shape_id is not None:
-        shape_tensor = torch.as_tensor(shape_id).view(-1)
-        if shape_tensor.numel() != 1:
-            raise AssertionError(f"{prefix}shape_id must be scalar")
-        primary_id = int(factor_ids_tensor[primary_idx].item())
-        if primary_id != int(shape_tensor.item()):
-            raise AssertionError(
-                f"{prefix}primary identity mismatch: factor[{primary_idx}]={primary_id}, "
-                f"shape_id={int(shape_tensor.item())}"
-            )
 
     def _check_vector(name: str, *, expect_bool: bool = False, expect_int: bool = False) -> torch.Tensor:
         value = getattr(graph, name, None)
@@ -1746,24 +1678,19 @@ def train(
                                 device=graph_loss.device,
                             )
                             gold_regression = regression_tensor[gold_index]
-                            regression_eligible = torch.tensor(
-                                [m.secondary_regressions_denom > 0 for m in metrics_summary],
-                                dtype=torch.bool,
-                                device=graph_loss.device,
+                            reg_penalty = torch.sum(
+                                probs * torch.clamp(regression_tensor - gold_regression, min=0.0)
                             )
-                            if metrics_summary[gold_index].secondary_regressions_denom > 0:
-                                reg_penalty = _conditional_candidate_mean(
-                                    scores,
-                                    torch.clamp(regression_tensor - gold_regression, min=0.0),
-                                    regression_eligible,
-                                )
-                            else:
-                                reg_penalty = probs.sum() * 0.0
                             chooser_loss = chooser_loss + chooser_cfg.beta_no_regression * reg_penalty
                             chooser_eval_math_s += (time.perf_counter() - math_t0) if timing_enabled else 0.0
                         if chooser_need_primary and metrics_summary:
                             math_t0 = time.perf_counter() if timing_enabled else 0.0
-                            primary_penalty = _proven_fix_candidate_penalty(scores, metrics_summary)
+                            primary_tensor = torch.tensor(
+                                [float(m.primary_satisfied) for m in metrics_summary],
+                                dtype=graph_loss.dtype,
+                                device=graph_loss.device,
+                            )
+                            primary_penalty = torch.sum(probs * (1.0 - primary_tensor))
                             chooser_loss = chooser_loss + chooser_cfg.gamma_primary * primary_penalty
                             chooser_eval_math_s += (time.perf_counter() - math_t0) if timing_enabled else 0.0
                     chooser_losses[idx] = chooser_loss
@@ -1856,22 +1783,18 @@ def train(
                         candidates=candidates,
                         primary_factor_index=primary_index,
                     )
+                    primary_tensor = torch.tensor(
+                        [float(m.primary_satisfied) for m in metrics_summary],
+                        dtype=graph_loss.dtype,
+                        device=graph_loss.device,
+                    )
                     secondary_tensor = torch.tensor(
                         [m.srr for m in metrics_summary],
                         dtype=graph_loss.dtype,
                         device=graph_loss.device,
                     )
-                    secondary_eligible = torch.tensor(
-                        [m.secondary_regressions_denom > 0 for m in metrics_summary],
-                        dtype=torch.bool,
-                        device=graph_loss.device,
-                    )
-                    primary_penalty = _proven_fix_candidate_penalty(scores, metrics_summary)
-                    secondary_penalty = _conditional_candidate_mean(
-                        scores,
-                        secondary_tensor,
-                        secondary_eligible,
-                    )
+                    primary_penalty = torch.sum(probs * (1.0 - primary_tensor))
+                    secondary_penalty = torch.sum(probs * secondary_tensor)
                     direct_safety_losses[idx] = (
                         direct_safety_cfg.alpha_primary * primary_penalty
                         + direct_safety_cfg.beta_secondary * secondary_penalty
@@ -2605,24 +2528,19 @@ def train(
                                     device=graph_loss.device,
                                 )
                                 gold_regression = regression_tensor[gold_index]
-                                regression_eligible = torch.tensor(
-                                    [m.secondary_regressions_denom > 0 for m in metrics_summary],
-                                    dtype=torch.bool,
-                                    device=graph_loss.device,
+                                reg_penalty = torch.sum(
+                                    probs * torch.clamp(regression_tensor - gold_regression, min=0.0)
                                 )
-                                if metrics_summary[gold_index].secondary_regressions_denom > 0:
-                                    reg_penalty = _conditional_candidate_mean(
-                                        scores,
-                                        torch.clamp(regression_tensor - gold_regression, min=0.0),
-                                        regression_eligible,
-                                    )
-                                else:
-                                    reg_penalty = probs.sum() * 0.0
                                 chooser_loss = chooser_loss + chooser_cfg.beta_no_regression * reg_penalty
                                 chooser_eval_math_s += (time.perf_counter() - math_t0) if timing_enabled else 0.0
                             if chooser_need_primary and metrics_summary:
                                 math_t0 = time.perf_counter() if timing_enabled else 0.0
-                                primary_penalty = _proven_fix_candidate_penalty(scores, metrics_summary)
+                                primary_tensor = torch.tensor(
+                                    [float(m.primary_satisfied) for m in metrics_summary],
+                                    dtype=graph_loss.dtype,
+                                    device=graph_loss.device,
+                                )
+                                primary_penalty = torch.sum(probs * (1.0 - primary_tensor))
                                 chooser_loss = chooser_loss + chooser_cfg.gamma_primary * primary_penalty
                                 chooser_eval_math_s += (time.perf_counter() - math_t0) if timing_enabled else 0.0
                         chooser_losses[idx] = chooser_loss
@@ -2715,22 +2633,18 @@ def train(
                             candidates=candidates,
                             primary_factor_index=primary_index,
                         )
+                        primary_tensor = torch.tensor(
+                            [float(m.primary_satisfied) for m in metrics_summary],
+                            dtype=graph_loss.dtype,
+                            device=graph_loss.device,
+                        )
                         secondary_tensor = torch.tensor(
                             [m.srr for m in metrics_summary],
                             dtype=graph_loss.dtype,
                             device=graph_loss.device,
                         )
-                        secondary_eligible = torch.tensor(
-                            [m.secondary_regressions_denom > 0 for m in metrics_summary],
-                            dtype=torch.bool,
-                            device=graph_loss.device,
-                        )
-                        primary_penalty = _proven_fix_candidate_penalty(scores, metrics_summary)
-                        secondary_penalty = _conditional_candidate_mean(
-                            scores,
-                            secondary_tensor,
-                            secondary_eligible,
-                        )
+                        primary_penalty = torch.sum(probs * (1.0 - primary_tensor))
+                        secondary_penalty = torch.sum(probs * secondary_tensor)
                         direct_safety_losses[idx] = (
                             direct_safety_cfg.alpha_primary * primary_penalty
                             + direct_safety_cfg.beta_secondary * secondary_penalty
@@ -3231,7 +3145,6 @@ def main():
         model_cfg.encoding,
         constraint_representation=model_cfg.constraint_representation,
     )
-    semantics_provenance = validate_graph_semantics([train_data_path, val_data_path])
     train_data = load_graph_dataset(train_data_path)
     val_data = load_graph_dataset(val_data_path)
 
@@ -3433,7 +3346,6 @@ def main():
             assume_complete=True,
             constraint_scope="local",
             use_encoded_ids=True,
-            require_hierarchy=True,
         )
         candidate_cfg = CandidateConfig(
             topk_candidates=chooser_cfg.topk_candidates,
@@ -3505,7 +3417,6 @@ def main():
             assume_complete=True,
             constraint_scope="local",
             use_encoded_ids=True,
-            require_hierarchy=True,
         )
         candidate_cfg = CandidateConfig(
             topk_candidates=direct_safety_cfg.topk_candidates,
@@ -3661,13 +3572,12 @@ def main():
 
     config_identity = _file_identity(config_path)
     training_provenance = {
-        "schema_version": 3,
+        "schema_version": 2,
         "seed": training_cfg.seed,
         "config": config_identity,
         "initialization_checkpoint": initialization_identity,
         "train_graph": repository_relative_path(train_data_path),
         "validation_graph": repository_relative_path(val_data_path),
-        **semantics_provenance,
     }
     history["training_provenance"] = training_provenance
 

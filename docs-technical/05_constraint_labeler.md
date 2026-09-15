@@ -12,7 +12,6 @@ For the paper-facing run, `--constraint-scope local` is the canonical setting. `
 - Parquet split file(s) produced by `02_dataframe_builder.py` (from `data/interim/<dataset_variant>`).
 - Constraint registry from `03_constraint_registry.py` (`data/interim/constraint_registry_<dataset>.parquet`).
 - Encoder (`data/interim/<dataset_variant>/globalintencoder.txt`) for encoded parquet IDs.
-- Fixed historical hierarchy (`data/static/wikidata-p279-2018-07-01.v2.json`).
 
 **Outputs**
 - Labeled parquet files under `data/interim/<dataset_variant>_labeled/` with additional columns:
@@ -20,14 +19,8 @@ For the paper-facing run, `--constraint-scope local` is the canonical setting. `
   - `factor_checkable_post_gold`, `factor_satisfied_post_gold`
   - `factor_types` (constraint type ids, aligned with `factor_constraint_ids`)
   - `factor_constraint_ids` (the constraint ids evaluated for the row)
-  - `primary_factor_index` (validated position of `constraint_id` in that exact vector)
-  - `factor_outcome_*`, `factor_applicable_*`, and `factor_unknown_reason_*`
-  - `historical_edit_applicable`, `historical_unresolved_edits_json`
   - `num_checkable_factors_pre`, `coverage_pre`
   - `num_checkable_factors_post_gold`, `coverage_post_gold`
-  - `validator_semantics_version`, `hierarchy_content_sha256`
-- `label_manifest.json`, containing source-row, registry, encoder, hierarchy,
-  code-revision, row-count, and per-family outcome provenance.
 - Coverage reports in the same output folder:
   - `coverage_<scope>.csv`
   - `coverage_<scope>.md`
@@ -62,11 +55,9 @@ We cannot directly observe whether all statements for an entity-property pair ar
 - If `--assume-complete-entity-facts` (default), treat the entity facts blob as complete for all properties in scope.
 - If `--no-assume-complete-entity-facts`, only treat properties explicitly present in the facts blob as complete.
 
-`single` and `distinct` are deliberately bounded to represented statements, as
-required by the benchmark's triple abstraction. They can therefore establish a
-local count or duplicate without claiming that the Wikidata entity is globally
-complete. Other families use the completeness setting when the result depends
-on the absence of a required or conflicting statement.
+For **single**, we additionally require:
+- at least one statement for `(subject, P, *)`, and
+- completeness for `(subject, P, *)`.
 
 ## Gold Edit Application
 Two states are evaluated:
@@ -74,13 +65,10 @@ Two states are evaluated:
 - **POST_GOLD**: apply `add_*` and `del_*` edits to the facts representation.
 
 Edits are resolved through placeholder tokens (`subject`, `predicate`, `object`, `other_*`) when present.
-If an edit references an entity/property/value outside the local evidence
-structure, its complete operation and failure reason are retained. Only
-definitions whose result can change across the edit's possible success/failure
-worlds become `unknown`; unrelated definitions and unaffected violations remain
-definite.
+If an edit references an entity/property/value outside the local evidence structure, the corresponding
+constraint checks are marked **not checkable** (conservative).
 
-## Constraint Types Implemented (v3)
+## Constraint Types Implemented (v1)
 Per-type checkability and satisfaction are implemented in `src/modules/constraint_checkers.py`.
 Canonical constraint-family names come from the registry (`constraint_family`), generated via the
 static catalog in `data/static/constraint_type_catalog.json`. On a fresh clone,
@@ -96,17 +84,10 @@ static catalog in `data/static/constraint_type_catalog.json`. On a fresh clone,
 - `valueType`
 - `distinct`
 
-Definitions are parsed from their Wikidata parameter roles (`P2306`, `P2305`,
-`P2308`, and item-valued `P2309`). Exceptions (`P2303`) are honored. Type and
-value-type checks follow transitive `P279` ancestry from the fixed 2018
-hierarchy plus state-local P279 edges and deletion tombstones. Unsupported
-scopes, malformed or unrepresentable mandatory
-parameters, incomplete ancestry, and `P4155`-qualified single/distinct
-definitions produce `unknown`.
-
-See [Validator semantics v3 and regeneration](12_validator_semantics_revision.md)
-for the family-level contract. That document is authoritative over the older
-short catalog descriptions.
+Semantics follow the short descriptions in
+[constraint_types.md](../docs-conceptual/constraint_types.md). When evidence is
+insufficient, the factor is marked **not checkable** to prioritize correctness
+over coverage.
 
 ## Coverage Summary
 At the end of a run, the script prints a per-type summary including:
@@ -118,12 +99,11 @@ Use this report to tune completeness assumptions and identify constraint types w
 ## CLI
 Example usage:
 ```bash
-uv run python src/05_constraint_labeler.py \
+python src/05_constraint_labeler.py \
   --dataset sample \
   --min-occurrence 100 \
   --constraint-scope local \
-  --factor-family-policy supported_only \
-  --hierarchy data/static/wikidata-p279-2018-07-01.v2.json
+  --factor-family-policy supported_only
 ```
 
 Key flags:

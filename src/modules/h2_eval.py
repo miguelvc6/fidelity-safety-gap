@@ -28,14 +28,11 @@ from modules.candidates import (
     score_candidates_from_logits_packed,
 )
 from modules.data_encoders import GraphStreamDataset
-from modules.constraint_checkers import VALIDATOR_SEMANTICS_VERSION
-from modules.evaluation_artifacts import EVALUATION_SCHEMA_VERSION
 from modules.repair_eval import (
     RepairSample,
     evaluate_global_repair_samples,
     evaluate_repair_samples,
 )
-from modules.semantics_provenance import expected_semantic_contracts
 
 logger = logging.getLogger(__name__)
 
@@ -330,8 +327,6 @@ def _repair_samples(
                 constraint_type=str(kind),
                 predicted=_triples_from_slots(predictions[idx]),
                 gold=_triples_from_slots(targets[idx]),
-                predicted_slots=tuple(int(value) for value in predictions[idx].reshape(-1).tolist()),
-                gold_slots=tuple(int(value) for value in targets[idx].reshape(-1).tolist()),
             )
         )
     return samples
@@ -950,18 +945,6 @@ def write_h2_report(
             "may be absent from the train/validation compact target vocabulary"
         )
     report = {
-        "schema_version": EVALUATION_SCHEMA_VERSION,
-        "validator_semantics_version": VALIDATOR_SEMANTICS_VERSION,
-        "semantic_contracts": expected_semantic_contracts(),
-        "hierarchy": (
-            getattr(
-                getattr(support.global_support, "evaluator", None),
-                "hierarchy_identity",
-                None,
-            )
-            if support.global_support is not None
-            else None
-        ),
         "status": "ok" if not unsupported else "partial",
         "selection_mode": (
             "chooser"
@@ -971,7 +954,7 @@ def write_h2_report(
             else "slot_argmax"
         ),
         "normal_prediction_source": (
-            "validated_schema_v3_replay" if normal_predictions is not None else "model_selector"
+            "validated_schema_v2_replay" if normal_predictions is not None else "model_selector"
         ),
         "unsupported_reason": normal_output.get("unsupported_reason"),
         "unsupported": unsupported,
