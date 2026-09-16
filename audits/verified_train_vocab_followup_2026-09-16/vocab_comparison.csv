@@ -1,0 +1,7 @@
+V0,V1,V1_subset_V0,difference_V1_minus_V0,metric,term_type
+5049,3039,True,-2010,concrete_output_terms,entity
+4,4,True,0,role_tokens,entity
+5054,3044,True,-2010,all_output_class_ids_including_NONE_roles,entity
+571,479,True,-92,concrete_output_terms,predicate
+3,3,True,0,role_tokens,predicate
+575,483,True,-92,all_output_class_ids_including_NONE_roles,predicate

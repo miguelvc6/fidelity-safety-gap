@@ -1,0 +1,1263 @@
+{
+  "audited_profile": "audited_v3_bounded",
+  "environment": {
+    "cpu_count": 16,
+    "platform": "Linux-6.8.12-23-pve-x86_64-with-glibc2.39",
+    "pyarrow": "23.0.0",
+    "python": "3.12.3 (main, Aug 14 2025, 17:47:21) [GCC 13.3.0]"
+  },
+  "expected_base_commit": "8582c5418965690eb8cfdeb454ca43cef00c662a",
+  "final_dataset_selected": false,
+  "generated_at_utc": "2026-09-16T12:13:26.212652+00:00",
+  "hypothetical_allocations": {
+    "preserve_F_and_A_V1_family_distribution": {
+      "conflictWith": 83725,
+      "distinct": 241772,
+      "inverse": 68348,
+      "itemRequiresStatement": 54147,
+      "oneOf": 1662,
+      "single": 57687,
+      "symmetric": 11293,
+      "type": 70243,
+      "valueRequiresStatement": 38823,
+      "valueType": 41079
+    },
+    "preserve_old_benchmark_family_proportions_where_feasible": {
+      "conflictWith": 79107,
+      "distinct": 195175,
+      "inverse": 58300,
+      "itemRequiresStatement": 69177,
+      "oneOf": 2123,
+      "single": 73699,
+      "symmetric": 14428,
+      "type": 74690,
+      "valueRequiresStatement": 49599,
+      "valueType": 52481
+    },
+    "proportional_sampling": {
+      "conflictWith": 83725,
+      "distinct": 241772,
+      "inverse": 68348,
+      "itemRequiresStatement": 54147,
+      "oneOf": 1662,
+      "single": 57687,
+      "symmetric": 11293,
+      "type": 70243,
+      "valueRequiresStatement": 38823,
+      "valueType": 41079
+    }
+  },
+  "input_audit": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16",
+  "input_verification": {
+    "non_core_mismatches": [
+      {
+        "actual_sha256": null,
+        "actual_size_bytes": 4579,
+        "exists": true,
+        "expected_sha256": "94ff5024389e21d91b25c6b57a70b4ba52cb59a7c84891bee4b3f7ee03a00426",
+        "expected_size_bytes": 4580,
+        "label": "run_artifact:aggregate_manifest.json",
+        "ok": false,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/aggregate_manifest.json",
+        "required": false
+      }
+    ],
+    "profile_revision": "018e2845de43bdb9480a1aa9a7791befb8b317ee",
+    "records": [
+      {
+        "actual_sha256": null,
+        "actual_size_bytes": 4579,
+        "exists": true,
+        "expected_sha256": "94ff5024389e21d91b25c6b57a70b4ba52cb59a7c84891bee4b3f7ee03a00426",
+        "expected_size_bytes": 4580,
+        "label": "run_artifact:aggregate_manifest.json",
+        "ok": false,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/aggregate_manifest.json",
+        "required": false
+      },
+      {
+        "actual_sha256": "a35821cf60e01e290daf2e80afac03fd561d263a2cdf038beb9b5b1e04b97f6b",
+        "actual_size_bytes": 192681,
+        "exists": true,
+        "expected_sha256": "a35821cf60e01e290daf2e80afac03fd561d263a2cdf038beb9b5b1e04b97f6b",
+        "expected_size_bytes": 192681,
+        "label": "run_artifact:clean_parent_train_vocab.json",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/clean_parent_train_vocab.json",
+        "required": true
+      },
+      {
+        "actual_sha256": "ab5523498f8d9102cc3b905a33364c772ccf26cc56fcaf9dbb513ad1f5b45cb5",
+        "actual_size_bytes": 11659,
+        "exists": true,
+        "expected_sha256": "ab5523498f8d9102cc3b905a33364c772ccf26cc56fcaf9dbb513ad1f5b45cb5",
+        "expected_size_bytes": 11659,
+        "label": "run_artifact:decision_report.md",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/decision_report.md",
+        "required": false
+      },
+      {
+        "actual_sha256": "fc82fd98d34a3f1f72385e1172c737671c797835b7567caf6c22422da578b818",
+        "actual_size_bytes": 4352,
+        "exists": true,
+        "expected_sha256": "fc82fd98d34a3f1f72385e1172c737671c797835b7567caf6c22422da578b818",
+        "expected_size_bytes": 4352,
+        "label": "run_artifact:execution_log.md",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/execution_log.md",
+        "required": false
+      },
+      {
+        "actual_sha256": "8b0e53100c0fc0ab2aca3e0639b42fb4f9ef9dee58c33804216724ef2ffe604b",
+        "actual_size_bytes": 20635,
+        "exists": true,
+        "expected_sha256": "8b0e53100c0fc0ab2aca3e0639b42fb4f9ef9dee58c33804216724ef2ffe604b",
+        "expected_size_bytes": 20635,
+        "label": "run_artifact:lineage.json",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/lineage.json",
+        "required": true
+      },
+      {
+        "actual_sha256": "80850ab1306d98fd250c9c642fc25e66bd12a0433b00de9316b0e0c6ec07ed84",
+        "actual_size_bytes": 24866,
+        "exists": true,
+        "expected_sha256": "80850ab1306d98fd250c9c642fc25e66bd12a0433b00de9316b0e0c6ec07ed84",
+        "expected_size_bytes": 24866,
+        "label": "run_artifact:profile_audited_v3_bounded.json",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_audited_v3_bounded.json",
+        "required": true
+      },
+      {
+        "actual_sha256": "6b171e0a8c67e4b8da1dbe33b911cddf8dd1eded30dc829c66ac54f2aaa3aa0f",
+        "actual_size_bytes": 23412,
+        "exists": true,
+        "expected_sha256": "6b171e0a8c67e4b8da1dbe33b911cddf8dd1eded30dc829c66ac54f2aaa3aa0f",
+        "expected_size_bytes": 23412,
+        "label": "run_artifact:profile_checked_out_bounded.json",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_checked_out_bounded.json",
+        "required": false
+      },
+      {
+        "actual_sha256": "48499354d089f6cd829467455b8ac4debc43a50ef1d9731597ad574cde7ea855",
+        "actual_size_bytes": 326,
+        "exists": true,
+        "expected_sha256": "48499354d089f6cd829467455b8ac4debc43a50ef1d9731597ad574cde7ea855",
+        "expected_size_bytes": 326,
+        "label": "run_artifact:row_level_manifest.json",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/row_level_manifest.json",
+        "required": true
+      },
+      {
+        "actual_sha256": "f3d1feaad208e4f5fd2f61ad9b05721cd80a1d941a615105a3a9e3a6dbb0a378",
+        "actual_size_bytes": 821292,
+        "exists": true,
+        "expected_sha256": "f3d1feaad208e4f5fd2f61ad9b05721cd80a1d941a615105a3a9e3a6dbb0a378",
+        "expected_size_bytes": 821292,
+        "label": "run_artifact:semantic_constraint_definitions.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_constraint_definitions.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "c1582f6df408f135b77744183e8cc19306ea75ca91d868d815fc3b851e4b39c2",
+        "actual_size_bytes": 15758,
+        "exists": true,
+        "expected_sha256": "c1582f6df408f135b77744183e8cc19306ea75ca91d868d815fc3b851e4b39c2",
+        "expected_size_bytes": 15758,
+        "label": "run_artifact:semantic_manifest.json",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_manifest.json",
+        "required": true
+      },
+      {
+        "actual_sha256": "5dfa263b3461c7b24ef2444acfff4f0f56bc5379865419eb879fe86ed4d6f2d7",
+        "actual_size_bytes": 534,
+        "exists": true,
+        "expected_sha256": "5dfa263b3461c7b24ef2444acfff4f0f56bc5379865419eb879fe86ed4d6f2d7",
+        "expected_size_bytes": 534,
+        "label": "run_artifact:validation_manifest.json",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/validation_manifest.json",
+        "required": true
+      },
+      {
+        "actual_sha256": "8b1752c5b3b54c11ca90782d7247aa2c64844281fbdb7014aac946678c375b2a",
+        "actual_size_bytes": 276504107,
+        "exists": true,
+        "expected_sha256": "8b1752c5b3b54c11ca90782d7247aa2c64844281fbdb7014aac946678c375b2a",
+        "expected_size_bytes": 276504107,
+        "label": "row_level_audit",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/row_level_audit.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "d91118b955e14cdd5b9918bf9f0f592db253a44abcef360b9afe00bcb6a55068",
+        "actual_size_bytes": 72681776,
+        "exists": true,
+        "expected_sha256": "d91118b955e14cdd5b9918bf9f0f592db253a44abcef360b9afe00bcb6a55068",
+        "expected_size_bytes": 72681776,
+        "label": "semantic_chunk:00-constraint-corrections-conflictWith.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/00-constraint-corrections-conflictWith.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "2eba8e4829af1df0515b4d990765119315c45bf5dea5e2e39f11dab9c3193dfb",
+        "actual_size_bytes": 40849566,
+        "exists": true,
+        "expected_sha256": "2eba8e4829af1df0515b4d990765119315c45bf5dea5e2e39f11dab9c3193dfb",
+        "expected_size_bytes": 40849566,
+        "label": "semantic_chunk:01-constraint-corrections-distinct.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/01-constraint-corrections-distinct.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "7a060fb6179738be432ef5f04f083c67bfa7c5993742481d939a7f4b88c5b1b3",
+        "actual_size_bytes": 55360574,
+        "exists": true,
+        "expected_sha256": "7a060fb6179738be432ef5f04f083c67bfa7c5993742481d939a7f4b88c5b1b3",
+        "expected_size_bytes": 55360574,
+        "label": "semantic_chunk:02-constraint-corrections-inverse.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/02-constraint-corrections-inverse.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "a70a6c133d1b4a9ad3cdb628e962e82dae6940cfae668f73594746a54e3889cc",
+        "actual_size_bytes": 42949493,
+        "exists": true,
+        "expected_sha256": "a70a6c133d1b4a9ad3cdb628e962e82dae6940cfae668f73594746a54e3889cc",
+        "expected_size_bytes": 42949493,
+        "label": "semantic_chunk:03-constraint-corrections-itemRequiresStatement.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/03-constraint-corrections-itemRequiresStatement.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "4365751ec98771f7d28ea3c6cdd654162b2834aeff1084e08064ce75d5dfc34c",
+        "actual_size_bytes": 3927567,
+        "exists": true,
+        "expected_sha256": "4365751ec98771f7d28ea3c6cdd654162b2834aeff1084e08064ce75d5dfc34c",
+        "expected_size_bytes": 3927567,
+        "label": "semantic_chunk:04-constraint-corrections-oneOf.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/04-constraint-corrections-oneOf.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "d42aeeea09be361c8ef6d7f6095d2b3e0758c3155ea0a4f992332431c1d9039a",
+        "actual_size_bytes": 86459804,
+        "exists": true,
+        "expected_sha256": "d42aeeea09be361c8ef6d7f6095d2b3e0758c3155ea0a4f992332431c1d9039a",
+        "expected_size_bytes": 86459804,
+        "label": "semantic_chunk:05-constraint-corrections-single.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/05-constraint-corrections-single.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "8a4d872f61707aa117850d2a465c787816e4e448f8cad0edfcd5fb7682999d39",
+        "actual_size_bytes": 48553016,
+        "exists": true,
+        "expected_sha256": "8a4d872f61707aa117850d2a465c787816e4e448f8cad0edfcd5fb7682999d39",
+        "expected_size_bytes": 48553016,
+        "label": "semantic_chunk:06-constraint-corrections-type.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/06-constraint-corrections-type.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "d2b0214c61a9ad6f1c9e3da5af4146ecad3002077abef83227fdadec7f40c498",
+        "actual_size_bytes": 42253843,
+        "exists": true,
+        "expected_sha256": "d2b0214c61a9ad6f1c9e3da5af4146ecad3002077abef83227fdadec7f40c498",
+        "expected_size_bytes": 42253843,
+        "label": "semantic_chunk:07-constraint-corrections-valueRequiresStatement.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/07-constraint-corrections-valueRequiresStatement.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "a9a1863844caf6c4ea9a3fc047850d5ef1464ac11f3e4ee4eb8b369b9c7b85c5",
+        "actual_size_bytes": 74088522,
+        "exists": true,
+        "expected_sha256": "a9a1863844caf6c4ea9a3fc047850d5ef1464ac11f3e4ee4eb8b369b9c7b85c5",
+        "expected_size_bytes": 74088522,
+        "label": "semantic_chunk:08-constraint-corrections-valueType.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/08-constraint-corrections-valueType.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "78580b121ac5236e9ea1f79c0c570fecd78d64d64b38bb9d42d589995df14650",
+        "actual_size_bytes": 8971832,
+        "exists": true,
+        "expected_sha256": "78580b121ac5236e9ea1f79c0c570fecd78d64d64b38bb9d42d589995df14650",
+        "expected_size_bytes": 8971832,
+        "label": "semantic_chunk:09-constraint-corrections-conflictWith.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/09-constraint-corrections-conflictWith.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "6cf722141379052dc6e76dd9af3b9c9d5bf56ff03f160f54c5e8489beae48ab1",
+        "actual_size_bytes": 5484393,
+        "exists": true,
+        "expected_sha256": "6cf722141379052dc6e76dd9af3b9c9d5bf56ff03f160f54c5e8489beae48ab1",
+        "expected_size_bytes": 5484393,
+        "label": "semantic_chunk:10-constraint-corrections-distinct.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/10-constraint-corrections-distinct.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "294e4db3d3345d3e484e1469da92185061cf40663cb538ad535b669279471599",
+        "actual_size_bytes": 6920036,
+        "exists": true,
+        "expected_sha256": "294e4db3d3345d3e484e1469da92185061cf40663cb538ad535b669279471599",
+        "expected_size_bytes": 6920036,
+        "label": "semantic_chunk:11-constraint-corrections-inverse.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/11-constraint-corrections-inverse.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "8817b3a498b648ea7f0a8ee7119688bb32d32f5c290d65669b9cfed90e6a4070",
+        "actual_size_bytes": 5425620,
+        "exists": true,
+        "expected_sha256": "8817b3a498b648ea7f0a8ee7119688bb32d32f5c290d65669b9cfed90e6a4070",
+        "expected_size_bytes": 5425620,
+        "label": "semantic_chunk:12-constraint-corrections-itemRequiresStatement.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/12-constraint-corrections-itemRequiresStatement.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "fdb5badeba60be12f85d35fb20e1e78420529d2f472654b6d28e7d4e18f9ff18",
+        "actual_size_bytes": 551464,
+        "exists": true,
+        "expected_sha256": "fdb5badeba60be12f85d35fb20e1e78420529d2f472654b6d28e7d4e18f9ff18",
+        "expected_size_bytes": 551464,
+        "label": "semantic_chunk:13-constraint-corrections-oneOf.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/13-constraint-corrections-oneOf.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "cf67c6238dbea9d0d35f9d191330f7ef7e8a2ea18192998c0d1a4fc2950ac207",
+        "actual_size_bytes": 11354947,
+        "exists": true,
+        "expected_sha256": "cf67c6238dbea9d0d35f9d191330f7ef7e8a2ea18192998c0d1a4fc2950ac207",
+        "expected_size_bytes": 11354947,
+        "label": "semantic_chunk:14-constraint-corrections-single.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/14-constraint-corrections-single.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "26e4a4a5cf27814aeb21d8671eb83d611e62f617c7d73bf60ac0dab44799f171",
+        "actual_size_bytes": 6086579,
+        "exists": true,
+        "expected_sha256": "26e4a4a5cf27814aeb21d8671eb83d611e62f617c7d73bf60ac0dab44799f171",
+        "expected_size_bytes": 6086579,
+        "label": "semantic_chunk:15-constraint-corrections-type.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/15-constraint-corrections-type.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "465ea1821c6aab54d125029bc468a550e7558d28537f3d22c43c6d135be09b2d",
+        "actual_size_bytes": 5347747,
+        "exists": true,
+        "expected_sha256": "465ea1821c6aab54d125029bc468a550e7558d28537f3d22c43c6d135be09b2d",
+        "expected_size_bytes": 5347747,
+        "label": "semantic_chunk:16-constraint-corrections-valueRequiresStatement.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/16-constraint-corrections-valueRequiresStatement.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "c10641b9ce4d93e11313ddf572f419c332261cf4831ccf3ac052c8b090afd22d",
+        "actual_size_bytes": 9178479,
+        "exists": true,
+        "expected_sha256": "c10641b9ce4d93e11313ddf572f419c332261cf4831ccf3ac052c8b090afd22d",
+        "expected_size_bytes": 9178479,
+        "label": "semantic_chunk:17-constraint-corrections-valueType.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/17-constraint-corrections-valueType.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "acdd4a2c6a7f3633267fe9b82f0bc6849b1b63b8ef485eaa3c629f58fa88d653",
+        "actual_size_bytes": 9143313,
+        "exists": true,
+        "expected_sha256": "acdd4a2c6a7f3633267fe9b82f0bc6849b1b63b8ef485eaa3c629f58fa88d653",
+        "expected_size_bytes": 9143313,
+        "label": "semantic_chunk:18-constraint-corrections-conflictWith.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/18-constraint-corrections-conflictWith.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "5e34228764494ae06e7c303f5f3eb3f62a73c7d25ce6c960ef99684fd29f662f",
+        "actual_size_bytes": 5555333,
+        "exists": true,
+        "expected_sha256": "5e34228764494ae06e7c303f5f3eb3f62a73c7d25ce6c960ef99684fd29f662f",
+        "expected_size_bytes": 5555333,
+        "label": "semantic_chunk:19-constraint-corrections-distinct.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/19-constraint-corrections-distinct.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "01d5d23862bc8dcb5ca58a3c59fa6274accda2a20d9fd4c425cc399f9c2cafe2",
+        "actual_size_bytes": 6983033,
+        "exists": true,
+        "expected_sha256": "01d5d23862bc8dcb5ca58a3c59fa6274accda2a20d9fd4c425cc399f9c2cafe2",
+        "expected_size_bytes": 6983033,
+        "label": "semantic_chunk:20-constraint-corrections-inverse.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/20-constraint-corrections-inverse.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "6d0613146a9b8d2ed691f65af95f4dbb7b870317ca19258f37555b45ace35c95",
+        "actual_size_bytes": 5419118,
+        "exists": true,
+        "expected_sha256": "6d0613146a9b8d2ed691f65af95f4dbb7b870317ca19258f37555b45ace35c95",
+        "expected_size_bytes": 5419118,
+        "label": "semantic_chunk:21-constraint-corrections-itemRequiresStatement.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/21-constraint-corrections-itemRequiresStatement.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "c0ebc3f8b22db5d43382c739cd8f433d8386e86dace7cdcd875da0422911948e",
+        "actual_size_bytes": 509542,
+        "exists": true,
+        "expected_sha256": "c0ebc3f8b22db5d43382c739cd8f433d8386e86dace7cdcd875da0422911948e",
+        "expected_size_bytes": 509542,
+        "label": "semantic_chunk:22-constraint-corrections-oneOf.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/22-constraint-corrections-oneOf.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "713120ed804fae6fd1f5a8c403b9c9a9a78042da0911f718533363c317f2dff3",
+        "actual_size_bytes": 11471425,
+        "exists": true,
+        "expected_sha256": "713120ed804fae6fd1f5a8c403b9c9a9a78042da0911f718533363c317f2dff3",
+        "expected_size_bytes": 11471425,
+        "label": "semantic_chunk:23-constraint-corrections-single.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/23-constraint-corrections-single.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "e796386306ef9990441854fa5c7f6eb678f555473ccd415c85bf6680cb4748a4",
+        "actual_size_bytes": 6006542,
+        "exists": true,
+        "expected_sha256": "e796386306ef9990441854fa5c7f6eb678f555473ccd415c85bf6680cb4748a4",
+        "expected_size_bytes": 6006542,
+        "label": "semantic_chunk:24-constraint-corrections-type.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/24-constraint-corrections-type.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "7a4f1a9594a3c3e5ecf8c8a56e140cd604f674c8e09062d09f9b0289e278516d",
+        "actual_size_bytes": 5364310,
+        "exists": true,
+        "expected_sha256": "7a4f1a9594a3c3e5ecf8c8a56e140cd604f674c8e09062d09f9b0289e278516d",
+        "expected_size_bytes": 5364310,
+        "label": "semantic_chunk:25-constraint-corrections-valueRequiresStatement.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/25-constraint-corrections-valueRequiresStatement.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "40659134b51bfb296ee2c82e8613c91e1fc285b6a67b23fa6aad7dd962e4a73d",
+        "actual_size_bytes": 9356680,
+        "exists": true,
+        "expected_sha256": "40659134b51bfb296ee2c82e8613c91e1fc285b6a67b23fa6aad7dd962e4a73d",
+        "expected_size_bytes": 9356680,
+        "label": "semantic_chunk:26-constraint-corrections-valueType.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_chunks/26-constraint-corrections-valueType.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "b543cf9a57bd01064ae03bbb6a29d6e50f3e4e30161fefbde85f3450027e4dd7",
+        "actual_size_bytes": 491693,
+        "exists": true,
+        "expected_sha256": "b543cf9a57bd01064ae03bbb6a29d6e50f3e4e30161fefbde85f3450027e4dd7",
+        "expected_size_bytes": 491693,
+        "label": "audited_v3_chunk:00-constraint-corrections-conflictWith.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/00-constraint-corrections-conflictWith.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "c4012c2472b314b403eaafe5f04b1451966aed9599e0799c111c6ffa78b921e3",
+        "actual_size_bytes": 1057318,
+        "exists": true,
+        "expected_sha256": "c4012c2472b314b403eaafe5f04b1451966aed9599e0799c111c6ffa78b921e3",
+        "expected_size_bytes": 1057318,
+        "label": "audited_v3_chunk:01-constraint-corrections-distinct.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/01-constraint-corrections-distinct.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "76fe69b7aa1d28f6325c17cad3090031388ee1e65819a74f583b84353a01c66d",
+        "actual_size_bytes": 513992,
+        "exists": true,
+        "expected_sha256": "76fe69b7aa1d28f6325c17cad3090031388ee1e65819a74f583b84353a01c66d",
+        "expected_size_bytes": 513992,
+        "label": "audited_v3_chunk:02-constraint-corrections-inverse.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/02-constraint-corrections-inverse.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "25792ca8cb52112da1dcdfd0e49196519a9c3d1de5f9ee2ae49cf0d52adff8ac",
+        "actual_size_bytes": 485694,
+        "exists": true,
+        "expected_sha256": "25792ca8cb52112da1dcdfd0e49196519a9c3d1de5f9ee2ae49cf0d52adff8ac",
+        "expected_size_bytes": 485694,
+        "label": "audited_v3_chunk:03-constraint-corrections-itemRequiresStatement.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/03-constraint-corrections-itemRequiresStatement.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "19d30a1925123436fb8c57adbbe1d427a05d29f19b5d6e07f6c8134bf0ac0976",
+        "actual_size_bytes": 39419,
+        "exists": true,
+        "expected_sha256": "19d30a1925123436fb8c57adbbe1d427a05d29f19b5d6e07f6c8134bf0ac0976",
+        "expected_size_bytes": 39419,
+        "label": "audited_v3_chunk:04-constraint-corrections-oneOf.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/04-constraint-corrections-oneOf.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "209c8cdcd8109dd5cbdfafead232e884b004c10f030a16aab3453092ad4fe691",
+        "actual_size_bytes": 679339,
+        "exists": true,
+        "expected_sha256": "209c8cdcd8109dd5cbdfafead232e884b004c10f030a16aab3453092ad4fe691",
+        "expected_size_bytes": 679339,
+        "label": "audited_v3_chunk:05-constraint-corrections-single.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/05-constraint-corrections-single.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "05790add4b012f102d4705c22ae6bfdf9cd94d2044c2abc1a0201bd083d81662",
+        "actual_size_bytes": 525363,
+        "exists": true,
+        "expected_sha256": "05790add4b012f102d4705c22ae6bfdf9cd94d2044c2abc1a0201bd083d81662",
+        "expected_size_bytes": 525363,
+        "label": "audited_v3_chunk:06-constraint-corrections-type.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/06-constraint-corrections-type.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "ce5d732043d6a531e3a616ca98d6fbd00a571606f705420cdd588097f1e70548",
+        "actual_size_bytes": 564215,
+        "exists": true,
+        "expected_sha256": "ce5d732043d6a531e3a616ca98d6fbd00a571606f705420cdd588097f1e70548",
+        "expected_size_bytes": 564215,
+        "label": "audited_v3_chunk:07-constraint-corrections-valueRequiresStatement.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/07-constraint-corrections-valueRequiresStatement.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "0c7cbd4a965026f25f3df101117e7403aab9e1d4bc1a55093dd899977edd4b5d",
+        "actual_size_bytes": 554067,
+        "exists": true,
+        "expected_sha256": "0c7cbd4a965026f25f3df101117e7403aab9e1d4bc1a55093dd899977edd4b5d",
+        "expected_size_bytes": 554067,
+        "label": "audited_v3_chunk:08-constraint-corrections-valueType.tsv.gz.full.train.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/08-constraint-corrections-valueType.tsv.gz.full.train.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "526c2822220a4b6a89f1f4229aeb42a85b42c6cb3439baa4292f2204b543114d",
+        "actual_size_bytes": 61804,
+        "exists": true,
+        "expected_sha256": "526c2822220a4b6a89f1f4229aeb42a85b42c6cb3439baa4292f2204b543114d",
+        "expected_size_bytes": 61804,
+        "label": "audited_v3_chunk:09-constraint-corrections-conflictWith.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/09-constraint-corrections-conflictWith.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "d20981c57d70cb06ab0d3e25efe8d9cf00e2e1049ac79199e2d776c4dbd73a19",
+        "actual_size_bytes": 133914,
+        "exists": true,
+        "expected_sha256": "d20981c57d70cb06ab0d3e25efe8d9cf00e2e1049ac79199e2d776c4dbd73a19",
+        "expected_size_bytes": 133914,
+        "label": "audited_v3_chunk:10-constraint-corrections-distinct.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/10-constraint-corrections-distinct.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "4eb3b725a7569e119f1aee8ae197d1850b55beb70cbe072a18127b02f870ec5d",
+        "actual_size_bytes": 64943,
+        "exists": true,
+        "expected_sha256": "4eb3b725a7569e119f1aee8ae197d1850b55beb70cbe072a18127b02f870ec5d",
+        "expected_size_bytes": 64943,
+        "label": "audited_v3_chunk:11-constraint-corrections-inverse.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/11-constraint-corrections-inverse.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "dc7a71aa586499bd85f0e8e8f1a4574f314b5c7846d20e8397e7696df3a740eb",
+        "actual_size_bytes": 62156,
+        "exists": true,
+        "expected_sha256": "dc7a71aa586499bd85f0e8e8f1a4574f314b5c7846d20e8397e7696df3a740eb",
+        "expected_size_bytes": 62156,
+        "label": "audited_v3_chunk:12-constraint-corrections-itemRequiresStatement.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/12-constraint-corrections-itemRequiresStatement.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "2ac837969da54ecd475d86dcb449cf6252a4838319473679cb0a579c2727f81a",
+        "actual_size_bytes": 6598,
+        "exists": true,
+        "expected_sha256": "2ac837969da54ecd475d86dcb449cf6252a4838319473679cb0a579c2727f81a",
+        "expected_size_bytes": 6598,
+        "label": "audited_v3_chunk:13-constraint-corrections-oneOf.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/13-constraint-corrections-oneOf.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "ba46c10c82162095bb67861e346a4b9685e026fae29dbfb23b3638aea67daa12",
+        "actual_size_bytes": 86335,
+        "exists": true,
+        "expected_sha256": "ba46c10c82162095bb67861e346a4b9685e026fae29dbfb23b3638aea67daa12",
+        "expected_size_bytes": 86335,
+        "label": "audited_v3_chunk:14-constraint-corrections-single.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/14-constraint-corrections-single.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "1fcea27c5c5e0be9354244ac714bd19d45ca7aafe9fad42dd2efed54e6eb63ba",
+        "actual_size_bytes": 66865,
+        "exists": true,
+        "expected_sha256": "1fcea27c5c5e0be9354244ac714bd19d45ca7aafe9fad42dd2efed54e6eb63ba",
+        "expected_size_bytes": 66865,
+        "label": "audited_v3_chunk:15-constraint-corrections-type.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/15-constraint-corrections-type.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "ee77c3e3d58faf46d35916ce52bd056ec904fe2448505c6b9770c1047af65a06",
+        "actual_size_bytes": 71342,
+        "exists": true,
+        "expected_sha256": "ee77c3e3d58faf46d35916ce52bd056ec904fe2448505c6b9770c1047af65a06",
+        "expected_size_bytes": 71342,
+        "label": "audited_v3_chunk:16-constraint-corrections-valueRequiresStatement.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/16-constraint-corrections-valueRequiresStatement.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "c9ed08102d8e65a884d02ca027547ceef2f18993fd6e83f99fb14075993b7bdf",
+        "actual_size_bytes": 69669,
+        "exists": true,
+        "expected_sha256": "c9ed08102d8e65a884d02ca027547ceef2f18993fd6e83f99fb14075993b7bdf",
+        "expected_size_bytes": 69669,
+        "label": "audited_v3_chunk:17-constraint-corrections-valueType.tsv.gz.full.dev.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/17-constraint-corrections-valueType.tsv.gz.full.dev.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "513a616a4e8f52dc538c6637ee61a23b3db6db6a8978149a9a4dee534b33852c",
+        "actual_size_bytes": 62731,
+        "exists": true,
+        "expected_sha256": "513a616a4e8f52dc538c6637ee61a23b3db6db6a8978149a9a4dee534b33852c",
+        "expected_size_bytes": 62731,
+        "label": "audited_v3_chunk:18-constraint-corrections-conflictWith.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/18-constraint-corrections-conflictWith.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "642508cad88373fbee837cbb1efd8c119918f356b05e63e30694387f14df830d",
+        "actual_size_bytes": 133913,
+        "exists": true,
+        "expected_sha256": "642508cad88373fbee837cbb1efd8c119918f356b05e63e30694387f14df830d",
+        "expected_size_bytes": 133913,
+        "label": "audited_v3_chunk:19-constraint-corrections-distinct.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/19-constraint-corrections-distinct.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "a5e3e3bec4ee6a32c51f1b7aee1c692f48ee3dd18b490aa9dacd154a749ffa35",
+        "actual_size_bytes": 64638,
+        "exists": true,
+        "expected_sha256": "a5e3e3bec4ee6a32c51f1b7aee1c692f48ee3dd18b490aa9dacd154a749ffa35",
+        "expected_size_bytes": 64638,
+        "label": "audited_v3_chunk:20-constraint-corrections-inverse.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/20-constraint-corrections-inverse.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "bb81d62f6ef5abd1064eb9e21ea3ae0c57136cb4bccbd678c83954851d6ec9f9",
+        "actual_size_bytes": 61695,
+        "exists": true,
+        "expected_sha256": "bb81d62f6ef5abd1064eb9e21ea3ae0c57136cb4bccbd678c83954851d6ec9f9",
+        "expected_size_bytes": 61695,
+        "label": "audited_v3_chunk:21-constraint-corrections-itemRequiresStatement.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/21-constraint-corrections-itemRequiresStatement.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "a58274b4af0b194cff8b65d16c19890c020abace8268920a21a949d876940f7e",
+        "actual_size_bytes": 6468,
+        "exists": true,
+        "expected_sha256": "a58274b4af0b194cff8b65d16c19890c020abace8268920a21a949d876940f7e",
+        "expected_size_bytes": 6468,
+        "label": "audited_v3_chunk:22-constraint-corrections-oneOf.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/22-constraint-corrections-oneOf.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "15b0eef09c955d16da1ee10c981950013e7de9cc02c05803bc5a07fd66e40be1",
+        "actual_size_bytes": 86643,
+        "exists": true,
+        "expected_sha256": "15b0eef09c955d16da1ee10c981950013e7de9cc02c05803bc5a07fd66e40be1",
+        "expected_size_bytes": 86643,
+        "label": "audited_v3_chunk:23-constraint-corrections-single.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/23-constraint-corrections-single.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "ce3f5f8fbf2147f4601dc125bfea2748b06a71f997f7bc7973782a46ba989a08",
+        "actual_size_bytes": 66377,
+        "exists": true,
+        "expected_sha256": "ce3f5f8fbf2147f4601dc125bfea2748b06a71f997f7bc7973782a46ba989a08",
+        "expected_size_bytes": 66377,
+        "label": "audited_v3_chunk:24-constraint-corrections-type.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/24-constraint-corrections-type.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "7c8733a56b06914a8b52933b3e702fe01a2fdffd87f0e7f9e3c58f5a4c67c783",
+        "actual_size_bytes": 71220,
+        "exists": true,
+        "expected_sha256": "7c8733a56b06914a8b52933b3e702fe01a2fdffd87f0e7f9e3c58f5a4c67c783",
+        "expected_size_bytes": 71220,
+        "label": "audited_v3_chunk:25-constraint-corrections-valueRequiresStatement.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/25-constraint-corrections-valueRequiresStatement.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "85e589b358cc343a17c1334995db54c833bc9211155bcee2b925af8683456e7a",
+        "actual_size_bytes": 70707,
+        "exists": true,
+        "expected_sha256": "85e589b358cc343a17c1334995db54c833bc9211155bcee2b925af8683456e7a",
+        "expected_size_bytes": 70707,
+        "label": "audited_v3_chunk:26-constraint-corrections-valueType.tsv.gz.full.test.tsv.gz.parquet",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_chunks/audited_v3_bounded/26-constraint-corrections-valueType.tsv.gz.full.test.tsv.gz.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "56918ceae029d4727709fd6a0817f14cf87d8fe377978129403cc4cb4b725a9e",
+        "actual_size_bytes": 3219892361,
+        "exists": true,
+        "expected_sha256": "56918ceae029d4727709fd6a0817f14cf87d8fe377978129403cc4cb4b725a9e",
+        "expected_size_bytes": 3219892361,
+        "label": "raw_source:constraint-corrections-conflictWith.tsv.gz.full.train.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-conflictWith.tsv.gz.full.train.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "52f12e8784f28460f7c9ce2e869b786617044d63806ec4e9ac26a33f63c9d796",
+        "actual_size_bytes": 579266419,
+        "exists": true,
+        "expected_sha256": "52f12e8784f28460f7c9ce2e869b786617044d63806ec4e9ac26a33f63c9d796",
+        "expected_size_bytes": 579266419,
+        "label": "raw_source:constraint-corrections-distinct.tsv.gz.full.train.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-distinct.tsv.gz.full.train.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "e0539720a8a64f94de81d2a4c3afd0f2895845fc0618da4c308eb70e6908a5b6",
+        "actual_size_bytes": 111169638,
+        "exists": true,
+        "expected_sha256": "e0539720a8a64f94de81d2a4c3afd0f2895845fc0618da4c308eb70e6908a5b6",
+        "expected_size_bytes": 111169638,
+        "label": "raw_source:constraint-corrections-inverse.tsv.gz.full.train.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-inverse.tsv.gz.full.train.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "6657aed92a5a21e29037444adcb9b054077ad4597f5f9f62bb253965a14edd55",
+        "actual_size_bytes": 834093488,
+        "exists": true,
+        "expected_sha256": "6657aed92a5a21e29037444adcb9b054077ad4597f5f9f62bb253965a14edd55",
+        "expected_size_bytes": 834093488,
+        "label": "raw_source:constraint-corrections-itemRequiresStatement.tsv.gz.full.train.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-itemRequiresStatement.tsv.gz.full.train.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "5257cc6e7f4fed9cba6a81ec5e8224d0abc7a7e4801b1c5f8467eea053741714",
+        "actual_size_bytes": 14982776,
+        "exists": true,
+        "expected_sha256": "5257cc6e7f4fed9cba6a81ec5e8224d0abc7a7e4801b1c5f8467eea053741714",
+        "expected_size_bytes": 14982776,
+        "label": "raw_source:constraint-corrections-oneOf.tsv.gz.full.train.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-oneOf.tsv.gz.full.train.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "07b78db32be1963d513bb361c2825924ad2459425600652a7096dfb2a1144352",
+        "actual_size_bytes": 3145566071,
+        "exists": true,
+        "expected_sha256": "07b78db32be1963d513bb361c2825924ad2459425600652a7096dfb2a1144352",
+        "expected_size_bytes": 3145566071,
+        "label": "raw_source:constraint-corrections-single.tsv.gz.full.train.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-single.tsv.gz.full.train.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "21cec2294639232e3bb77545dbf32b27e73261d7d3c118a140a3a32b84577a13",
+        "actual_size_bytes": 629808009,
+        "exists": true,
+        "expected_sha256": "21cec2294639232e3bb77545dbf32b27e73261d7d3c118a140a3a32b84577a13",
+        "expected_size_bytes": 629808009,
+        "label": "raw_source:constraint-corrections-type.tsv.gz.full.train.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-type.tsv.gz.full.train.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "41c70b172ebbdc03e11c87c44359baa1b9bb023b53ed5d4019277ca6eefaf96d",
+        "actual_size_bytes": 171277345,
+        "exists": true,
+        "expected_sha256": "41c70b172ebbdc03e11c87c44359baa1b9bb023b53ed5d4019277ca6eefaf96d",
+        "expected_size_bytes": 171277345,
+        "label": "raw_source:constraint-corrections-valueRequiresStatement.tsv.gz.full.train.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-valueRequiresStatement.tsv.gz.full.train.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "86dc194fc4d1b9b1f68a8cade675be852c5516dfe10ac3e4e3200f2e20a630e9",
+        "actual_size_bytes": 346052121,
+        "exists": true,
+        "expected_sha256": "86dc194fc4d1b9b1f68a8cade675be852c5516dfe10ac3e4e3200f2e20a630e9",
+        "expected_size_bytes": 346052121,
+        "label": "raw_source:constraint-corrections-valueType.tsv.gz.full.train.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-valueType.tsv.gz.full.train.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "2bf09d20cb04f2a8e41efc3ae137fd118d1a2ccc9f9b7fb5e747328c531b4b19",
+        "actual_size_bytes": 394211888,
+        "exists": true,
+        "expected_sha256": "2bf09d20cb04f2a8e41efc3ae137fd118d1a2ccc9f9b7fb5e747328c531b4b19",
+        "expected_size_bytes": 394211888,
+        "label": "raw_source:constraint-corrections-conflictWith.tsv.gz.full.dev.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-conflictWith.tsv.gz.full.dev.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "13d261c156242fc82a5de7aad0832c3000830b6398bd767434a68fd070b7a69e",
+        "actual_size_bytes": 73393950,
+        "exists": true,
+        "expected_sha256": "13d261c156242fc82a5de7aad0832c3000830b6398bd767434a68fd070b7a69e",
+        "expected_size_bytes": 73393950,
+        "label": "raw_source:constraint-corrections-distinct.tsv.gz.full.dev.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-distinct.tsv.gz.full.dev.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "d39fe09373fd4da3256fa3348b8fea3bbf143051020ee24219d9b59b39694f9f",
+        "actual_size_bytes": 13766786,
+        "exists": true,
+        "expected_sha256": "d39fe09373fd4da3256fa3348b8fea3bbf143051020ee24219d9b59b39694f9f",
+        "expected_size_bytes": 13766786,
+        "label": "raw_source:constraint-corrections-inverse.tsv.gz.full.dev.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-inverse.tsv.gz.full.dev.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "b06119ea56b0179d99e2d5280d4d7f282fb9e65588e9a8672e553c7c2ab990d6",
+        "actual_size_bytes": 103826440,
+        "exists": true,
+        "expected_sha256": "b06119ea56b0179d99e2d5280d4d7f282fb9e65588e9a8672e553c7c2ab990d6",
+        "expected_size_bytes": 103826440,
+        "label": "raw_source:constraint-corrections-itemRequiresStatement.tsv.gz.full.dev.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-itemRequiresStatement.tsv.gz.full.dev.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "54584373dda384731b237670172c2af354121a4c1cf3a89e701d388d7b5ef712",
+        "actual_size_bytes": 1955271,
+        "exists": true,
+        "expected_sha256": "54584373dda384731b237670172c2af354121a4c1cf3a89e701d388d7b5ef712",
+        "expected_size_bytes": 1955271,
+        "label": "raw_source:constraint-corrections-oneOf.tsv.gz.full.dev.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-oneOf.tsv.gz.full.dev.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "267ba45ffa9885debc64d1168c8a4d719e2f92644d661b2e01db9eb892acd654",
+        "actual_size_bytes": 395182847,
+        "exists": true,
+        "expected_sha256": "267ba45ffa9885debc64d1168c8a4d719e2f92644d661b2e01db9eb892acd654",
+        "expected_size_bytes": 395182847,
+        "label": "raw_source:constraint-corrections-single.tsv.gz.full.dev.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-single.tsv.gz.full.dev.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "c5f1b47a27954079e3fb9c4d40071ba03ed674d78a216ab0b318949e6f875cc5",
+        "actual_size_bytes": 78398153,
+        "exists": true,
+        "expected_sha256": "c5f1b47a27954079e3fb9c4d40071ba03ed674d78a216ab0b318949e6f875cc5",
+        "expected_size_bytes": 78398153,
+        "label": "raw_source:constraint-corrections-type.tsv.gz.full.dev.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-type.tsv.gz.full.dev.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "11a50444f20990b0448a03f20e82fc7fd2fe25051dc70d02af62a9c8151960df",
+        "actual_size_bytes": 21637141,
+        "exists": true,
+        "expected_sha256": "11a50444f20990b0448a03f20e82fc7fd2fe25051dc70d02af62a9c8151960df",
+        "expected_size_bytes": 21637141,
+        "label": "raw_source:constraint-corrections-valueRequiresStatement.tsv.gz.full.dev.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-valueRequiresStatement.tsv.gz.full.dev.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "8a45696b30b5cc58839b553402739f454ac651c9daaeb714f2fef4a7311c6e97",
+        "actual_size_bytes": 42825533,
+        "exists": true,
+        "expected_sha256": "8a45696b30b5cc58839b553402739f454ac651c9daaeb714f2fef4a7311c6e97",
+        "expected_size_bytes": 42825533,
+        "label": "raw_source:constraint-corrections-valueType.tsv.gz.full.dev.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-valueType.tsv.gz.full.dev.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "392042e1d937a272c3ebb3f1665b847240ceb15d512d4086349fbd4f45fac908",
+        "actual_size_bytes": 405789486,
+        "exists": true,
+        "expected_sha256": "392042e1d937a272c3ebb3f1665b847240ceb15d512d4086349fbd4f45fac908",
+        "expected_size_bytes": 405789486,
+        "label": "raw_source:constraint-corrections-conflictWith.tsv.gz.full.test.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-conflictWith.tsv.gz.full.test.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "7edf5424f053d16ce84594329cb83c7e5e42bfd84b493ee97a3bbb18e4ef68c3",
+        "actual_size_bytes": 76386922,
+        "exists": true,
+        "expected_sha256": "7edf5424f053d16ce84594329cb83c7e5e42bfd84b493ee97a3bbb18e4ef68c3",
+        "expected_size_bytes": 76386922,
+        "label": "raw_source:constraint-corrections-distinct.tsv.gz.full.test.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-distinct.tsv.gz.full.test.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "5aceef5db213e0f563cee1647c9cf96f15d422e83fc81a229290267ff38f6f0d",
+        "actual_size_bytes": 13915632,
+        "exists": true,
+        "expected_sha256": "5aceef5db213e0f563cee1647c9cf96f15d422e83fc81a229290267ff38f6f0d",
+        "expected_size_bytes": 13915632,
+        "label": "raw_source:constraint-corrections-inverse.tsv.gz.full.test.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-inverse.tsv.gz.full.test.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "ddae20e15666cbb2c16e77d540bcf0450d63eddf748c81b2fc6fa92f6c10a105",
+        "actual_size_bytes": 106011130,
+        "exists": true,
+        "expected_sha256": "ddae20e15666cbb2c16e77d540bcf0450d63eddf748c81b2fc6fa92f6c10a105",
+        "expected_size_bytes": 106011130,
+        "label": "raw_source:constraint-corrections-itemRequiresStatement.tsv.gz.full.test.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-itemRequiresStatement.tsv.gz.full.test.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "3705a07ffb5548f8f35a56cde699ca65536a3d82bdf7f6d557e02fae29a9755b",
+        "actual_size_bytes": 1826495,
+        "exists": true,
+        "expected_sha256": "3705a07ffb5548f8f35a56cde699ca65536a3d82bdf7f6d557e02fae29a9755b",
+        "expected_size_bytes": 1826495,
+        "label": "raw_source:constraint-corrections-oneOf.tsv.gz.full.test.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-oneOf.tsv.gz.full.test.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "fb5bd3d0b1c2a39e4178110ab0a9b517a1ef958ab9f47feee604176d9c8d36d5",
+        "actual_size_bytes": 399069859,
+        "exists": true,
+        "expected_sha256": "fb5bd3d0b1c2a39e4178110ab0a9b517a1ef958ab9f47feee604176d9c8d36d5",
+        "expected_size_bytes": 399069859,
+        "label": "raw_source:constraint-corrections-single.tsv.gz.full.test.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-single.tsv.gz.full.test.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "af30663f0f3b6a527b4b851cbab43a79878a8235cb6e61d2923d7c6f09139e0c",
+        "actual_size_bytes": 77767639,
+        "exists": true,
+        "expected_sha256": "af30663f0f3b6a527b4b851cbab43a79878a8235cb6e61d2923d7c6f09139e0c",
+        "expected_size_bytes": 77767639,
+        "label": "raw_source:constraint-corrections-type.tsv.gz.full.test.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-type.tsv.gz.full.test.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "5e37f08c6e09b1d9e5312ab2caec2119d7353164052ab3f9944084741d13d502",
+        "actual_size_bytes": 21227686,
+        "exists": true,
+        "expected_sha256": "5e37f08c6e09b1d9e5312ab2caec2119d7353164052ab3f9944084741d13d502",
+        "expected_size_bytes": 21227686,
+        "label": "raw_source:constraint-corrections-valueRequiresStatement.tsv.gz.full.test.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-valueRequiresStatement.tsv.gz.full.test.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "ee7da43d38f6c511ee62b921b1e4b50908c91491634b79b8f7052230d01d356c",
+        "actual_size_bytes": 43637507,
+        "exists": true,
+        "expected_sha256": "ee7da43d38f6c511ee62b921b1e4b50908c91491634b79b8f7052230d01d356c",
+        "expected_size_bytes": 43637507,
+        "label": "raw_source:constraint-corrections-valueType.tsv.gz.full.test.tsv.gz",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-valueType.tsv.gz.full.test.tsv.gz",
+        "required": true
+      },
+      {
+        "actual_sha256": "1bbc8cd77ba01a215e68594ffabc0e20e700d53cc27d55414d6c9fb28e8e242b",
+        "actual_size_bytes": 7710772,
+        "exists": true,
+        "expected_sha256": "1bbc8cd77ba01a215e68594ffabc0e20e700d53cc27d55414d6c9fb28e8e242b",
+        "expected_size_bytes": 7710772,
+        "label": "run_input:encoder",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100/globalintencoder.txt",
+        "required": true
+      },
+      {
+        "actual_sha256": "2c331f662799715d5a2fda042061fa88c0922801c5dfa29601c029244ce1b1f4",
+        "actual_size_bytes": 4016688,
+        "exists": true,
+        "expected_sha256": "2c331f662799715d5a2fda042061fa88c0922801c5dfa29601c029244ce1b1f4",
+        "expected_size_bytes": 4016688,
+        "label": "run_input:hierarchy_v2",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/deprecated/post-validator-conversation-2026-09-15/data/static/wikidata-p279-2018-07-01.v2.json",
+        "required": true
+      },
+      {
+        "actual_sha256": "f263b5a33d9d49af971692e2d180bfd7b89d678625f0547682cee035af81ae4b",
+        "actual_size_bytes": 2144777,
+        "exists": true,
+        "expected_sha256": "f263b5a33d9d49af971692e2d180bfd7b89d678625f0547682cee035af81ae4b",
+        "expected_size_bytes": 2144777,
+        "label": "run_input:registry",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/interim/constraint_registry_full.parquet",
+        "required": true
+      },
+      {
+        "actual_sha256": "d263bcd62a6d50ea30e29efde6ec5e42f5471f6d2debd2c1e022475372edc7bc",
+        "actual_size_bytes": 99811,
+        "exists": true,
+        "expected_sha256": "d263bcd62a6d50ea30e29efde6ec5e42f5471f6d2debd2c1e022475372edc7bc",
+        "expected_size_bytes": 99811,
+        "label": "run_input:target_vocabs",
+        "ok": true,
+        "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/target_vocabs.json",
+        "required": true
+      }
+    ],
+    "required_inputs_ok": true,
+    "row_count": 1910794,
+    "v0_fingerprint": "112209218148ebb7dbc95c76a6909037ce98cc2651511fd7941c8c5ce5532668"
+  },
+  "max_rss_kib": 849008,
+  "old_train_budget": 668779,
+  "output_validation": {
+    "check_count": 11,
+    "checks": [
+      "V1 output references are subsets of V0",
+      "parent = existing sample + discarded for every coverage cell",
+      "F = (F and A) + (F not A) for every coverage cell",
+      "A(V1) count never exceeds A(V0) in any reported cell",
+      "family and mutually exclusive action counts reconcile",
+      "family-action F-and-A counts equal coverage counts",
+      "mutually exclusive primary exclusion reasons sum to F not A(V1)",
+      "core and unexpressible evaluation strata equal V1 coverage partitions",
+      "per-slot support counts equal raw F and F-and-A training occurrences",
+      "all hypothetical budgets sum exactly and do not oversample",
+      "row-level follow-up derivative contains all 1,910,794 rows"
+    ],
+    "passed": true
+  },
+  "outputs": {
+    "budget_feasibility.csv": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/budget_feasibility.csv",
+      "sha256": "3d3fb94a80984815670d70f7c4efef2f4adcbaf1db5ea4e6f2338fdb47491f9f",
+      "size_bytes": 7906
+    },
+    "coverage_comparison.csv": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/coverage_comparison.csv",
+      "sha256": "9df9d4267c6823eea54d65b6a9ebca234ab0be355760a146da020020e154af4d",
+      "size_bytes": 35029
+    },
+    "decision_report.md": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/decision_report.md",
+      "sha256": "81695fb41856ed64be4a72c5fda8b52dad242a1f0d843130ee83c99b8b5ded84",
+      "size_bytes": 6296
+    },
+    "distribution_shift.csv": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/distribution_shift.csv",
+      "sha256": "9b49fa68be08a76329ad77f6286f10fba6ec720a04d538cf3c5de7cc90d53582",
+      "size_bytes": 13657
+    },
+    "evaluation_strata.csv": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/evaluation_strata.csv",
+      "sha256": "e679a0ebf1b2336350a50f20c9c905728f1dcfb5566e2be9a0e764cc6245cf6f",
+      "size_bytes": 24479
+    },
+    "exclusion_reasons.csv": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/exclusion_reasons.csv",
+      "sha256": "a005dc68c1212c96f74bca5df20a1d85afd36f364bcf2c4e840b23960f9cd8f7",
+      "size_bytes": 22255
+    },
+    "execution_log.md": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/execution_log.md",
+      "sha256": "ec8cb97d58b93e27c98c7aed71ff6cb3812c6b83d8c491d095cfe13765e9d0ec",
+      "size_bytes": 2171
+    },
+    "family_action_retention.csv": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/family_action_retention.csv",
+      "sha256": "302c86f5801cae19d538acc4f77d977ce3e9be1d154b6eacf032f3e37fc2cf8c",
+      "size_bytes": 15200
+    },
+    "requires_statement_exclusions.csv": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/requires_statement_exclusions.csv",
+      "sha256": "ebfe29db02d869ee5b82846d0a602ed9a0e871533736fd7ec90b7c3ec2cf6e3c",
+      "size_bytes": 14152
+    },
+    "row_level_followup.parquet": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/row_level_followup.parquet",
+      "sha256": "9b715943a86b72ce0c4b1634fa3178659409633d725edaee65dd322b21f1eebe",
+      "size_bytes": 7182188
+    },
+    "summary.json": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/summary.json",
+      "sha256": "293170f2e42160d73c2fb28dc32197b0d6bc6de5c0d24a8db943831fe2e4825b",
+      "size_bytes": 2573
+    },
+    "target_support_by_slot.csv": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/target_support_by_slot.csv",
+      "sha256": "f5c0e4f5a39c1488476c7b985809a0cd371c5c3bb0fc3d2baafb6fc6bfe2b534",
+      "size_bytes": 682607
+    },
+    "target_support_histogram.csv": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/target_support_histogram.csv",
+      "sha256": "614299624bd9a8f88e7bcc687fe7b832bf4eb09c7af095c66acec275fe8922fd",
+      "size_bytes": 35675
+    },
+    "verified_train_vocab.json": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/verified_train_vocab.json",
+      "sha256": "76dfc40e235fb9c45b0c65a8ab7c52e90452018f304d9eb6de2f3a5c464db187",
+      "size_bytes": 991234
+    },
+    "vocab_comparison.csv": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/verified_train_vocab_followup_2026-09-16/vocab_comparison.csv",
+      "sha256": "398f861552b3a9867a840565a0c2e004bff57a1a40215c441cf73146f4f89a53",
+      "size_bytes": 360
+    }
+  },
+  "repository": "/home/mvazquez/fidelity-safety-gap",
+  "repository_dirty_state_at_start": [
+    "M .gitignore",
+    " M latex_paper/main.tex",
+    "?? audits/verified_train_vocab_followup_2026-09-16/",
+    "?? codex-session-01a07537-9bf0-70c3-be37-9ff5694d627d.md",
+    "?? notebooks/",
+    "?? scripts/audit_verified_train_vocab_followup.py",
+    "?? src/modules/verified_vocab_followup.py",
+    "?? tests/test_verified_vocab_followup.py"
+  ],
+  "repository_head": "8582c5418965690eb8cfdeb454ca43cef00c662a",
+  "runtime_seconds": 646.389710156247,
+  "sampling_performed": false,
+  "schema_version": 1,
+  "source_rows_scanned": 1910794,
+  "stage": "all",
+  "validator_rescan_performed": false,
+  "vocabulary_profiles": {
+    "V0": {
+      "fingerprint": "112209218148ebb7dbc95c76a6909037ce98cc2651511fd7941c8c5ce5532668",
+      "name": "clean_parent_train_minocc100"
+    },
+    "V1": {
+      "fingerprint": "19d5e48c202172be95ca9a050038a0fed988bf92ec94f32f3db4303e037985c8",
+      "name": "verified_train_minocc100"
+    }
+  }
+}

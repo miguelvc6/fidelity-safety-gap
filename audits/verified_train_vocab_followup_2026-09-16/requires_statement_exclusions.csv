@@ -1,0 +1,121 @@
+category,count,detail,family,rank,section
+F,166379,,itemRequiresStatement,,summary
+F_and_A_V1,98502,,itemRequiresStatement,,summary
+excluded,67877,,itemRequiresStatement,,summary
+addition_only,67874,,itemRequiresStatement,,excluded_action
+paired_other,3,,itemRequiresStatement,,excluded_action
+add_object,67873,,itemRequiresStatement,,failing_slot
+add_predicate,14,,itemRequiresStatement,,failing_slot
+P-property,14,,itemRequiresStatement,,term_kind
+Q-item,37388,,itemRequiresStatement,,term_kind
+literal,30485,,itemRequiresStatement,,term_kind
+False,15429,,itemRequiresStatement,,train_seen
+True,52458,,itemRequiresStatement,,train_seen
+False,64096,,itemRequiresStatement,,in_local_input
+True,3791,,itemRequiresStatement,,in_local_input
+iri:http://www.wikidata.org/entity/statement/P105-C1EC2D1C-C2B7-4AB2-BAF6-17C291BA9BE0,14326,"{""constrained_property"": ""wd:P105"", ""parameter_objects"": [""wd:P171""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,1,top_constraint
+iri:http://www.wikidata.org/entity/statement/P442-ABC431F2-61C6-4ACA-9563-341B93A16C76,9508,"{""constrained_property"": ""wd:P442"", ""parameter_objects"": [""wd:Q215664"", ""wd:P131""], ""parameter_predicates"": [""wd:P2303"", ""wd:P2306""]}",itemRequiresStatement,2,top_constraint
+iri:http://www.wikidata.org/entity/statement/P105-C7F3642C-3DAE-4FB7-9DA3-235B4CDA122A,3263,"{""constrained_property"": ""wd:P105"", ""parameter_objects"": [""wd:P225""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,3,top_constraint
+iri:http://www.wikidata.org/entity/statement/P20-F8978927-FA3E-4684-81C6-3BB4EC8A6B80,2762,"{""constrained_property"": ""wd:P20"", ""parameter_objects"": [""wd:P570""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,4,top_constraint
+iri:http://www.wikidata.org/entity/statement/P1216-7011A1D7-93F7-4FAE-8388-9A7F8AFAA4E2,2683,"{""constrained_property"": ""wd:P1216"", ""parameter_objects"": [""wd:P625""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,5,top_constraint
+iri:http://www.wikidata.org/entity/statement/P1216-29D60E05-64C5-41FB-936B-BF9E1785FB0C,2092,"{""constrained_property"": ""wd:P1216"", ""parameter_objects"": [""wd:P131""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,6,top_constraint
+iri:http://www.wikidata.org/entity/statement/P3880-95fa159e-4bb3-c602-df34-2f954c10e909,1787,"{""constrained_property"": ""wd:P3880"", ""parameter_objects"": [""wd:P1705""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,7,top_constraint
+iri:http://www.wikidata.org/entity/statement/P3879-bef304f3-4b3d-7521-de42-bc372276225f,1780,"{""constrained_property"": ""wd:P3879"", ""parameter_objects"": [""wd:P1705""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,8,top_constraint
+iri:http://www.wikidata.org/entity/statement/P3878-1d619799-4a51-5bd4-effa-a4483fb337e4,1749,"{""constrained_property"": ""wd:P3878"", ""parameter_objects"": [""wd:P1705""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,9,top_constraint
+iri:http://www.wikidata.org/entity/statement/P721-63AF1662-F88A-40EF-AD57-C4A49629F484,1611,"{""constrained_property"": ""wd:P721"", ""parameter_objects"": [""wd:P131""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,10,top_constraint
+iri:http://www.wikidata.org/entity/statement/P1435-C07D3C3C-CB01-4676-AE99-F3B3C9A88D8C,1434,"{""constrained_property"": ""wd:P1435"", ""parameter_objects"": [""wd:P31""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,11,top_constraint
+iri:http://www.wikidata.org/entity/statement/P141-4B41C003-2CC4-43A3-B9A8-997FFBB772FB,1162,"{""constrained_property"": ""wd:P141"", ""parameter_objects"": [""wd:P627"", ""wd:Q21502408""], ""parameter_predicates"": [""wd:P2306"", ""wd:P2316""]}",itemRequiresStatement,12,top_constraint
+iri:http://www.wikidata.org/entity/statement/P413-9D39BFF8-22D1-451C-8484-C92777B1D09A,1107,"{""constrained_property"": ""wd:P413"", ""parameter_objects"": [""wd:P54""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,13,top_constraint
+iri:http://www.wikidata.org/entity/statement/P2163-FE9955DF-5E0A-4551-8E43-94F667960E22,1051,"{""constrained_property"": ""wd:P2163"", ""parameter_objects"": [""wd:Q519554"", ""wd:P244""], ""parameter_predicates"": [""wd:P2303"", ""wd:P2306""]}",itemRequiresStatement,14,top_constraint
+iri:http://www.wikidata.org/entity/statement/P932-0594B43D-47C7-4A9B-8756-3D09CEDF4F74,953,"{""constrained_property"": ""wd:P932"", ""parameter_objects"": [""wd:P1476""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,15,top_constraint
+iri:http://www.wikidata.org/entity/statement/P359-3B931C70-47B9-4FB2-B410-A9AC4A0AFED1,790,"{""constrained_property"": ""wd:P359"", ""parameter_objects"": [""wd:P625""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,16,top_constraint
+iri:http://www.wikidata.org/entity/statement/P932-9EF8F26F-EB9C-4DAD-A3DF-37DBC8F30310,658,"{""constrained_property"": ""wd:P932"", ""parameter_objects"": [""wd:P1433""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,17,top_constraint
+iri:http://www.wikidata.org/entity/statement/P932-B8176D92-CDB4-408A-B250-113894E074C0,658,"{""constrained_property"": ""wd:P932"", ""parameter_objects"": [""wd:P577""], ""parameter_predicates"": [""wd:P2306""]}",itemRequiresStatement,18,top_constraint
+iri:http://www.wikidata.org/entity/statement/P380-D2977E7D-8B94-47E8-9721-3AA7DD07FB94,650,"{""constrained_property"": ""wd:P380"", ""parameter_objects"": [""wd:Q22926743"", ""wd:P625""], ""parameter_predicates"": [""wd:P2303"", ""wd:P2306""]}",itemRequiresStatement,19,top_constraint
+iri:http://www.wikidata.org/entity/statement/P2186-DEA95548-2F06-4514-BD87-129DB6AB1909,645,"{""constrained_property"": ""wd:P2186"", ""parameter_objects"": [""wd:P17"", ""wd:P625""], ""parameter_predicates"": [""wd:P2304"", ""wd:P2306""]}",itemRequiresStatement,20,top_constraint
+wd:P131,16354,,itemRequiresStatement,1,top_target_predicate
+wd:P171,14462,,itemRequiresStatement,2,top_target_predicate
+wd:P625,8398,,itemRequiresStatement,3,top_target_predicate
+wd:P1705,5323,,itemRequiresStatement,4,top_target_predicate
+wd:P225,4044,,itemRequiresStatement,5,top_target_predicate
+wd:P570,3187,,itemRequiresStatement,6,top_target_predicate
+wd:P31,2083,,itemRequiresStatement,7,top_target_predicate
+wd:P1476,1356,,itemRequiresStatement,8,top_target_predicate
+wd:P627,1162,,itemRequiresStatement,9,top_target_predicate
+wd:P54,1133,,itemRequiresStatement,10,top_target_predicate
+wd:P244,1051,,itemRequiresStatement,11,top_target_predicate
+wd:P577,971,,itemRequiresStatement,12,top_target_predicate
+wd:P1433,917,,itemRequiresStatement,13,top_target_predicate
+wd:P1566,913,,itemRequiresStatement,14,top_target_predicate
+wd:P569,845,,itemRequiresStatement,15,top_target_predicate
+wd:P18,639,,itemRequiresStatement,16,top_target_predicate
+wd:P586,572,,itemRequiresStatement,17,top_target_predicate
+wd:P373,512,,itemRequiresStatement,18,top_target_predicate
+wd:P195,407,,itemRequiresStatement,19,top_target_predicate
+wd:P19,314,,itemRequiresStatement,20,top_target_predicate
+plain_or_source_untyped,9840,,itemRequiresStatement,1,top_literal_datatype
+http://www.opengis.net/ont/geosparql#wktLiteral,8637,,itemRequiresStatement,2,top_literal_datatype
+language:mul,5323,,itemRequiresStatement,3,top_literal_datatype
+http://www.w3.org/2001/XMLSchema#dateTime,5075,,itemRequiresStatement,4,top_literal_datatype
+language:en,1356,,itemRequiresStatement,5,top_literal_datatype
+http://www.w3.org/2001/XMLSchema#decimal,245,,itemRequiresStatement,6,top_literal_datatype
+language:sv,8,,itemRequiresStatement,7,top_literal_datatype
+language:fr,1,,itemRequiresStatement,8,top_literal_datatype
+F,91155,,valueRequiresStatement,,summary
+F_and_A_V1,70949,,valueRequiresStatement,,summary
+excluded,20206,,valueRequiresStatement,,summary
+addition_only,20205,,valueRequiresStatement,,excluded_action
+paired_other,1,,valueRequiresStatement,,excluded_action
+add_object,20205,,valueRequiresStatement,,failing_slot
+add_predicate,1,,valueRequiresStatement,,failing_slot
+P-property,1,,valueRequiresStatement,,term_kind
+Q-item,4107,,valueRequiresStatement,,term_kind
+literal,16098,,valueRequiresStatement,,term_kind
+False,852,,valueRequiresStatement,,train_seen
+True,19354,,valueRequiresStatement,,train_seen
+False,19060,,valueRequiresStatement,,in_local_input
+True,1146,,valueRequiresStatement,,in_local_input
+iri:http://www.wikidata.org/entity/statement/P735-05d2bc2d-4882-d2ca-96d2-ad53f4e3d1a8,16093,"{""constrained_property"": ""wd:P735"", ""parameter_objects"": [""wd:P1705""], ""parameter_predicates"": [""wd:P2306""]}",valueRequiresStatement,1,top_constraint
+iri:http://www.wikidata.org/entity/statement/P171-5A7780C6-6C66-466E-BB08-459A21B5F270,3758,"{""constrained_property"": ""wd:P171"", ""parameter_objects"": [""wd:Q2382443"", ""wd:P171""], ""parameter_predicates"": [""wd:P2303"", ""wd:P2306""]}",valueRequiresStatement,2,top_constraint
+iri:http://www.wikidata.org/entity/statement/P279-7E25825D-1E67-4535-8287-1C9D6DC0AE36,232,"{""constrained_property"": ""wd:P279"", ""parameter_objects"": [""wd:Q35120"", ""wd:P279""], ""parameter_predicates"": [""wd:P2303"", ""wd:P2306""]}",valueRequiresStatement,3,top_constraint
+iri:http://www.wikidata.org/entity/statement/P166-1176e634-4435-f032-6479-f1dd7095a429,61,"{""constrained_property"": ""wd:P166"", ""parameter_objects"": [""wd:P31""], ""parameter_predicates"": [""wd:P2306""]}",valueRequiresStatement,4,top_constraint
+iri:http://www.wikidata.org/entity/statement/P2348-383B3D36-97C1-48D9-BD35-C58F84268D0D,23,"{""constrained_property"": ""wd:P2348"", ""parameter_objects"": [""wd:P31""], ""parameter_predicates"": [""wd:P2306""]}",valueRequiresStatement,5,top_constraint
+iri:http://www.wikidata.org/entity/statement/P31-BBCF739D-1197-4F08-B1F9-7F76D0CA4445,18,"{""constrained_property"": ""wd:P31"", ""parameter_objects"": [""wd:Q35120"", ""wd:P279""], ""parameter_predicates"": [""wd:P2303"", ""wd:P2306""]}",valueRequiresStatement,6,top_constraint
+iri:http://www.wikidata.org/entity/statement/P19-79DE29FD-C07C-46DE-A2AE-92CB60F98F29,7,"{""constrained_property"": ""wd:P19"", ""parameter_objects"": [""wd:P17""], ""parameter_predicates"": [""wd:P2306""]}",valueRequiresStatement,7,top_constraint
+iri:http://www.wikidata.org/entity/statement/P747-86F2DD6B-5D37-4EB0-B689-0447FA4B8045,5,"{""constrained_property"": ""wd:P747"", ""parameter_objects"": [""wd:P577""], ""parameter_predicates"": [""wd:P2306""]}",valueRequiresStatement,8,top_constraint
+iri:http://www.wikidata.org/entity/statement/P106-3969b222-4b23-c21d-5f97-506c26f5bf0f,2,"{""constrained_property"": ""wd:P106"", ""parameter_objects"": [""wd:P31""], ""parameter_predicates"": [""wd:P2306""]}",valueRequiresStatement,9,top_constraint
+iri:http://www.wikidata.org/entity/statement/P35-334BD74D-F21B-4F99-8785-2C7E6A9247F4,2,"{""constrained_property"": ""wd:P35"", ""parameter_objects"": [""wd:P39""], ""parameter_predicates"": [""wd:P2306""]}",valueRequiresStatement,10,top_constraint
+iri:http://www.wikidata.org/entity/statement/P1028-5b54883b-4283-3b23-5e77-156db1b9ae4b,1,"{""constrained_property"": ""wd:P1028"", ""parameter_objects"": [""wd:P31""], ""parameter_predicates"": [""wd:P2306""]}",valueRequiresStatement,11,top_constraint
+iri:http://www.wikidata.org/entity/statement/P1071-65b34685-45ac-5b07-23c2-365f113f3ed1,1,"{""constrained_property"": ""wd:P1071"", ""parameter_objects"": [""wd:P31""], ""parameter_predicates"": [""wd:P2306""]}",valueRequiresStatement,12,top_constraint
+iri:http://www.wikidata.org/entity/statement/P126-9a955ee2-45a0-7b07-f760-2b575cacb25a,1,"{""constrained_property"": ""wd:P126"", ""parameter_objects"": [""wd:P31""], ""parameter_predicates"": [""wd:P2306""]}",valueRequiresStatement,13,top_constraint
+iri:http://www.wikidata.org/entity/statement/P562-FD77CC27-7C0F-4E64-A1F1-0CFA0C02500F,1,"{""constrained_property"": ""wd:P562"", ""parameter_objects"": [""wd:P17""], ""parameter_predicates"": [""wd:P2306""]}",valueRequiresStatement,14,top_constraint
+iri:http://www.wikidata.org/entity/statement/P676-6a59cd87-4cab-08ed-1106-819ec741f1d5,1,"{""constrained_property"": ""wd:P676"", ""parameter_objects"": [""wd:Q59755569"", ""wd:P1412""], ""parameter_predicates"": [""wd:P2303"", ""wd:P2306""]}",valueRequiresStatement,15,top_constraint
+wd:P1705,16093,,valueRequiresStatement,1,top_target_predicate
+wd:P171,3758,,valueRequiresStatement,2,top_target_predicate
+wd:P279,250,,valueRequiresStatement,3,top_target_predicate
+wd:P31,89,,valueRequiresStatement,4,top_target_predicate
+wd:P17,8,,valueRequiresStatement,5,top_target_predicate
+wd:P577,5,,valueRequiresStatement,6,top_target_predicate
+wd:P39,2,,valueRequiresStatement,7,top_target_predicate
+wd:P1412,1,,valueRequiresStatement,8,top_target_predicate
+wd:P172,1,,valueRequiresStatement,9,top_target_predicate
+language:mul,16005,,valueRequiresStatement,1,top_literal_datatype
+language:en,21,,valueRequiresStatement,2,top_literal_datatype
+language:be,20,,valueRequiresStatement,3,top_literal_datatype
+language:ja,10,,valueRequiresStatement,4,top_literal_datatype
+http://www.w3.org/2001/XMLSchema#dateTime,5,,valueRequiresStatement,5,top_literal_datatype
+language:el,5,,valueRequiresStatement,6,top_literal_datatype
+language:ko,4,,valueRequiresStatement,7,top_literal_datatype
+language:ar,3,,valueRequiresStatement,8,top_literal_datatype
+language:he,3,,valueRequiresStatement,9,top_literal_datatype
+language:tr,3,,valueRequiresStatement,10,top_literal_datatype
+language:uk,3,,valueRequiresStatement,11,top_literal_datatype
+language:es,2,,valueRequiresStatement,12,top_literal_datatype
+language:et,2,,valueRequiresStatement,13,top_literal_datatype
+language:hy,2,,valueRequiresStatement,14,top_literal_datatype
+language:ro,2,,valueRequiresStatement,15,top_literal_datatype
+language:ru,2,,valueRequiresStatement,16,top_literal_datatype
+language:bg,1,,valueRequiresStatement,17,top_literal_datatype
+language:fr,1,,valueRequiresStatement,18,top_literal_datatype
+language:lv,1,,valueRequiresStatement,19,top_literal_datatype
+language:no,1,,valueRequiresStatement,20,top_literal_datatype

@@ -1,0 +1,118 @@
+{
+  "V0_F_and_A": 1220925,
+  "V0_F_and_A_by_split": {
+    "test": 183293,
+    "train": 854411,
+    "val": 183221
+  },
+  "V0_coverage_among_F": 0.9227558310640912,
+  "V1_F_and_A": 1220706,
+  "V1_F_and_A_by_split": {
+    "test": 183181,
+    "train": 854411,
+    "val": 183114
+  },
+  "V1_action_retention": {
+    "addition_only": 0.8494801327320685,
+    "base_deleting": 0.9909849280049822,
+    "base_preserving": 0.8931427700298517,
+    "deletion_only": 1.0,
+    "paired": 0.7600480934386808,
+    "same_sp_replacement": 0.6249056400301952
+  },
+  "V1_coverage_among_F": 0.9225903143230932,
+  "V1_unique_concrete_class_support": {
+    "0": 50,
+    "1": 1327,
+    "10-49": 488,
+    "2-4": 883,
+    "5-9": 374,
+    "50-99": 122,
+    ">=100": 274
+  },
+  "action_composition": {
+    "F_addition_only_share": 0.44413658834474945,
+    "F_and_A_V1_addition_only_share": 0.4089412192616404,
+    "F_and_A_V1_deletion_only_share": 0.5548092661132165,
+    "F_and_A_V1_paired_share": 0.036249514625143156,
+    "F_deletion_only_share": 0.5118616552127571,
+    "F_paired_share": 0.04400175644249351,
+    "deletion_only_percentage_point_change": 4.29476109004594
+  },
+  "available_V1_train": 854411,
+  "coverage_loss_percentage_points_on_F": 0.016551674099796188,
+  "coverage_loss_rows": 219,
+  "difference_V1_minus_V0_by_split": {
+    "test": -112,
+    "train": 0,
+    "val": -107
+  },
+  "excess_over_old_train_budget": 185632,
+  "heldout_concrete_target_support_from_F_and_A_training": {
+    "F": {
+      "test": {
+        "0": 17092,
+        "1-9": 2217
+      },
+      "val": {
+        "0": 17149,
+        "1-9": 2157
+      }
+    },
+    "F_and_A_V1": {
+      "test": {
+        "0": 1,
+        "1-9": 1113
+      },
+      "val": {
+        "0": 2,
+        "1-9": 1082
+      }
+    }
+  },
+  "largest_F_not_A_V1_families": [
+    {
+      "count": 67877,
+      "family": "itemRequiresStatement"
+    },
+    {
+      "count": 20206,
+      "family": "valueRequiresStatement"
+    },
+    {
+      "count": 13186,
+      "family": "distinct"
+    },
+    {
+      "count": 705,
+      "family": "conflictWith"
+    },
+    {
+      "count": 290,
+      "family": "type"
+    },
+    {
+      "count": 91,
+      "family": "valueType"
+    },
+    {
+      "count": 37,
+      "family": "oneOf"
+    },
+    {
+      "count": 24,
+      "family": "single"
+    },
+    {
+      "count": 5,
+      "family": "inverse"
+    },
+    {
+      "count": 2,
+      "family": "symmetric"
+    }
+  ],
+  "old_train_budget": 668779,
+  "v1_fingerprint": "19d5e48c202172be95ca9a050038a0fed988bf92ec94f32f3db4303e037985c8",
+  "verified_F": 1323129
+}

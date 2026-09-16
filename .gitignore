@@ -14,6 +14,7 @@ logs/
 # Full-scan audit sidecars and resumable chunks are local data artifacts. Keep
 # the compact reports, aggregates, manifests, and lineage maps under audits/.
 audits/*/row_level_audit.parquet
+audits/*/row_level_followup.parquet
 audits/*/semantic_chunks/
 audits/*/profile_chunks/
 
