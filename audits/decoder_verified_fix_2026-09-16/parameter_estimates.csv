@@ -1,0 +1,5 @@
+accounted_parameters,constraint_representation,embedding_dimension,entity_output_classes,input_embedding_parameters,input_vocabulary_size,model,output_branch_hidden,predicate_output_classes,six_output_head_parameters,threshold,vocabulary_profile
+19881764,factorized,128,4255,12655744,98873,Direct-Factor,400,500,7226020,100,existing_train_val_minocc100
+21223510,factorized,128,5054,12655744,98873,Direct-Factor,400,575,8567766,100,clean_parent_train_minocc100
+14980324,eswc_passive,128,4255,12655744,98873,Direct-Passive,128,500,2324580,100,existing_train_val_minocc100
+15411958,eswc_passive,128,5054,12655744,98873,Direct-Passive,128,575,2756214,100,clean_parent_train_minocc100

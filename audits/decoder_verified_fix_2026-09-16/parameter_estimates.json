@@ -1,0 +1,60 @@
+{
+  "rows": [
+    {
+      "accounted_parameters": 19881764,
+      "constraint_representation": "factorized",
+      "embedding_dimension": 128,
+      "entity_output_classes": 4255,
+      "input_embedding_parameters": 12655744,
+      "input_vocabulary_size": 98873,
+      "model": "Direct-Factor",
+      "output_branch_hidden": 400,
+      "predicate_output_classes": 500,
+      "six_output_head_parameters": 7226020,
+      "threshold": 100,
+      "vocabulary_profile": "existing_train_val_minocc100"
+    },
+    {
+      "accounted_parameters": 21223510,
+      "constraint_representation": "factorized",
+      "embedding_dimension": 128,
+      "entity_output_classes": 5054,
+      "input_embedding_parameters": 12655744,
+      "input_vocabulary_size": 98873,
+      "model": "Direct-Factor",
+      "output_branch_hidden": 400,
+      "predicate_output_classes": 575,
+      "six_output_head_parameters": 8567766,
+      "threshold": 100,
+      "vocabulary_profile": "clean_parent_train_minocc100"
+    },
+    {
+      "accounted_parameters": 14980324,
+      "constraint_representation": "eswc_passive",
+      "embedding_dimension": 128,
+      "entity_output_classes": 4255,
+      "input_embedding_parameters": 12655744,
+      "input_vocabulary_size": 98873,
+      "model": "Direct-Passive",
+      "output_branch_hidden": 128,
+      "predicate_output_classes": 500,
+      "six_output_head_parameters": 2324580,
+      "threshold": 100,
+      "vocabulary_profile": "existing_train_val_minocc100"
+    },
+    {
+      "accounted_parameters": 15411958,
+      "constraint_representation": "eswc_passive",
+      "embedding_dimension": 128,
+      "entity_output_classes": 5054,
+      "input_embedding_parameters": 12655744,
+      "input_vocabulary_size": 98873,
+      "model": "Direct-Passive",
+      "output_branch_hidden": 128,
+      "predicate_output_classes": 575,
+      "six_output_head_parameters": 2756214,
+      "threshold": 100,
+      "vocabulary_profile": "clean_parent_train_minocc100"
+    }
+  ]
+}

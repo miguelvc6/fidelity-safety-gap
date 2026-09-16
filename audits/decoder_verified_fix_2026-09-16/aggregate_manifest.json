@@ -1,0 +1,106 @@
+{
+  "full_scan": true,
+  "generated_at_utc": "2026-09-16T11:02:29.112817+00:00",
+  "max_rss_kib": 21470068,
+  "rows": 1910794,
+  "runtime_seconds": 1402.501919284463,
+  "schema_version": 1,
+  "tables": {
+    "decoder_coverage": {
+      "csv": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/decoder_coverage.csv",
+        "sha256": "4923b6d9de326356b09f82653262fb637652009270278bd462d19907222bbfe2",
+        "size_bytes": 95675
+      },
+      "json": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/decoder_coverage.json",
+        "sha256": "d038b570f6006987302112aaebfdb567b015425a1bb8987031d1b5eef9ce4f0f",
+        "size_bytes": 286640
+      }
+    },
+    "diagnostic_examples_seed1729": {
+      "csv": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/diagnostic_examples_seed1729.csv",
+        "sha256": "762a71746fa2fe23717d8154d0d1265a7c32f5c4a8494673012d55f461c6f545",
+        "size_bytes": 27249
+      },
+      "json": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/diagnostic_examples_seed1729.json",
+        "sha256": "d0764d32ec8772e13bba1ff86842bcefe2e302087cce4a926d795add529e93f0",
+        "size_bytes": 58223
+      }
+    },
+    "grounding_reasons": {
+      "csv": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/grounding_reasons.csv",
+        "sha256": "c85203df21c287280e1f29b68723b58bde4b9db0977e9a0000efa27eff0f237d",
+        "size_bytes": 283582
+      },
+      "json": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/grounding_reasons.json",
+        "sha256": "5879cb542f34eb36553034619528b059187cb6865771d73ba1ab72857a00da63",
+        "size_bytes": 768285
+      }
+    },
+    "parameter_estimates": {
+      "csv": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/parameter_estimates.csv",
+        "sha256": "b283a7271844f4e5a98eb2c755e5e523de3b45a49bc72cdd723c7bc24365e089",
+        "size_bytes": 680
+      },
+      "json": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/parameter_estimates.json",
+        "sha256": "50e77dbbff276279ff80fcf55e1da15a23fac6ea2cb8f49ef8bde16fc2de4f25",
+        "size_bytes": 1989
+      }
+    },
+    "primary_transitions": {
+      "csv": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/primary_transitions.csv",
+        "sha256": "4f671a07348a028d83df961147159ddbd54b3c139411ba38925606d7900078e5",
+        "size_bytes": 245570
+      },
+      "json": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/primary_transitions.json",
+        "sha256": "2b9de3d7356bceb6f9a1db3ed2c6ef58ba3c38ff915b4da4ab3a9330cbd7466b",
+        "size_bytes": 812559
+      }
+    },
+    "resource_estimates": {
+      "csv": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/resource_estimates.csv",
+        "sha256": "ae3e436f8721fb92ec2bf94432d5ca7a168c9e4531a91cd9aa53d03a9d4b9346",
+        "size_bytes": 1952132
+      },
+      "json": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/resource_estimates.json",
+        "sha256": "4def960f2345bb25efbdc050f6097fdc4f8601cdb7c8e286b442d53cca0c2ee6",
+        "size_bytes": 9307448
+      }
+    },
+    "slot_coverage": {
+      "csv": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/slot_coverage.csv",
+        "sha256": "07f075065457b4f7a7953f1b1716173517f4164799999559ea85f8a140ea5a7f",
+        "size_bytes": 572124
+      },
+      "json": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/slot_coverage.json",
+        "sha256": "f0b7cb568ec7c45bf50df102e82435909c7e93d38b6035b353f30d134cc6bedb",
+        "size_bytes": 1898311
+      }
+    },
+    "subset_decisions": {
+      "csv": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/subset_decisions.csv",
+        "sha256": "504a3fd98922016f166002ef77328e3a3c41a7444d33f7fcb89899f13bd4cc94",
+        "size_bytes": 302276
+      },
+      "json": {
+        "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/subset_decisions.json",
+        "sha256": "340b6462bc5e0aaa680622d1fefdea195785273b59ad3b729fed5a9b3393966d",
+        "size_bytes": 1009449
+      }
+    }
+  }
+}

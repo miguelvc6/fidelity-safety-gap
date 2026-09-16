@@ -1,0 +1,649 @@
+{
+  "discarded_split_counts": {
+    "test": 143304,
+    "train": 668776,
+    "val": 143309
+  },
+  "files": [
+    {
+      "accepted_rows": 161139,
+      "accepted_start": 0,
+      "accepted_stop": 161139,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition+deletion": 15900,
+        "deletion": 132562,
+        "deletion+addition": 12677
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-conflictWith.tsv.gz.full.train.tsv.gz",
+      "raw_split": "train",
+      "sha256": "56918ceae029d4727709fd6a0817f14cf87d8fe377978129403cc4cb4b725a9e",
+      "size_bytes": 3219892361,
+      "source_family": "conflictWith",
+      "source_rows": 161139,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 365029,
+      "accepted_start": 161139,
+      "accepted_stop": 526168,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition+deletion": 11312,
+        "deletion": 343968,
+        "deletion+addition": 9749
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-distinct.tsv.gz.full.train.tsv.gz",
+      "raw_split": "train",
+      "sha256": "52f12e8784f28460f7c9ce2e869b786617044d63806ec4e9ac26a33f63c9d796",
+      "size_bytes": 579266419,
+      "source_family": "distinct",
+      "source_rows": 365029,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 160060,
+      "accepted_start": 526168,
+      "accepted_stop": 686228,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 145534,
+        "addition+deletion": 2293,
+        "deletion": 10254,
+        "deletion+addition": 1979
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-inverse.tsv.gz.full.train.tsv.gz",
+      "raw_split": "train",
+      "sha256": "e0539720a8a64f94de81d2a4c3afd0f2895845fc0618da4c308eb70e6908a5b6",
+      "size_bytes": 111169638,
+      "source_family": "inverse",
+      "source_rows": 160060,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 159744,
+      "accepted_start": 686228,
+      "accepted_stop": 845972,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 156161,
+        "addition+deletion": 457,
+        "deletion": 2709,
+        "deletion+addition": 417
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-itemRequiresStatement.tsv.gz.full.train.tsv.gz",
+      "raw_split": "train",
+      "sha256": "6657aed92a5a21e29037444adcb9b054077ad4597f5f9f62bb253965a14edd55",
+      "size_bytes": 834093488,
+      "source_family": "itemRequiresStatement",
+      "source_rows": 159744,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 11018,
+      "accepted_start": 845972,
+      "accepted_stop": 856990,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition+deletion": 4326,
+        "deletion": 2863,
+        "deletion+addition": 3829
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-oneOf.tsv.gz.full.train.tsv.gz",
+      "raw_split": "train",
+      "sha256": "5257cc6e7f4fed9cba6a81ec5e8224d0abc7a7e4801b1c5f8467eea053741714",
+      "size_bytes": 14982776,
+      "source_family": "oneOf",
+      "source_rows": 11018,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 191718,
+      "accepted_start": 856990,
+      "accepted_stop": 1048708,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition+deletion": 14728,
+        "deletion": 163689,
+        "deletion+addition": 13301
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-single.tsv.gz.full.train.tsv.gz",
+      "raw_split": "train",
+      "sha256": "07b78db32be1963d513bb361c2825924ad2459425600652a7096dfb2a1144352",
+      "size_bytes": 3145566071,
+      "source_family": "single",
+      "source_rows": 191718,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 159983,
+      "accepted_start": 1048708,
+      "accepted_stop": 1208691,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 150993,
+        "addition+deletion": 1796,
+        "deletion": 5624,
+        "deletion+addition": 1570
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-type.tsv.gz.full.train.tsv.gz",
+      "raw_split": "train",
+      "sha256": "21cec2294639232e3bb77545dbf32b27e73261d7d3c118a140a3a32b84577a13",
+      "size_bytes": 629808009,
+      "source_family": "type",
+      "source_rows": 159983,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 160028,
+      "accepted_start": 1208691,
+      "accepted_stop": 1368719,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 152830,
+        "addition+deletion": 1883,
+        "deletion": 3546,
+        "deletion+addition": 1769
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-valueRequiresStatement.tsv.gz.full.train.tsv.gz",
+      "raw_split": "train",
+      "sha256": "41c70b172ebbdc03e11c87c44359baa1b9bb023b53ed5d4019277ca6eefaf96d",
+      "size_bytes": 171277345,
+      "source_family": "valueRequiresStatement",
+      "source_rows": 160028,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 159941,
+      "accepted_start": 1368719,
+      "accepted_stop": 1528660,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 155797,
+        "addition+deletion": 1433,
+        "deletion": 1450,
+        "deletion+addition": 1261
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-valueType.tsv.gz.full.train.tsv.gz",
+      "raw_split": "train",
+      "sha256": "86dc194fc4d1b9b1f68a8cade675be852c5516dfe10ac3e4e3200f2e20a630e9",
+      "size_bytes": 346052121,
+      "source_family": "valueType",
+      "source_rows": 159941,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 19998,
+      "accepted_start": 1528660,
+      "accepted_stop": 1548658,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition+deletion": 1953,
+        "deletion": 16425,
+        "deletion+addition": 1620
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-conflictWith.tsv.gz.full.dev.tsv.gz",
+      "raw_split": "dev",
+      "sha256": "2bf09d20cb04f2a8e41efc3ae137fd118d1a2ccc9f9b7fb5e747328c531b4b19",
+      "size_bytes": 394211888,
+      "source_family": "conflictWith",
+      "source_rows": 19998,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 45784,
+      "accepted_start": 1548658,
+      "accepted_stop": 1594442,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition+deletion": 1368,
+        "deletion": 43246,
+        "deletion+addition": 1170
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-distinct.tsv.gz.full.dev.tsv.gz",
+      "raw_split": "dev",
+      "sha256": "13d261c156242fc82a5de7aad0832c3000830b6398bd767434a68fd070b7a69e",
+      "size_bytes": 73393950,
+      "source_family": "distinct",
+      "source_rows": 45784,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 19945,
+      "accepted_start": 1594442,
+      "accepted_stop": 1614387,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 18112,
+        "addition+deletion": 301,
+        "deletion": 1265,
+        "deletion+addition": 267
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-inverse.tsv.gz.full.dev.tsv.gz",
+      "raw_split": "dev",
+      "sha256": "d39fe09373fd4da3256fa3348b8fea3bbf143051020ee24219d9b59b39694f9f",
+      "size_bytes": 13766786,
+      "source_family": "inverse",
+      "source_rows": 19945,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 20171,
+      "accepted_start": 1614387,
+      "accepted_stop": 1634558,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 19726,
+        "addition+deletion": 58,
+        "deletion": 334,
+        "deletion+addition": 53
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-itemRequiresStatement.tsv.gz.full.dev.tsv.gz",
+      "raw_split": "dev",
+      "sha256": "b06119ea56b0179d99e2d5280d4d7f282fb9e65588e9a8672e553c7c2ab990d6",
+      "size_bytes": 103826440,
+      "source_family": "itemRequiresStatement",
+      "source_rows": 20171,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 1366,
+      "accepted_start": 1634558,
+      "accepted_stop": 1635924,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition+deletion": 552,
+        "deletion": 361,
+        "deletion+addition": 453
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-oneOf.tsv.gz.full.dev.tsv.gz",
+      "raw_split": "dev",
+      "sha256": "54584373dda384731b237670172c2af354121a4c1cf3a89e701d388d7b5ef712",
+      "size_bytes": 1955271,
+      "source_family": "oneOf",
+      "source_rows": 1366,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 23775,
+      "accepted_start": 1635924,
+      "accepted_stop": 1659699,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition+deletion": 1895,
+        "deletion": 20230,
+        "deletion+addition": 1650
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-single.tsv.gz.full.dev.tsv.gz",
+      "raw_split": "dev",
+      "sha256": "267ba45ffa9885debc64d1168c8a4d719e2f92644d661b2e01db9eb892acd654",
+      "size_bytes": 395182847,
+      "source_family": "single",
+      "source_rows": 23775,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 20084,
+      "accepted_start": 1659699,
+      "accepted_stop": 1679783,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 18944,
+        "addition+deletion": 240,
+        "deletion": 682,
+        "deletion+addition": 218
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-type.tsv.gz.full.dev.tsv.gz",
+      "raw_split": "dev",
+      "sha256": "c5f1b47a27954079e3fb9c4d40071ba03ed674d78a216ab0b318949e6f875cc5",
+      "size_bytes": 78398153,
+      "source_family": "type",
+      "source_rows": 20084,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 19993,
+      "accepted_start": 1679783,
+      "accepted_stop": 1699776,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 19112,
+        "addition+deletion": 227,
+        "deletion": 459,
+        "deletion+addition": 195
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-valueRequiresStatement.tsv.gz.full.dev.tsv.gz",
+      "raw_split": "dev",
+      "sha256": "11a50444f20990b0448a03f20e82fc7fd2fe25051dc70d02af62a9c8151960df",
+      "size_bytes": 21637141,
+      "source_family": "valueRequiresStatement",
+      "source_rows": 19993,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 19872,
+      "accepted_start": 1699776,
+      "accepted_stop": 1719648,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 19279,
+        "addition+deletion": 210,
+        "deletion": 194,
+        "deletion+addition": 189
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-valueType.tsv.gz.full.dev.tsv.gz",
+      "raw_split": "dev",
+      "sha256": "8a45696b30b5cc58839b553402739f454ac651c9daaeb714f2fef4a7311c6e97",
+      "size_bytes": 42825533,
+      "source_family": "valueType",
+      "source_rows": 19872,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 20088,
+      "accepted_start": 1719648,
+      "accepted_stop": 1739736,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition+deletion": 1932,
+        "deletion": 16548,
+        "deletion+addition": 1608
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-conflictWith.tsv.gz.full.test.tsv.gz",
+      "raw_split": "test",
+      "sha256": "392042e1d937a272c3ebb3f1665b847240ceb15d512d4086349fbd4f45fac908",
+      "size_bytes": 405789486,
+      "source_family": "conflictWith",
+      "source_rows": 20088,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 45596,
+      "accepted_start": 1739736,
+      "accepted_stop": 1785332,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition+deletion": 1420,
+        "deletion": 42979,
+        "deletion+addition": 1197
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-distinct.tsv.gz.full.test.tsv.gz",
+      "raw_split": "test",
+      "sha256": "7edf5424f053d16ce84594329cb83c7e5e42bfd84b493ee97a3bbb18e4ef68c3",
+      "size_bytes": 76386922,
+      "source_family": "distinct",
+      "source_rows": 45596,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 19996,
+      "accepted_start": 1785332,
+      "accepted_stop": 1805328,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 18100,
+        "addition+deletion": 295,
+        "deletion": 1334,
+        "deletion+addition": 267
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-inverse.tsv.gz.full.test.tsv.gz",
+      "raw_split": "test",
+      "sha256": "5aceef5db213e0f563cee1647c9cf96f15d422e83fc81a229290267ff38f6f0d",
+      "size_bytes": 13915632,
+      "source_family": "inverse",
+      "source_rows": 19996,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 20086,
+      "accepted_start": 1805328,
+      "accepted_stop": 1825414,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 19626,
+        "addition+deletion": 62,
+        "deletion": 345,
+        "deletion+addition": 53
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-itemRequiresStatement.tsv.gz.full.test.tsv.gz",
+      "raw_split": "test",
+      "sha256": "ddae20e15666cbb2c16e77d540bcf0450d63eddf748c81b2fc6fa92f6c10a105",
+      "size_bytes": 106011130,
+      "source_family": "itemRequiresStatement",
+      "source_rows": 20086,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 1325,
+      "accepted_start": 1825414,
+      "accepted_stop": 1826739,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition+deletion": 536,
+        "deletion": 362,
+        "deletion+addition": 427
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-oneOf.tsv.gz.full.test.tsv.gz",
+      "raw_split": "test",
+      "sha256": "3705a07ffb5548f8f35a56cde699ca65536a3d82bdf7f6d557e02fae29a9755b",
+      "size_bytes": 1826495,
+      "source_family": "oneOf",
+      "source_rows": 1325,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 23953,
+      "accepted_start": 1826739,
+      "accepted_stop": 1850692,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition+deletion": 1848,
+        "deletion": 20387,
+        "deletion+addition": 1718
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-single.tsv.gz.full.test.tsv.gz",
+      "raw_split": "test",
+      "sha256": "fb5bd3d0b1c2a39e4178110ab0a9b517a1ef958ab9f47feee604176d9c8d36d5",
+      "size_bytes": 399069859,
+      "source_family": "single",
+      "source_rows": 23953,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 19934,
+      "accepted_start": 1850692,
+      "accepted_stop": 1870626,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 18801,
+        "addition+deletion": 228,
+        "deletion": 711,
+        "deletion+addition": 194
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-type.tsv.gz.full.test.tsv.gz",
+      "raw_split": "test",
+      "sha256": "af30663f0f3b6a527b4b851cbab43a79878a8235cb6e61d2923d7c6f09139e0c",
+      "size_bytes": 77767639,
+      "source_family": "type",
+      "source_rows": 19934,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 19980,
+      "accepted_start": 1870626,
+      "accepted_stop": 1890606,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 19061,
+        "addition+deletion": 237,
+        "deletion": 453,
+        "deletion+addition": 229
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-valueRequiresStatement.tsv.gz.full.test.tsv.gz",
+      "raw_split": "test",
+      "sha256": "5e37f08c6e09b1d9e5312ab2caec2119d7353164052ab3f9944084741d13d502",
+      "size_bytes": 21227686,
+      "source_family": "valueRequiresStatement",
+      "source_rows": 19980,
+      "unknown_constraint_rows": 0
+    },
+    {
+      "accepted_rows": 20188,
+      "accepted_start": 1890606,
+      "accepted_stop": 1910794,
+      "malformed_rows": 0,
+      "operation_patterns": {
+        "addition": 19675,
+        "addition+deletion": 186,
+        "deletion": 165,
+        "deletion+addition": 162
+      },
+      "path": "/home/mvazquez/fidelity-safety-gap/data/raw/full/constraint-corrections-valueType.tsv.gz.full.test.tsv.gz",
+      "raw_split": "test",
+      "sha256": "ee7da43d38f6c511ee62b921b1e4b50908c91491634b79b8f7052230d01d356c",
+      "size_bytes": 43637507,
+      "source_family": "valueType",
+      "source_rows": 20188,
+      "unknown_constraint_rows": 0
+    }
+  ],
+  "full_scan": true,
+  "generated_at_utc": "2026-09-16T08:31:30.627538+00:00",
+  "malformed_rows": 0,
+  "parent_rows": 1910794,
+  "parent_split_counts": {
+    "test": 286620,
+    "train": 1337555,
+    "val": 286619
+  },
+  "sample_replay": {
+    "bins": [
+      {
+        "label": "1-32",
+        "lower": 1,
+        "upper": 32
+      },
+      {
+        "label": "33-64",
+        "lower": 33,
+        "upper": 64
+      },
+      {
+        "label": "65-83",
+        "lower": 65,
+        "upper": 83
+      },
+      {
+        "label": "84-107",
+        "lower": 84,
+        "upper": 107
+      },
+      {
+        "label": "108",
+        "lower": 108,
+        "upper": 108
+      },
+      {
+        "label": "109-160",
+        "lower": 109,
+        "upper": 160
+      },
+      {
+        "label": "161-267",
+        "lower": 161,
+        "upper": 267
+      },
+      {
+        "label": "268+",
+        "lower": 268,
+        "upper": null
+      }
+    ],
+    "content_verification": {
+      "test": {
+        "columns": [
+          "constraint_type",
+          "constraint_id",
+          "subject",
+          "predicate",
+          "object",
+          "other_subject",
+          "other_predicate",
+          "other_object",
+          "add_subject",
+          "add_predicate",
+          "add_object",
+          "del_subject",
+          "del_predicate",
+          "del_object"
+        ],
+        "exact_arrow_equality": true,
+        "rows": 143316
+      },
+      "train": {
+        "columns": [
+          "constraint_type",
+          "constraint_id",
+          "subject",
+          "predicate",
+          "object",
+          "other_subject",
+          "other_predicate",
+          "other_object",
+          "add_subject",
+          "add_predicate",
+          "add_object",
+          "del_subject",
+          "del_predicate",
+          "del_object"
+        ],
+        "exact_arrow_equality": true,
+        "rows": 668779
+      },
+      "val": {
+        "columns": [
+          "constraint_type",
+          "constraint_id",
+          "subject",
+          "predicate",
+          "object",
+          "other_subject",
+          "other_predicate",
+          "other_object",
+          "add_subject",
+          "add_predicate",
+          "add_object",
+          "del_subject",
+          "del_predicate",
+          "del_object"
+        ],
+        "exact_arrow_equality": true,
+        "rows": 143310
+      }
+    },
+    "fraction": 0.5,
+    "seed": 42,
+    "strata": [
+      "split",
+      "constraint_type",
+      "len(local_constraint_ids) bin"
+    ]
+  },
+  "sample_split_counts": {
+    "test": 143316,
+    "train": 668779,
+    "val": 143310
+  },
+  "schema_version": 1,
+  "source_rows": 1910794,
+  "split_replay": {
+    "implementation": "sklearn.model_selection.train_test_split",
+    "random_state": 42,
+    "sklearn_version": "1.8.0",
+    "stratify": "source constraint_type",
+    "test_fraction": 0.15,
+    "train_fraction": 0.7,
+    "validation_fraction": 0.15
+  },
+  "unknown_constraint_rows": 0
+}

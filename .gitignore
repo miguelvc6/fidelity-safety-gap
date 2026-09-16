@@ -11,6 +11,12 @@ data/
 kg_repairs/*
 logs/
 
+# Full-scan audit sidecars and resumable chunks are local data artifacts. Keep
+# the compact reports, aggregates, manifests, and lineage maps under audits/.
+audits/*/row_level_audit.parquet
+audits/*/semantic_chunks/
+audits/*/profile_chunks/
+
 # Track only the experiment artifacts used by the submitted paper. All other
 # runs stay available locally but are excluded from the release repository.
 models/*

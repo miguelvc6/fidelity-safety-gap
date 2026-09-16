@@ -13,6 +13,7 @@ operating procedures:
 - [Training](07_train.md)
 - [Deletion-shortcut study](10_deletion_shortcut_study.md)
 - [Zenodo release preparation](11_zenodo_release.md)
+- [Decoder coverage and verified-fix audit](12_decoder_verified_fix_audit.md)
 
 Research rationale belongs in the
 [conceptual documentation](../docs-conceptual/README.md).

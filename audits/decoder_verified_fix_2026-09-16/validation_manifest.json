@@ -1,0 +1,20 @@
+{
+  "checks": {
+    "all_claimed_edits_roundtrip_exactly": true,
+    "no_copy_is_subset_of_copy": true
+  },
+  "counts": {
+    "clean_A_roundtrips": 1710505,
+    "clean_B_factorized_roundtrips": 1719936,
+    "clean_B_passive_roundtrips": 1719857,
+    "existing_A_roundtrips": 1709055,
+    "existing_B_factorized_roundtrips": 1718831,
+    "existing_B_passive_roundtrips": 1718668,
+    "rows": 1910794
+  },
+  "full_scan": true,
+  "max_rss_kib": 426364,
+  "rows": 1910794,
+  "runtime_seconds": 136.29561099410057,
+  "schema_version": 1
+}

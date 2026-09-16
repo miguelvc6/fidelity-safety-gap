@@ -1,0 +1,9 @@
+{
+  "full_scan": true,
+  "max_rss_kib": 934208,
+  "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/row_level_audit.parquet",
+  "rows": 1910794,
+  "runtime_seconds": 596.9556757155806,
+  "sha256": "8b1752c5b3b54c11ca90782d7247aa2c64844281fbdb7014aac946678c375b2a",
+  "size_bytes": 276504107
+}

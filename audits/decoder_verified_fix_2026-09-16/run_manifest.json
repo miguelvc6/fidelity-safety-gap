@@ -1,0 +1,111 @@
+{
+  "artifacts": {
+    "aggregate_manifest.json": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/aggregate_manifest.json",
+      "sha256": "94ff5024389e21d91b25c6b57a70b4ba52cb59a7c84891bee4b3f7ee03a00426",
+      "size_bytes": 4580
+    },
+    "clean_parent_train_vocab.json": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/clean_parent_train_vocab.json",
+      "sha256": "a35821cf60e01e290daf2e80afac03fd561d263a2cdf038beb9b5b1e04b97f6b",
+      "size_bytes": 192681
+    },
+    "decision_report.md": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/decision_report.md",
+      "sha256": "ab5523498f8d9102cc3b905a33364c772ccf26cc56fcaf9dbb513ad1f5b45cb5",
+      "size_bytes": 11659
+    },
+    "execution_log.md": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/execution_log.md",
+      "sha256": "fc82fd98d34a3f1f72385e1172c737671c797835b7567caf6c22422da578b818",
+      "size_bytes": 4352
+    },
+    "lineage.json": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/lineage.json",
+      "sha256": "8b0e53100c0fc0ab2aca3e0639b42fb4f9ef9dee58c33804216724ef2ffe604b",
+      "size_bytes": 20635
+    },
+    "profile_audited_v3_bounded.json": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_audited_v3_bounded.json",
+      "sha256": "80850ab1306d98fd250c9c642fc25e66bd12a0433b00de9316b0e0c6ec07ed84",
+      "size_bytes": 24866
+    },
+    "profile_checked_out_bounded.json": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/profile_checked_out_bounded.json",
+      "sha256": "6b171e0a8c67e4b8da1dbe33b911cddf8dd1eded30dc829c66ac54f2aaa3aa0f",
+      "size_bytes": 23412
+    },
+    "row_level_manifest.json": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/row_level_manifest.json",
+      "sha256": "48499354d089f6cd829467455b8ac4debc43a50ef1d9731597ad574cde7ea855",
+      "size_bytes": 326
+    },
+    "semantic_constraint_definitions.parquet": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_constraint_definitions.parquet",
+      "sha256": "f3d1feaad208e4f5fd2f61ad9b05721cd80a1d941a615105a3a9e3a6dbb0a378",
+      "size_bytes": 821292
+    },
+    "semantic_manifest.json": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/semantic_manifest.json",
+      "sha256": "c1582f6df408f135b77744183e8cc19306ea75ca91d868d815fc3b851e4b39c2",
+      "size_bytes": 15758
+    },
+    "validation_manifest.json": {
+      "path": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/validation_manifest.json",
+      "sha256": "5dfa263b3461c7b24ef2444acfff4f0f56bc5379865419eb879fe86ed4d6f2d7",
+      "size_bytes": 534
+    }
+  },
+  "commands": [],
+  "configuration": {
+    "batch_size": 2048,
+    "diagnostic_seed": 1729,
+    "parent_root": "/home/mvazquez/fidelity-safety-gap/data/interim/full_minocc100",
+    "raw_root": "/home/mvazquez/fidelity-safety-gap/data/raw/full",
+    "sample_root": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100",
+    "threshold": 100,
+    "workers": 12
+  },
+  "full_scan": true,
+  "generated_at_utc": "2026-09-16T10:29:34.540860+00:00",
+  "host": {
+    "cpu_count": 16,
+    "platform": "Linux-6.8.12-23-pve-x86_64-with-glibc2.39",
+    "python": "3.12.3 (main, Aug 14 2025, 17:47:21) [GCC 13.3.0]"
+  },
+  "inputs": {
+    "encoder": {
+      "path": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100/globalintencoder.txt",
+      "sha256": "1bbc8cd77ba01a215e68594ffabc0e20e700d53cc27d55414d6c9fb28e8e242b",
+      "size_bytes": 7710772
+    },
+    "hierarchy_v2": {
+      "path": "/home/mvazquez/fidelity-safety-gap/deprecated/post-validator-conversation-2026-09-15/data/static/wikidata-p279-2018-07-01.v2.json",
+      "sha256": "2c331f662799715d5a2fda042061fa88c0922801c5dfa29601c029244ce1b1f4",
+      "size_bytes": 4016688
+    },
+    "registry": {
+      "path": "/home/mvazquez/fidelity-safety-gap/data/interim/constraint_registry_full.parquet",
+      "sha256": "f263b5a33d9d49af971692e2d180bfd7b89d678625f0547682cee035af81ae4b",
+      "size_bytes": 2144777
+    },
+    "target_vocabs": {
+      "path": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/target_vocabs.json",
+      "sha256": "d263bcd62a6d50ea30e29efde6ec5e42f5471f6d2debd2c1e022475372edc7bc",
+      "size_bytes": 99811
+    }
+  },
+  "limitations": [
+    "bounded-local distinct-values semantics",
+    "fixed 2018-07-01 hierarchy evidence for v3",
+    "no threshold-50 count because exact pre-pruning feature frequencies are unavailable",
+    "no secondary full evaluation"
+  ],
+  "max_rss_kib_this_process": 209540,
+  "repository_dirty": true,
+  "repository_head": "6c9f1818e2436e5bdfdc2023d01b3ec022af7596",
+  "reproduction_command": "/home/mvazquez/fidelity-safety-gap/.venv/bin/python3 /home/mvazquez/fidelity-safety-gap/scripts/audit_decoder_verified_fixes.py --output /home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16 --raw-root /home/mvazquez/fidelity-safety-gap/data/raw/full --parent-root /home/mvazquez/fidelity-safety-gap/data/interim/full_minocc100 --sample-root /home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100 --registry /home/mvazquez/fidelity-safety-gap/data/interim/constraint_registry_full.parquet --encoder /home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100/globalintencoder.txt --target-vocabs /home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/target_vocabs.json --checked-worktree /tmp/fsg-audit-checked --v3-worktree /tmp/fsg-audit-v3 --hierarchy /home/mvazquez/fidelity-safety-gap/deprecated/post-validator-conversation-2026-09-15/data/static/wikidata-p279-2018-07-01.v2.json --workers 12 --batch-size 2048 --stage all --resume",
+  "row_limit": null,
+  "runtime_seconds_this_invocation": 0.2730110250413418,
+  "schema_version": 1
+}

@@ -1,0 +1,9 @@
+{
+  "batch_size": 2048,
+  "encoder": "/home/mvazquez/fidelity-safety-gap/data/interim/full_strat1m_minocc100/globalintencoder.txt",
+  "parent_row": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/source_to_parent_row.npy",
+  "registry": "/home/mvazquez/fidelity-safety-gap/data/interim/constraint_registry_full.parquet",
+  "sampled": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/source_to_existing_sample.npy",
+  "split_code": "/home/mvazquez/fidelity-safety-gap/audits/decoder_verified_fix_2026-09-16/source_to_split_code.npy",
+  "target_vocabs": "/home/mvazquez/fidelity-safety-gap/data/processed/full_strat1m_minocc100/target_vocabs.json"
+}
